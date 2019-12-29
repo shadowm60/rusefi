@@ -18,26 +18,71 @@
 EXTERN_ENGINE;
 
 static scheduling_s tachTurnSignalOff;
+static float halfperiodMs = 4; /* period in ms, used for multi pulse output, actually half period */
+static uint8_t isStarted = 0;
+
+static void toggleTachPinHigh(void);
+static void toggleTachPinLow(void);
 
 static void turnTachPinLow(void) {
 	enginePins.tachOut.setLow();
 }
 
+static void toggleTachPinLow(void)
+{
+	if(isStarted)
+	{
+		enginePins.tachOut.setLow();
+		engine->executor.scheduleForLater(&tachTurnSignalOff, (int)MS2US(halfperiodMs), (schfunc_t) &toggleTachPinHigh, NULL);
+	}
+}
+
+static void toggleTachPinHigh(void)
+{
+	if(isStarted)
+	{
+		enginePins.tachOut.setHigh();
+		engine->executor.scheduleForLater(&tachTurnSignalOff, (int)MS2US(halfperiodMs), (schfunc_t) &toggleTachPinLow, NULL);
+	}
+
+}
+
 static void tachSignalCallback(trigger_event_e ckpSignalType,
 		uint32_t index DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	UNUSED(ckpSignalType);
+
 	if (index != (uint32_t)engineConfiguration->tachPulseTriggerIndex) {
 		return;
 	}
-	enginePins.tachOut.setHigh();
-	float durationMs;
-	if (engineConfiguration->tachPulseDurationAsDutyCycle) {
-		// todo: implement tachPulseDurationAsDutyCycle
-		durationMs = engineConfiguration->tachPulseDuractionMs;
-	} else {
-		durationMs = engineConfiguration->tachPulseDuractionMs;
+
+	if ((1 < engineConfiguration->tachPulsePerRev))
+	{
+
+		/* reset timing counters */
+		int rpm = GET_RPM();
+		float duration = 60000/rpm;
+		halfperiodMs = (duration/(engineConfiguration->tachPulsePerRev*2));
+        if(isStarted==0)
+        {
+        	enginePins.tachOut.setHigh();
+        	isStarted = 1;
+        	engine->executor.scheduleForLater(&tachTurnSignalOff, (int)MS2US(halfperiodMs), (schfunc_t) &toggleTachPinLow, NULL);
+        }
 	}
-	engine->executor.scheduleForLater(&tachTurnSignalOff, (int)MS2US(durationMs), (schfunc_t) &turnTachPinLow, NULL);
+	else
+	{
+		isStarted = 0;
+
+		enginePins.tachOut.setHigh();
+		float durationMs;
+		if (engineConfiguration->tachPulseDurationAsDutyCycle) {
+			// todo: implement tachPulseDurationAsDutyCycle
+			durationMs = engineConfiguration->tachPulseDuractionMs;
+		} else {
+			durationMs = engineConfiguration->tachPulseDuractionMs;
+		}
+		engine->executor.scheduleForLater(&tachTurnSignalOff, (int)MS2US(durationMs), (schfunc_t) &turnTachPinLow, NULL);
+	}
 }
 
 void initTachometer(void) {
