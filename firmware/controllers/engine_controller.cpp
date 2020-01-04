@@ -810,7 +810,7 @@ void initEngineContoller(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) 
 #endif /* EFI_HD44780_LCD */
 
 #if EFI_PROD_CODE
-	initTachometer();
+	initTachometer(PASS_ENGINE_PARAMETER_SIGNATURE);
 #endif /* EFI_PROD_CODE */
 }
 
