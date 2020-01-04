@@ -16,7 +16,7 @@
 
 EXTERN_ENGINE;
 
-static scheduling_s events[12];
+static scheduling_s events[24];
 
 struct tach_ctx {
 	OutputPin *Pin;
@@ -31,12 +31,27 @@ static void setTach(void *param) {
 	ctx->Pin->setValue(ctx->State);
 }
 
+static int multiplierFromEngineType(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
+	switch (engineConfiguration->ambiguousOperationMode) {
+	// These modes have index 0 once per rev
+	case TWO_STROKE:
+	case FOUR_STROKE_CRANK_SENSOR:
+		return 1;
+	// This mode has index 0 once every other rev (once per cam rev)
+	case FOUR_STROKE_CAM_SENSOR:
+		return 2;
+	case FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR:
+		// is this correct? or should it be 0.5?
+		return 1;
+	default:
+		//warning(0, "Unknown ");
+		return 1;
+	}
+}
+
 static void tachSignalCallback(trigger_event_e ckpSignalType,
 		uint32_t index DECLARE_ENGINE_PARAMETER_SUFFIX) {
-
-	// TODO: does index 0 mean the beginning of a revolution, or of a cycle?
-
-	// only process at index 0 - we schedule the full revolution all at once
+	// only process at index 0 - we schedule the full cycle all at once
 	if (index != (uint32_t)engineConfiguration->tachPulseTriggerIndex) {
 		return;
 	}
@@ -50,7 +65,7 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 	// TODO: warning if periods is set too high
 
 	// How many tach pulse periods do we have?
-	const int periods = engineConfiguration->tachPulsePerRev;
+	int periods = engineConfiguration->tachPulsePerRev;
 	// What is the angle per tach output period?
 	const angle_t period = 360.0 / periods;
 
@@ -75,6 +90,10 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 	angle_t angleLow = period - angleHigh;
 
 	angle_t angle = 0;
+
+	// cam trigger vs. crank trigger vs. 2 stroke trigger shapes fire this callback either once
+	// per rev, or once every other rev.  Adjust appropriately.
+	periods *= multiplierFromEngineType(PASS_ENGINE_PARAMETER_SIGNATURE);
 
 	for (int i = 0; i < periods; i++) {
 		// Rising edge
