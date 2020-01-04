@@ -10,7 +10,7 @@ TEST(tachometer, testThreePulsePerRev) {
 
     // Configure tach pulse count
     // 5 PPR, 25% duty
-    engineConfiguration->tachPulsePerRev = 5;
+    engineConfiguration->tachPulsePerRev = 4;
     engineConfiguration->tachPulseDuractionMs = 0.25f;
     engineConfiguration->tachPulseDurationAsDutyCycle = true;
     engineConfiguration->tachPulseTriggerIndex = 0;
@@ -19,7 +19,7 @@ TEST(tachometer, testThreePulsePerRev) {
     engineConfiguration->trigger.customTotalToothCount = 8;
     engineConfiguration->trigger.customSkippedToothCount = 0;
     engineConfiguration->useOnlyRisingEdgeForTrigger = false;
-    engineConfiguration->ambiguousOperationMode = FOUR_STROKE_CRANK_SENSOR; //FOUR_STROKE_CAM_SENSOR
+    engineConfiguration->ambiguousOperationMode = FOUR_STROKE_CAM_SENSOR;
 	eth.applyTriggerWaveform();
 
     // get the engine running - 6 revolutions
@@ -27,7 +27,7 @@ TEST(tachometer, testThreePulsePerRev) {
 
     // ensure engine speed and position
 	ASSERT_EQ(1500,  GET_RPM()) << "RPM";
-	EXPECT_EQ(15,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #1";
+	ASSERT_EQ(15,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #1";
     ASSERT_EQ(engine->triggerCentral.triggerState.shaft_is_synchronized, true);
 
     // Clean the slate
@@ -41,24 +41,24 @@ TEST(tachometer, testThreePulsePerRev) {
 
     // Now we verify that the correct stuff got scheduled
     float enginePeriod = 40000; // us
-    float tachPeriod = enginePeriod / 5;
+    float tachPeriod = enginePeriod / 4;
     float tachHighTime = tachPeriod * 0.25f;
 
     // Build the times we expect the edges to have occured
-    float events[20];
-    for (int i = 0; i < 10; i++) {
+    float events[16];
+    for (int i = 0; i < 8; i++) {
         auto periodStart = i * tachPeriod;
         events[2 * i] = periodStart;
         events[2 * i + 1] = periodStart + tachHighTime;
     }
 
-    // Check that exactly 20 events got scheduled
-    ASSERT_EQ(engine->executor.size(), 20);
+    // Check that exactly 16 events got scheduled
+    ASSERT_EQ(engine->executor.size(), 16);
 
     auto start = eth.getTimeNowUs();
 
     // Check that everything is in the right spot
-    for (int i = 0; i < 20; i++)
+    for (int i = 0; i < 16; i++)
     {
         auto s = engine->executor.getForUnitTest(i);
         ASSERT_NE(s, nullptr);

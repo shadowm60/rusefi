@@ -16,7 +16,8 @@
 
 EXTERN_ENGINE;
 
-static scheduling_s events[24];
+// [4 pulse/rev] * [2 edges per pulse] * [2 revs per cycle] = 16
+static scheduling_s events[16];
 
 struct tach_ctx {
 	OutputPin *Pin;
