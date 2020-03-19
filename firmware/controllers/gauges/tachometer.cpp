@@ -4,16 +4,18 @@
  *
  * This implementation produces one pulse per engine cycle
  *
+ * todo: these is a bit of duplication with dizzySparkOutputPin
+ *
  * @date Aug 18, 2015
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
 
-#include "pch.h"
-
 #include "tachometer.h"
+#include "trigger_central.h"
 
 
 EXTERN_ENGINE;
+
 
 // [4 pulse/rev] * [2 edges per pulse] * [2 revs per cycle] = 16
 #define MAX_EVENTS	16
@@ -49,7 +51,6 @@ static int multiplierFromEngineType(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 		return 1;
 	}
 }
-#endif
 
 static void tachSignalCallback(trigger_event_e ckpSignalType,
 		uint32_t index, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
@@ -58,7 +59,6 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 		return;
 	}
 
-	action_s highAction, lowAction;
 #if EFI_UNIT_TEST
 	printf("tachSignalCallback(%d %d)\n", ckpSignalType, index);
 #else
@@ -110,28 +110,26 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 
 	for (int i = 0; i < periods; i++) {
 		// Rising edge
-		highAction = {&setTach, &ctx_high};
-		scheduleByAngle(&events[2 * i], edgeTimestamp, angle, highAction PASS_ENGINE_PARAMETER_SUFFIX);
+		scheduleByAngle(&events[2 * i], edgeTimestamp, angle, {&setTach, &ctx_high} PASS_ENGINE_PARAMETER_SUFFIX);
 		angle += angleHigh;
 
 		// Followed by falling edge
-		lowAction = {&setTach, &ctx_low};
-		scheduleByAngle(&events[2 * i + 1], edgeTimestamp, angle, lowAction PASS_ENGINE_PARAMETER_SUFFIX);
+		scheduleByAngle(&events[2 * i + 1], edgeTimestamp, angle, {&setTach, &ctx_low} PASS_ENGINE_PARAMETER_SUFFIX);
 		angle += angleLow;
 	}
 }
 
 void initTachometer(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-	tachHasInit = false;
-	if (!isBrainPinValid(CONFIG(tachOutputPin))) {
+//#if !EFI_UNIT_TEST
+#if EFI_UNIT_TEST
+	printf("initTachometer\n");
+#endif
+	if (CONFIG(tachOutputPin) == GPIO_UNASSIGNED) {
 		return;
 	}
 
-	startSimplePwm(&tachControl,
-				"Tachometer",
-				&engine->executor,
-				&enginePins.tachOut,
-				NAN, 0.1f);
+	enginePins.tachOut.initPin("analog tach output", CONFIG(tachOutputPin), &CONFIG(tachOutputPinMode));
+
 
 	ctx_high.Pin = &enginePins.tachOut;
 	ctx_high.State = true;
@@ -145,4 +143,4 @@ void initTachometer(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 }
 
 
-#endif /* EFI_UNIT_TEST */
+

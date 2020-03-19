@@ -21,52 +21,51 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "pch.h"
-
+#include "global.h"
 #include "os_access.h"
 #include "trigger_central.h"
+#include "engine_controller.h"
 #include "fsio_core.h"
 #include "fsio_impl.h"
 #include "idle_thread.h"
 #include "advance_map.h"
+#include "rpm_calculator.h"
 #include "main_trigger_callback.h"
+#include "io_pins.h"
 #include "flash_main.h"
-#include "bench_test.h"
+#include "injector_central.h"
 #include "os_util.h"
+#include "engine_math.h"
+#include "allsensors.h"
 #include "electronic_throttle.h"
 #include "map_averaging.h"
-#include "high_pressure_fuel_pump.h"
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
+#include "engine.h"
 #include "speed_density.h"
 #include "local_version_holder.h"
 #include "alternator_controller.h"
 #include "fuel_math.h"
+#include "settings.h"
+#include "aux_pid.h"
 #include "spark_logic.h"
 #include "aux_valves.h"
 #include "accelerometer.h"
-#include "vvt.h"
+#include "counter64.h"
+#include "perf_trace.h"
 #include "boost_control.h"
-#include "launch_control.h"
-#include "tachometer.h"
-#include "gppwm.h"
-#include "date_stamp.h"
-#include "buttonshift.h"
-#include "start_stop.h"
-#include "dynoview.h"
-#include "vr_pwm.h"
 
 #if EFI_SENSOR_CHART
 #include "sensor_chart.h"
-#endif /* EFI_SENSOR_CHART */
+#endif
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
-#endif /* EFI_TUNER_STUDIO */
+#endif
 
 #if EFI_LOGIC_ANALYZER
 #include "logic_analyzer.h"
-#endif /* EFI_LOGIC_ANALYZER */
+#endif
 
 #if HAL_USE_ADC
 #include "AdcConfiguration.h"
@@ -76,32 +75,30 @@
 #include "bootloader/bootloader.h"
 #endif /* EFI_BOOTLOADER_INCLUDE_CODE */
 
+#if EFI_PROD_CODE || EFI_SIMULATOR
 #include "periodic_task.h"
-
+#endif
 
 #if ! EFI_UNIT_TEST
 #include "init.h"
 #endif /* EFI_UNIT_TEST */
 
 #if EFI_PROD_CODE
+#include "pwm_generator.h"
+#include "adc_inputs.h"
+
 #include "pwm_tester.h"
+#include "pwm_generator.h"
 #include "lcd_controller.h"
+#include "pin_repository.h"
 #endif /* EFI_PROD_CODE */
+#include "tachometer.h"
 
 #if EFI_CJ125
 #include "cj125.h"
 #endif /* EFI_CJ125 */
 
-#if !EFI_UNIT_TEST
-
-/**
- * Would love to pass reference to configuration object into constructor but C++ does allow attributes after parenthesized initializer
- */
-Engine ___engine CCM_OPTIONAL;
-Engine * engine = &___engine;
-
-#endif /* EFI_UNIT_TEST */
-
+EXTERN_ENGINE;
 
 void initDataStructures(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #if EFI_ENGINE_CONTROL
@@ -111,19 +108,48 @@ void initDataStructures(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #endif // EFI_ENGINE_CONTROL
 }
 
-#if EFI_ENABLE_MOCK_ADC
+static void mostCommonInitEngineController(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
+#if !EFI_UNIT_TEST
+	initSensors();
+#endif /* EFI_UNIT_TEST */
 
-static void initMockVoltage(void) {
-#if EFI_SIMULATOR
-	setMockCltVoltage(2);
-	setMockIatVoltage(2);
-#endif /* EFI_SIMULATOR */
+	initSensors(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+
+	initAccelEnrichment(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+
+#if EFI_FSIO
+	initFsioImpl(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+#endif /* EFI_FSIO */
+
+#if EFI_IDLE_CONTROL
+	startIdleThread(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+#endif /* EFI_IDLE_CONTROL */
+
+#if EFI_ELECTRONIC_THROTTLE_BODY
+	initElectronicThrottle(PASS_ENGINE_PARAMETER_SIGNATURE);
+#endif /* EFI_ELECTRONIC_THROTTLE_BODY */
+
+#if EFI_MAP_AVERAGING
+	if (engineConfiguration->isMapAveragingEnabled) {
+		initMapAveraging(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+	}
+#endif /* EFI_MAP_AVERAGING */
+
 }
 
-#endif /* EFI_ENABLE_MOCK_ADC */
+EXTERN_ENGINE;
 
+#if EFI_ENABLE_MOCK_ADC
+void setMockVoltage(int hwChannel, float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	engine->engineState.mockAdcState.setMockVoltage(hwChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+#endif
 
 #if !EFI_UNIT_TEST
+
+extern bool hasFirmwareErrorFlag;
+extern EnginePins enginePins;
+
 
 static void doPeriodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
@@ -143,13 +169,25 @@ class PeriodicSlowController : public PeriodicTimerController {
 	}
 
 	int getPeriodMs() override {
-		// no reason to have this configurable, looks like everyone is happy with 20Hz
-		return SLOW_CALLBACK_PERIOD_MS;
+		// we need at least protection from zero value while resetting configuration
+		int periodMs = maxI(50, CONFIG(generalPeriodicThreadPeriodMs));
+		return periodMs;
 	}
 };
 
 static PeriodicFastController fastController;
 static PeriodicSlowController slowController;
+
+static LoggingWithStorage logger("Engine Controller");
+
+#if EFI_PROD_CODE || EFI_SIMULATOR
+
+/**
+ * todo: this should probably become 'static', i.e. private, and propagated around explicitly?
+ */
+Engine ___engine CCM_OPTIONAL;
+Engine * engine = &___engine;
+#endif /* EFI_PROD_CODE || EFI_SIMULATOR */
 
 class EngineStateBlinkingTask : public PeriodicTimerController {
 	int getPeriodMs() override {
@@ -159,16 +197,16 @@ class EngineStateBlinkingTask : public PeriodicTimerController {
 	void PeriodicTask() override {
 		counter++;
 #if EFI_SHAFT_POSITION_INPUT
-		bool is_running = ENGINE(rpmCalculator).isRunning();
+		bool is_running = ENGINE(rpmCalculator).isRunning(PASS_ENGINE_PARAMETER_SIGNATURE);
 #else
 		bool is_running = false;
-#endif /* EFI_SHAFT_POSITION_INPUT */
+#endif
 
 		if (is_running) {
 			// blink in running mode
 			enginePins.runningLedPin.setValue(counter % 2);
 		} else {
-			int is_cranking = ENGINE(rpmCalculator).isCranking();
+			int is_cranking = ENGINE(rpmCalculator).isCranking(PASS_ENGINE_PARAMETER_SIGNATURE);
 			enginePins.runningLedPin.setValue(is_cranking);
 		}
 	}
@@ -177,6 +215,78 @@ private:
 };
 
 static EngineStateBlinkingTask engineStateBlinkingTask;
+
+#if EFI_PROD_CODE
+static Overflow64Counter halTime;
+
+/**
+ * 64-bit result would not overflow, but that's complex stuff for our 32-bit MCU
+ */
+//todo: macro to save method invocation
+efitimeus_t getTimeNowUs(void) {
+	ScopePerf perf(PE::GetTimeNowUs);
+	return getTimeNowNt() / (CORE_CLOCK / 1000000);
+}
+
+//todo: macro to save method invocation
+efitick_t getTimeNowNt(void) {
+#if EFI_PROD_CODE
+    /* Entering a reentrant critical zone.*/
+    syssts_t sts = chSysGetStatusAndLockX();
+	efitime_t localH = halTime.state.highBits;
+	uint32_t localLow = halTime.state.lowBits;
+
+	uint32_t value = getTimeNowLowerNt();
+
+	if (value < localLow) {
+		// new value less than previous value means there was an overflow in that 32 bit counter
+		localH += 0x100000000LL;
+	}
+
+	efitime_t result = localH + value;
+
+    /* Leaving the critical zone.*/
+    chSysRestoreStatusX(sts);
+	return result;
+#else /* EFI_PROD_CODE */
+// todo: why is this implementation not used?
+	/**
+	 * this method is lock-free and thread-safe, that's because the 'update' method
+	 * is atomic with a critical zone requirement.
+	 *
+	 * http://stackoverflow.com/questions/5162673/how-to-read-two-32bit-counters-as-a-64bit-integer-without-race-condition
+	 */
+	efitime_t localH;
+	efitime_t localH2;
+	uint32_t localLow;
+	int counter = 0;
+	do {
+		localH = halTime.state.highBits;
+		localLow = halTime.state.lowBits;
+		localH2 = halTime.state.highBits;
+#if EFI_PROD_CODE
+		if (counter++ == 10000)
+			chDbgPanic("lock-free frozen");
+#endif /* EFI_PROD_CODE */
+	} while (localH != localH2);
+	/**
+	 * We need to take current counter after making a local 64 bit snapshot
+	 */
+	uint32_t value = getTimeNowLowerNt();
+
+	if (value < localLow) {
+		// new value less than previous value means there was an overflow in that 32 bit counter
+		localH += 0x100000000LL;
+	}
+
+	return localH + value;
+#endif /* EFI_PROD_CODE */
+
+}
+
+#endif /* EFI_PROD_CODE */
+
+#if ! EFI_UNIT_TEST
 
 /**
  * number of SysClock ticks in one ms
@@ -193,56 +303,60 @@ efitimems_t currentTimeMillis(void) {
 efitimesec_t getTimeNowSeconds(void) {
 	return currentTimeMillis() / 1000;
 }
+#endif /* EFI_UNIT_TEST */
 
 static void resetAccel(void) {
 	engine->engineLoadAccelEnrichment.resetAE();
 	engine->tpsAccelEnrichment.resetAE();
 
-	for (size_t i = 0; i < efi::size(engine->injectionEvents.elements); i++)
+	for (unsigned int i = 0; i < sizeof(engine->wallFuel) / sizeof(engine->wallFuel[0]); i++)
 	{
-		engine->injectionEvents.elements[i].wallFuel.resetWF();
+		engine->wallFuel[i].resetWF();
 	}
 }
 
+#if ENABLE_PERF_TRACE
+
+void irqEnterHook(void) {
+	perfEventBegin(PE::ISR);
+}
+
+void irqExitHook(void) {
+	perfEventEnd(PE::ISR);
+}
+
+void contextSwitchHook() {
+	perfEventInstantGlobal(PE::ContextSwitch);
+}
+
+#endif /* ENABLE_PERF_TRACE */
+
 static void doPeriodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-#if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
+	#if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	efiAssertVoid(CUSTOM_ERR_6661, getCurrentRemainingStack() > 64, "lowStckOnEv");
-
-	slowStartStopButtonCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-
-	efitick_t nowNt = getTimeNowNt();
-	for (int bankIndex = 0; bankIndex < BANKS_COUNT; bankIndex++) {
-		for (int camIndex = 0; camIndex < CAMS_PER_BANK; camIndex++) {
-			if (nowNt - engine->triggerCentral.vvtSyncTimeNt[bankIndex][camIndex] >= NT_PER_SECOND) {
-				// loss of VVT sync
-				engine->triggerCentral.vvtSyncTimeNt[bankIndex][camIndex] = 0;
-
-			}
-		}
-	}
+#if EFI_PROD_CODE
+	/**
+	 * We need to push current value into the 64 bit counter often enough so that we do not miss an overflow
+	 */
+    /* Entering a reentrant critical zone.*/
+    syssts_t sts = chSysGetStatusAndLockX();
+	updateAndSet(&halTime.state, getTimeNowLowerNt());
+    /* Leaving the critical zone.*/
+    chSysRestoreStatusX(sts);
+#endif /* EFI_PROD_CODE */
 
 	/**
 	 * Update engine RPM state if needed (check timeouts).
 	 */
-	bool isSpinning = engine->rpmCalculator.checkIfSpinning(nowNt PASS_ENGINE_PARAMETER_SUFFIX);
+	bool isSpinning = engine->rpmCalculator.checkIfSpinning(getTimeNowNt() PASS_ENGINE_PARAMETER_SUFFIX);
 	if (!isSpinning) {
 		engine->rpmCalculator.setStopSpinning(PASS_ENGINE_PARAMETER_SIGNATURE);
 	}
 
-	if (ENGINE(directSelfStimulation) || engine->rpmCalculator.isStopped()) {
-		/**
-		 * rusEfi usually runs on hardware which halts execution while writing to internal flash, so we
-		 * postpone writes to until engine is stopped. Writes in case of self-stimulation are fine.
-		 *
-		 * todo: allow writing if 2nd bank of flash is used
-		 */
+	if (engine->rpmCalculator.isStopped(PASS_ENGINE_PARAMETER_SIGNATURE)) {
 #if EFI_INTERNAL_FLASH
 		writeToFlashIfPending();
 #endif /* EFI_INTERNAL_FLASH */
-	}
-
-	if (engine->rpmCalculator.isStopped()) {
 		resetAccel();
 	} else {
 		updatePrimeInjectionPulseState(PASS_ENGINE_PARAMETER_SIGNATURE);
@@ -253,11 +367,7 @@ static void doPeriodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	}
 
 	engine->periodicSlowCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT */
-
-	if (CONFIG(tcuEnabled)) {
-		engine->gearController->update();
-	}
+#endif
 }
 
 void initPeriodicEvents(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
@@ -267,79 +377,86 @@ void initPeriodicEvents(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 char * getPinNameByAdcChannel(const char *msg, adc_channel_e hwChannel, char *buffer) {
 #if HAL_USE_ADC
-	if (!isAdcChannelValid(hwChannel)) {
+	if (hwChannel == EFI_ADC_NONE) {
 		strcpy(buffer, "NONE");
 	} else {
-		strcpy(buffer, portname(getAdcChannelPort(msg, hwChannel)));
+		strcpy((char*) buffer, portname(getAdcChannelPort(msg, hwChannel)));
 		itoa10(&buffer[2], getAdcChannelPin(hwChannel));
 	}
 #else
 	strcpy(buffer, "NONE");
-#endif /* HAL_USE_ADC */
-	return buffer;
+#endif
+	return (char*) buffer;
 }
 
 static char pinNameBuffer[16];
 
 #if HAL_USE_ADC
 extern AdcDevice fastAdc;
-#endif /* HAL_USE_ADC */
+#endif
 
 static void printAnalogChannelInfoExt(const char *name, adc_channel_e hwChannel, float adcVoltage,
 		float dividerCoeff) {
 #if HAL_USE_ADC
-	if (!isAdcChannelValid(hwChannel)) {
-		efiPrintf("ADC is not assigned for %s", name);
+	if (hwChannel == EFI_ADC_NONE) {
+		scheduleMsg(&logger, "ADC is not assigned for %s", name);
 		return;
 	}
 
+	if (fastAdc.isHwUsed(hwChannel)) {
+		scheduleMsg(&logger, "fast enabled=%s", boolToString(CONFIG(isFastAdcEnabled)));
+	}
+
 	float voltage = adcVoltage * dividerCoeff;
-	efiPrintf("%s ADC%d %s %s adc=%.2f/input=%.2fv/divider=%.2f", name, hwChannel, getAdc_channel_mode_e(getAdcMode(hwChannel)),
+	scheduleMsg(&logger, "%s ADC%d %s %s adc=%.2f/input=%.2fv/divider=%.2f", name, hwChannel, getAdcMode(hwChannel),
 			getPinNameByAdcChannel(name, hwChannel, pinNameBuffer), adcVoltage, voltage, dividerCoeff);
-#endif /* HAL_USE_ADC */
+#endif
 }
 
 static void printAnalogChannelInfo(const char *name, adc_channel_e hwChannel) {
 #if HAL_USE_ADC
-	printAnalogChannelInfoExt(name, hwChannel, getVoltage(name, hwChannel PASS_ENGINE_PARAMETER_SUFFIX), engineConfiguration->analogInputDividerCoefficient);
-#endif /* HAL_USE_ADC */
+	printAnalogChannelInfoExt(name, hwChannel, getVoltage("print", hwChannel PASS_ENGINE_PARAMETER_SUFFIX), engineConfiguration->analogInputDividerCoefficient);
+#endif
 }
 
 static void printAnalogInfo(void) {
-	efiPrintf("analogInputDividerCoefficient: %.2f", engineConfiguration->analogInputDividerCoefficient);
+	scheduleMsg(&logger, "analogInputDividerCoefficient: %.2f", engineConfiguration->analogInputDividerCoefficient);
 
 	printAnalogChannelInfo("hip9011", engineConfiguration->hipOutputChannel);
 	printAnalogChannelInfo("fuel gauge", engineConfiguration->fuelLevelSensor);
-	printAnalogChannelInfo("TPS1 Primary", engineConfiguration->tps1_1AdcChannel);
-	printAnalogChannelInfo("TPS1 Secondary", engineConfiguration->tps1_2AdcChannel);
-	printAnalogChannelInfo("TPS2 Primary", engineConfiguration->tps2_1AdcChannel);
-	printAnalogChannelInfo("TPS2 Secondary", engineConfiguration->tps2_2AdcChannel);
-	printAnalogChannelInfo("LPF", engineConfiguration->lowPressureFuel.hwChannel);
-	printAnalogChannelInfo("HPF", engineConfiguration->highPressureFuel.hwChannel);
-	printAnalogChannelInfo("pPS1", engineConfiguration->throttlePedalPositionAdcChannel);
-	printAnalogChannelInfo("pPS2", engineConfiguration->throttlePedalPositionSecondAdcChannel);
-	printAnalogChannelInfo("CLT", engineConfiguration->clt.adcChannel);
-	printAnalogChannelInfo("IAT", engineConfiguration->iat.adcChannel);
-	printAnalogChannelInfo("AuxT1", engineConfiguration->auxTempSensor1.adcChannel);
-	printAnalogChannelInfo("AuxT2", engineConfiguration->auxTempSensor2.adcChannel);
-	printAnalogChannelInfo("MAF", engineConfiguration->mafAdcChannel);
-	for (int i = 0; i < AUX_ANALOG_INPUT_COUNT ; i++) {
+	printAnalogChannelInfo("TPS", engineConfiguration->tps1_1AdcChannel);
+	printAnalogChannelInfo("pPS", engineConfiguration->throttlePedalPositionAdcChannel);
+	if (engineConfiguration->clt.adcChannel != EFI_ADC_NONE) {
+		printAnalogChannelInfo("CLT", engineConfiguration->clt.adcChannel);
+	}
+	if (engineConfiguration->iat.adcChannel != EFI_ADC_NONE) {
+		printAnalogChannelInfo("IAT", engineConfiguration->iat.adcChannel);
+	}
+	if (hasMafSensor()) {
+		printAnalogChannelInfo("MAF", engineConfiguration->mafAdcChannel);
+	}
+	for (int i = 0; i < FSIO_ANALOG_INPUT_COUNT ; i++) {
 		adc_channel_e ch = engineConfiguration->fsioAdc[i];
-		printAnalogChannelInfo("FSIO analog", ch);
+		if (ch != EFI_ADC_NONE) {
+			printAnalogChannelInfo("fsio", ch);
+		}
 	}
 
 	printAnalogChannelInfo("AFR", engineConfiguration->afr.hwChannel);
-	printAnalogChannelInfo("MAP", engineConfiguration->map.sensor.hwChannel);
-	printAnalogChannelInfo("BARO", engineConfiguration->baroSensor.hwChannel);
-	printAnalogChannelInfo("extKno", engineConfiguration->externalKnockSenseAdc);
+	if (hasMapSensor(PASS_ENGINE_PARAMETER_SIGNATURE)) {
+		printAnalogChannelInfo("MAP", engineConfiguration->map.sensor.hwChannel);
+	}
+	if (hasBaroSensor(PASS_ENGINE_PARAMETER_SIGNATURE)) {
+		printAnalogChannelInfo("BARO", engineConfiguration->baroSensor.hwChannel);
+	}
+	if (engineConfiguration->externalKnockSenseAdc != EFI_ADC_NONE) {
+		printAnalogChannelInfo("extKno", engineConfiguration->externalKnockSenseAdc);
+	}
 
 	printAnalogChannelInfo("OilP", engineConfiguration->oilPressure.hwChannel);
 
-	printAnalogChannelInfo("CJ UR", engineConfiguration->cj125ur);
-	printAnalogChannelInfo("CJ UA", engineConfiguration->cj125ua);
-
+	printAnalogChannelInfo("A/C sw", engineConfiguration->acSwitchAdc);
 	printAnalogChannelInfo("HIP9011", engineConfiguration->hipOutputChannel);
-
 	printAnalogChannelInfoExt("Vbatt", engineConfiguration->vbattAdcChannel, getVoltage("vbatt", engineConfiguration->vbattAdcChannel PASS_ENGINE_PARAMETER_SUFFIX),
 			engineConfiguration->vbattDividerCoeff);
 }
@@ -354,7 +471,7 @@ static void getShort(int offset) {
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("short%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
+	scheduleMsg(&logger, "short%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
 }
 
 static void getByte(int offset) {
@@ -365,7 +482,7 @@ static void getByte(int offset) {
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("byte%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
+	scheduleMsg(&logger, "byte%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
 }
 
 static void onConfigurationChanged() {
@@ -381,7 +498,7 @@ static void onConfigurationChanged() {
 static void setBit(const char *offsetStr, const char *bitStr, const char *valueStr) {
 	int offset = atoi(offsetStr);
 	if (absI(offset) == absI(ERROR_CODE)) {
-		efiPrintf("invalid offset [%s]", offsetStr);
+		scheduleMsg(&logger, "invalid offset [%s]", offsetStr);
 		return;
 	}
 	if (isOutOfBounds(offset)) {
@@ -389,12 +506,12 @@ static void setBit(const char *offsetStr, const char *bitStr, const char *valueS
 	}
 	int bit = atoi(bitStr);
 	if (absI(bit) == absI(ERROR_CODE)) {
-		efiPrintf("invalid bit [%s]", bitStr);
+		scheduleMsg(&logger, "invalid bit [%s]", bitStr);
 		return;
 	}
 	int value = atoi(valueStr);
 	if (absI(value) == absI(ERROR_CODE)) {
-		efiPrintf("invalid value [%s]", valueStr);
+		scheduleMsg(&logger, "invalid value [%s]", valueStr);
 		return;
 	}
 	int *ptr = (int *) (&((char *) engineConfiguration)[offset]);
@@ -402,7 +519,7 @@ static void setBit(const char *offsetStr, const char *bitStr, const char *valueS
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("bit%s%d/%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, bit, value);
+	scheduleMsg(&logger, "bit%s%d/%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, bit, value);
 	onConfigurationChanged();
 }
 
@@ -432,7 +549,7 @@ static void getBit(int offset, int bit) {
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("bit%s%d/%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, bit, value);
+	scheduleMsg(&logger, "bit%s%d/%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, bit, value);
 }
 
 static void getInt(int offset) {
@@ -443,7 +560,7 @@ static void getInt(int offset) {
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("int%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
+	scheduleMsg(&logger, "int%s%d is %d", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
 }
 
 static void setInt(const int offset, const int value) {
@@ -463,20 +580,20 @@ static void getFloat(int offset) {
 	/**
 	 * this response is part of rusEfi console API
 	 */
-	efiPrintf("float%s%d is %.5f", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
+	scheduleMsg(&logger, "float%s%d is %.5f", CONSOLE_DATA_PROTOCOL_TAG, offset, value);
 }
 
 static void setFloat(const char *offsetStr, const char *valueStr) {
 	int offset = atoi(offsetStr);
 	if (absI(offset) == absI(ERROR_CODE)) {
-		efiPrintf("invalid offset [%s]", offsetStr);
+		scheduleMsg(&logger, "invalid offset [%s]", offsetStr);
 		return;
 	}
 	if (isOutOfBounds(offset))
 		return;
 	float value = atoff(valueStr);
 	if (cisnan(value)) {
-		efiPrintf("invalid value [%s]", valueStr);
+		scheduleMsg(&logger, "invalid value [%s]", valueStr);
 		return;
 	}
 	float *ptr = (float *) (&((char *) engineConfiguration)[offset]);
@@ -484,6 +601,57 @@ static void setFloat(const char *offsetStr, const char *valueStr) {
 	getFloat(offset);
 	onConfigurationChanged();
 }
+#endif /* EFI_UNIT_TEST */
+
+#if EFI_ENABLE_MOCK_ADC
+
+void setMockCltVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->clt.adcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockIatVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->iat.adcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockMafVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->mafAdcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockAfrVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->afr.hwChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockThrottlePedalSensorVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->throttlePedalPositionAdcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockThrottlePositionSensorVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->tps1_1AdcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockMapVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->map.sensor.hwChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+void setMockVBattVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	setMockVoltage(engineConfiguration->vbattAdcChannel, voltage PASS_ENGINE_PARAMETER_SUFFIX);
+}
+
+static void initMockVoltage(void) {
+#if EFI_SIMULATOR
+	setMockCltVoltage(2);
+#endif /* EFI_SIMULATOR */
+
+#if EFI_SIMULATOR
+	setMockIatVoltage(2);
+#endif /* EFI_SIMULATOR */
+
+}
+
+#endif /* EFI_ENABLE_MOCK_ADC */
+
+
+#if !EFI_UNIT_TEST
 
 static void initConfigActions(void) {
 	addConsoleActionSS("set_float", (VoidCharPtrCharPtr) setFloat);
@@ -502,15 +670,15 @@ static void initConfigActions(void) {
 // todo: move this logic somewhere else?
 static void getKnockInfo(void) {
 	adc_channel_e hwChannel = engineConfiguration->externalKnockSenseAdc;
-	efiPrintf("externalKnockSenseAdc on ADC", getPinNameByAdcChannel("knock", hwChannel, pinNameBuffer));
+	scheduleMsg(&logger, "externalKnockSenseAdc on ADC", getPinNameByAdcChannel("knock", hwChannel, pinNameBuffer));
 
 	engine->printKnockState();
 }
 #endif /* EFI_UNIT_TEST */
 
 // this method is used by real firmware and simulator and unit test
-void commonInitEngineController(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-	initInterpolation();
+void commonInitEngineController(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
+	initInterpolation(sharedLogger);
 
 #if EFI_SIMULATOR
 	printf("commonInitEngineController\n");
@@ -522,7 +690,7 @@ void commonInitEngineController(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 #if EFI_ENGINE_CONTROL
 	/**
-	 * This has to go after 'enginePins.startPins()' in order to
+	 * This has to go after 'initInjectorCentral' in order to
 	 * properly detect un-assigned output pins
 	 */
 	prepareShapes(PASS_ENGINE_PARAMETER_SIGNATURE);
@@ -537,6 +705,13 @@ void commonInitEngineController(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	initSensorChart();
 #endif /* EFI_SENSOR_CHART */
 
+
+#if EFI_TUNER_STUDIO
+	if (engineConfiguration->isTunerStudioEnabled) {
+		startTunerStudioConnectivity();
+	}
+#endif /* EFI_TUNER_STUDIO */
+
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	initSettings();
 
@@ -545,178 +720,54 @@ void commonInitEngineController(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	}
 #endif
 
-#if !EFI_UNIT_TEST
-	// This is tested independently - don't configure sensors for tests.
-	// This lets us selectively mock them for each test.
-	initNewSensors();
-#endif /* EFI_UNIT_TEST */
-
-	initSensors(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-	initAccelEnrichment(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-#if EFI_FSIO
-	initFsioImpl(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_FSIO */
-
-	initGpPwm(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-#if EFI_IDLE_CONTROL
-	startIdleThread(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_IDLE_CONTROL */
-
-	initButtonShift(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-	initButtonDebounce();
-	initStartStopButton(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-#if EFI_ELECTRONIC_THROTTLE_BODY
-	initElectronicThrottle(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_ELECTRONIC_THROTTLE_BODY */
-
-#if EFI_MAP_AVERAGING
-	if (engineConfiguration->isMapAveragingEnabled) {
-		initMapAveraging(PASS_ENGINE_PARAMETER_SIGNATURE);
-	}
-#endif /* EFI_MAP_AVERAGING */
-
-#if EFI_BOOST_CONTROL
-	initBoostCtrl(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_BOOST_CONTROL */
-
-#if EFI_LAUNCH_CONTROL
-	initLaunchControl(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif
+	mostCommonInitEngineController(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
 
 #if EFI_SHAFT_POSITION_INPUT
 	/**
 	 * there is an implicit dependency on the fact that 'tachometer' listener is the 1st listener - this case
 	 * other listeners can access current RPM value
 	 */
-	initRpmCalculator(PASS_ENGINE_PARAMETER_SIGNATURE);
+	initRpmCalculator(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
 #endif /* EFI_SHAFT_POSITION_INPUT */
 
 #if (EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT) || EFI_SIMULATOR || EFI_UNIT_TEST
 	if (CONFIG(isEngineControlEnabled)) {
-		initAuxValves(PASS_ENGINE_PARAMETER_SIGNATURE);
+		initAuxValves(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
 		/**
 		 * This method adds trigger listener which actually schedules ignition
 		 */
-		initMainEventListener(PASS_ENGINE_PARAMETER_SIGNATURE);
-#if EFI_HPFP
-		initHPFP(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif // EFI_HPFP
+		initSparkLogic(sharedLogger);
+		initMainEventListener(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
 	}
 #endif /* EFI_ENGINE_CONTROL */
 
+#if EFI_UNIT_TEST
 	initTachometer(PASS_ENGINE_PARAMETER_SIGNATURE);
-}
+#endif /* EFI_UNIT_TEST */
 
-// Returns false if there's an obvious problem with the loaded configuration
-bool validateConfig(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
-	if (CONFIG(specs.cylindersCount) > MAX_CYLINDER_COUNT) {
-		firmwareError(OBD_PCM_Processor_Fault, "Invalid cylinder count: %d", CONFIG(specs.cylindersCount));
-		return false;
-	}
-
-	// Fueling
-	{
-		ensureArrayIsAscending("VE load", config->veLoadBins);
-		ensureArrayIsAscending("VE RPM", config->veRpmBins);
-
-		ensureArrayIsAscending("Lambda/AFR load", config->lambdaLoadBins);
-		ensureArrayIsAscending("Lambda/AFR RPM", config->lambdaRpmBins);
-
-		ensureArrayIsAscending("Fuel CLT mult", config->cltFuelCorrBins);
-		ensureArrayIsAscending("Fuel IAT mult", config->iatFuelCorrBins);
-
-		ensureArrayIsAscending("Injection phase load", config->injPhaseLoadBins);
-		ensureArrayIsAscending("Injection phase RPM", config->injPhaseRpmBins);
-
-		ensureArrayIsAscending("TPS/TPS AE from", config->tpsTpsAccelFromRpmBins);
-		ensureArrayIsAscending("TPS/TPS AE to", config->tpsTpsAccelToRpmBins);
-	}
-
-	// Ignition
-	{
-		ensureArrayIsAscending("Dwell RPM", engineConfiguration->sparkDwellRpmBins);
-
-		ensureArrayIsAscending("Ignition load", config->ignitionLoadBins);
-		ensureArrayIsAscending("Ignition RPM", config->ignitionRpmBins);
-
-		ensureArrayIsAscending("Ignition CLT corr", engineConfiguration->cltTimingBins);
-
-		ensureArrayIsAscending("Ignition IAT corr IAT", config->ignitionIatCorrLoadBins);
-		ensureArrayIsAscending("Ignition IAT corr RPM", config->ignitionIatCorrRpmBins);
-	}
-
-	if (config->mapEstimateTpsBins[1] != 0) { // only validate map if not all zeroes default
-		ensureArrayIsAscending("Map estimate TPS", config->mapEstimateTpsBins);
-	}
-
-	if (config->mapEstimateRpmBins[1] != 0) { // only validate map if not all zeroes default
-		ensureArrayIsAscending("Map estimate RPM", config->mapEstimateRpmBins);
-	}
-
-	ensureArrayIsAscending("MAF decoding", config->mafDecodingBins);
-
-	// Cranking tables
-	ensureArrayIsAscending("Cranking fuel mult", config->crankingFuelBins);
-	ensureArrayIsAscending("Cranking duration", config->crankingCycleBins);
-	ensureArrayIsAscending("Cranking TPS", engineConfiguration->crankingTpsBins);
-
-	// Idle tables
-	ensureArrayIsAscending("Idle target RPM", engineConfiguration->cltIdleRpmBins);
-	ensureArrayIsAscending("Idle warmup mult", config->cltIdleCorrBins);
-	if (engineConfiguration->iacCoastingBins[1] != 0) { // only validate map if not all zeroes default
-		ensureArrayIsAscending("Idle coasting position", engineConfiguration->iacCoastingBins);
-	}
-	if (config->idleVeBins[1] != 0) { // only validate map if not all zeroes default
-		ensureArrayIsAscending("Idle VE", config->idleVeBins);
-	}
-	if (config->idleAdvanceBins[1] != 0) { // only validate map if not all zeroes default
-		ensureArrayIsAscending("Idle timing", config->idleAdvanceBins);
-	}
-
-
-	// Boost
-	ensureArrayIsAscending("Boost control TPS", config->boostTpsBins);
-	ensureArrayIsAscending("Boost control RPM", config->boostRpmBins);
-
-	// ETB
-	ensureArrayIsAscending("Pedal map pedal", config->pedalToTpsPedalBins);
-	ensureArrayIsAscending("Pedal map RPM", config->pedalToTpsRpmBins);
-
-	// VVT
-	if (CONFIG(camInputs[0]) != GPIO_UNASSIGNED) {
-		ensureArrayIsAscending("VVT intake load", config->vvtTable1LoadBins);
-		ensureArrayIsAscending("VVT intake RPM", config->vvtTable1RpmBins);
-	}
-
-#if CAM_INPUTS_COUNT != 1
-	if (CONFIG(camInputs[1]) != GPIO_UNASSIGNED) {
-		ensureArrayIsAscending("VVT exhaust load", config->vvtTable2LoadBins);
-		ensureArrayIsAscending("VVT exhaust RPM", config->vvtTable2RpmBins);
-	}
-#endif
-
-	return true;
 }
 
 #if !EFI_UNIT_TEST
 
-void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
+void initEngineContoller(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
+#if EFI_SIMULATOR
+	printf("initEngineContoller\n");
+#endif
 	addConsoleAction("analoginfo", printAnalogInfo);
 
 #if EFI_PROD_CODE && EFI_ENGINE_CONTROL
-	initBenchTest();
+	initInjectorCentral(sharedLogger);
 #endif /* EFI_PROD_CODE && EFI_ENGINE_CONTROL */
 
-	commonInitEngineController();
+	commonInitEngineController(sharedLogger);
+
+#if EFI_PROD_CODE
+	initPwmGenerator();
+#endif
 
 #if EFI_LOGIC_ANALYZER
 	if (engineConfiguration->isWaveAnalyzerEnabled) {
-		initWaveAnalyzer();
+		initWaveAnalyzer(sharedLogger);
 	}
 #endif /* EFI_LOGIC_ANALYZER */
 
@@ -724,8 +775,12 @@ void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	/**
 	 * this uses SimplePwm which depends on scheduler, has to be initialized after scheduler
 	 */
-	initCJ125(PASS_ENGINE_PARAMETER_SIGNATURE);
+	initCJ125(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
 #endif /* EFI_CJ125 */
+
+
+	// periodic events need to be initialized after fuel&spark pins to avoid a warning
+	initPeriodicEvents(PASS_ENGINE_PARAMETER_SIGNATURE);
 
 	if (hasFirmwareError()) {
 		return;
@@ -733,19 +788,22 @@ void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
 
 	engineStateBlinkingTask.Start();
 
-	initVrPwm(PASS_ENGINE_PARAMETER_SIGNATURE);
-
 #if EFI_PWM_TESTER
 	initPwmTester();
 #endif /* EFI_PWM_TESTER */
 
-#if EFI_ALTERNATOR_CONTROL
-	initAlternatorCtrl(PASS_ENGINE_PARAMETER_SIGNATURE);
-#endif /* EFI_ALTERNATOR_CONTROL */
+	initMalfunctionCentral();
 
+#if EFI_ALTERNATOR_CONTROL
+	initAlternatorCtrl(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+#endif
+
+#if EFI_BOOST_CONTROL
+	initBoostCtrl(sharedLogger PASS_ENGINE_PARAMETER_SUFFIX);
+#endif
 #if EFI_AUX_PID
-	initAuxPid();
-#endif /* EFI_AUX_PID */
+	initAuxPid(sharedLogger);
+#endif
 
 #if EFI_MALFUNCTION_INDICATOR
 	initMalfunctionIndicator();
@@ -753,7 +811,7 @@ void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
 
 	initEgoAveraging(PASS_ENGINE_PARAMETER_SIGNATURE);
 
-	if (isAdcChannelValid(engineConfiguration->externalKnockSenseAdc)) {
+	if (engineConfiguration->externalKnockSenseAdc != EFI_ADC_NONE) {
 		addConsoleAction("knockinfo", getKnockInfo);
 	}
 
@@ -765,21 +823,19 @@ void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	initLcdController();
 #endif /* EFI_HD44780_LCD */
 
+#if EFI_PROD_CODE
+	initTachometer(PASS_ENGINE_PARAMETER_SIGNATURE);
+#endif /* EFI_PROD_CODE */
 }
 
-/**
- * these two variables are here only to let us know how much RAM is available, also these
- * help to notice when RAM usage goes up - if a code change adds to RAM usage these variables would fail
- * linking process which is the way to raise the alarm
- *
- * You get "cannot move location counter backwards" linker error when you run out of RAM. When you run out of RAM you shall reduce these
- * UNUSED_SIZE constants.
- */
+// these two variables are here only to let us know how much RAM is available, also these
+// help to notice when RAM usage goes up - if a code change adds to RAM usage these variables would fail
+// linking process which is the way to raise the alarm
 #ifndef RAM_UNUSED_SIZE
-#define RAM_UNUSED_SIZE 10000
+#define RAM_UNUSED_SIZE 14500
 #endif
 #ifndef CCM_UNUSED_SIZE
-#define CCM_UNUSED_SIZE 600
+#define CCM_UNUSED_SIZE 4100
 #endif
 static char UNUSED_RAM_SIZE[RAM_UNUSED_SIZE];
 static char UNUSED_CCM_SIZE[CCM_UNUSED_SIZE] CCM_OPTIONAL;
@@ -797,6 +853,6 @@ int getRusEfiVersion(void) {
 	if (initBootloader() != 0)
 		return 123;
 #endif /* EFI_BOOTLOADER_INCLUDE_CODE */
-	return VCS_DATE;
+	return 201200317;
 }
 #endif /* EFI_UNIT_TEST */
