@@ -1,7 +1,7 @@
+.svn*
 .dep*
 build/
 build_kinetis/
-pinouts
 out/
 logs/
 blbuild/
@@ -14,13 +14,5 @@ doxygen/
 /.idea
 workspace.xml
 java_console_binary
-.vscode/.*
-*.cmp
-*.net
-err.txt
-log.txt
-*.rusefi_binary
-*.msq
-
-# Eclipse
-.metadata/
+.vscode
+*.json
