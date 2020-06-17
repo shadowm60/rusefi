@@ -301,7 +301,7 @@ static void setMiata1994_common(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 
 	engineConfiguration->tps1_1AdcChannel = EFI_ADC_2; // PA2
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_4;
-	engineConfiguration->mafAdcChannel = EFI_ADC_0;
+	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
 	engineConfiguration->clt.adcChannel = EFI_ADC_12;
 	engineConfiguration->iat.adcChannel = EFI_ADC_11;
 // end of 1994 commond
