@@ -5,9 +5,11 @@
  *      Author: Ola Ruud
  */
 
-#include "engine.h"
+
+#include "global.h"
 
 #if EFI_LAUNCH_CONTROL
+#include "engine.h"
 #include "boost_control.h"
 #include "vehicle_speed.h"
 #include "launch_control.h"
@@ -52,74 +54,66 @@ static bool getActivateSwitchCondition(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	}
 }
 
-class LaunchControl: public PeriodicTimerController {
-	efitick_t launchTimer;
+int LaunchControl::getPeriodMs() {
+	return 50;
+}
 
-	DECLARE_ENGINE_PTR;
-
-	int getPeriodMs() override {
-		return 50;
+void LaunchControl::PeriodicTask() {
+	if (!CONFIG(launchControlEnabled)) {
+		return;
 	}
 
-	void PeriodicTask() override {
-		if (!CONFIG(launchControlEnabled)) {
-			return;
+	int rpm = GET_RPM();
+	int speed = getVehicleSpeed();
+	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
+	int tpstreshold = engineConfiguration->launchTpsTreshold;
+	float timeDelay = engineConfiguration->launchActivateDelay;
+	int launchRpm = engineConfiguration->launchRpm;
+
+	bool activateSwitchCondition = getActivateSwitchCondition(PASS_ENGINE_PARAMETER_SIGNATURE);
+
+	bool rpmCondition = (launchRpm < rpm);
+	bool tpsCondition = tps.Valid && (tpstreshold < tps.Value);
+
+	bool speedCondition = (CONFIG(launchSpeedTreshold) > speed) || !engineConfiguration->launchDisableBySpeed;
+	bool combinedConditions = speedCondition && activateSwitchCondition && rpmCondition && tpsCondition;
+
+	if (!combinedConditions) {
+		// conditions not met, reset timer
+		launchTimer = getTimeNowNt();
+		engine->isLaunchCondition = false;
+		engine->setLaunchBoostDuty = false;
+		engine->applyLaunchControlRetard = false;
+		engine->applyLaunchExtraFuel = false;
+	} else {
+		// If conditions are met...
+		if ((getTimeNowNt() - launchTimer > MS2NT(timeDelay * 1000)) && combinedConditions) {
+			engine->isLaunchCondition = true;           // ...enable launch!
+			engine->applyLaunchExtraFuel = true;
 		}
-
-		int rpm = GET_RPM();
-		int speed = getVehicleSpeed();
-		auto tps = Sensor::get(SensorType::DriverThrottleIntent);
-		int tpstreshold = engineConfiguration->launchTpsTreshold;
-		float timeDelay = engineConfiguration->launchActivateDelay;
-		int cutRpmRange = engineConfiguration->hardCutRpmRange;
-		int launchAdvanceRpmRange = engineConfiguration->launchTimingRpmRange;
-		int launchRpm = engineConfiguration->launchRpm;
-
-		bool activateSwitchCondition = getActivateSwitchCondition(PASS_ENGINE_PARAMETER_SIGNATURE);
-
-		bool rpmCondition = (launchRpm < rpm);
-		bool tpsCondition = tps.Valid && (tpstreshold < tps.Value);
-
-		bool speedCondition = (CONFIG(launchSpeedTreshold) > speed) || !engineConfiguration->launchDisableBySpeed;
-
-		bool combinedConditions = speedCondition && activateSwitchCondition && rpmCondition && tpsCondition;
-
-		if (!combinedConditions) {
-			// conditions not met, reset timer
-			launchTimer = getTimeNowNt();
-			engine->isLaunchCondition = false;
-			engine->setLaunchBoostDuty = false;
-			engine->applyLaunchControlRetard = false;
-			engine->applyLaunchExtraFuel = false;
-		} else {
-			// If conditions are met...
-			if ((getTimeNowNt() - launchTimer > MS2NT(timeDelay * 1000)) && combinedConditions) {
-				engine->isLaunchCondition = true;           // ...enable launch!
-				engine->applyLaunchExtraFuel = true;
-			}
-			if (engineConfiguration->enableLaunchBoost) {
-				engine->setLaunchBoostDuty = true;           // ...enable boost!
-			}
-			if (engineConfiguration->enableLaunchRetard) {
-				engine->applyLaunchControlRetard = true;    // ...enable retard!
-			}
+		if (engineConfiguration->enableLaunchBoost) {
+			engine->setLaunchBoostDuty = true;           // ...enable boost!
 		}
-		if (engineConfiguration->debugMode == DBG_LAUNCH) {
+		if (engineConfiguration->enableLaunchRetard) {
+			engine->applyLaunchControlRetard = true;    // ...enable retard!
+		}
+	}
+
+	if (engineConfiguration->debugMode == DBG_LAUNCH) {
 #if EFI_TUNER_STUDIO
-			tsOutputChannels.debugIntField1 = rpmCondition;
-			tsOutputChannels.debugIntField2 = tpsCondition;
-			tsOutputChannels.debugIntField3 = speedCondition;
-			tsOutputChannels.debugIntField4 = activateSwitchCondition;
-			tsOutputChannels.debugIntField5 = engine->clutchDownState;
-			tsOutputChannels.debugFloatField1 = engine->launchActivatePinState;
-			tsOutputChannels.debugFloatField2 = engine->isLaunchCondition;
-			tsOutputChannels.debugFloatField3 = combinedConditions;
+		tsOutputChannels.debugIntField1 = rpmCondition;
+		tsOutputChannels.debugIntField2 = tpsCondition;
+		tsOutputChannels.debugIntField3 = speedCondition;
+		tsOutputChannels.debugIntField4 = activateSwitchCondition;
+		tsOutputChannels.debugIntField5 = engine->clutchDownState;
+		tsOutputChannels.debugFloatField1 = engine->launchActivatePinState;
+		tsOutputChannels.debugFloatField2 = engine->isLaunchCondition;
+		tsOutputChannels.debugFloatField3 = combinedConditions;
 #endif /* EFI_TUNER_STUDIO */
-		}
 	}
-};
+}
 
-static LaunchControl Launch;
+LaunchControl Launch;
 
 void setDefaultLaunchParameters(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	engineConfiguration->launchRpm = 4000;    // Rpm to trigger Launch condition
@@ -139,7 +133,6 @@ void setDefaultLaunchParameters(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 }
 
 void applyLaunchControlLimiting(bool *limitedSpark, bool *limitedFuel DECLARE_ENGINE_PARAMETER_SUFFIX) {
-	int rpm = GET_RPM();
 
 	int retardThresholdRpm = CONFIG(launchRpm) +
 		(CONFIG(enableLaunchRetard) ? CONFIG(launchAdvanceRpmRange) : 0) +

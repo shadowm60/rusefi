@@ -8,6 +8,18 @@
 #pragma once
 
 #include "engine.h"
+#include "periodic_task.h"
+
+class LaunchControl : public PeriodicTimerController {
+public:
+	DECLARE_ENGINE_PTR;
+
+	int getPeriodMs() override;
+	void PeriodicTask() override;
+
+private:
+    efitick_t launchTimer;
+};
 
 void initLaunchControl(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX);
 void setDefaultLaunchParameters(DECLARE_CONFIG_PARAMETER_SIGNATURE);
