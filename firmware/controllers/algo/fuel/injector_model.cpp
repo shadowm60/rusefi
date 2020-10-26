@@ -4,7 +4,10 @@ EXTERN_ENGINE;
 
 void InjectorModelBase::prepare() {
 	m_massFlowRate = getInjectorMassFlowRate();
-	m_deadtime = getDeadtime();
+	float deadtime = getDeadtime();
+	m_deadtime = deadtime;
+
+	postState(deadtime);
 }
 
 constexpr float convertToGramsPerSecond(float ccPerMinute) {
@@ -27,9 +30,19 @@ float InjectorModel::getDeadtime() const {
 	);
 }
 
+void InjectorModel::postState(float deadtime) const {
+	engine->engineState.running.injectorLag = deadtime;
+}
+
 float InjectorModelBase::getInjectionDuration(float fuelMassGram) const {
 	// TODO: support injector nonlinearity correction
 
 	floatms_t baseDuration = fuelMassGram / m_massFlowRate * 1000;
-	return baseDuration + m_deadtime;
+
+	if (baseDuration <= 0) {
+		// If 0 duration, don't add deadtime, just skip the injection.
+		return 0.0f;
+	} else {
+		return baseDuration + m_deadtime;
+	}
 }
