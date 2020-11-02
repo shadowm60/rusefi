@@ -526,7 +526,9 @@ void updateTunerStudioState(TunerStudioOutputChannels *tsOutputChannels DECLARE_
 	tsOutputChannels->massAirFlowVoltage = hasMafSensor() ? getMafVoltage(PASS_ENGINE_PARAMETER_SIGNATURE) : 0;
 
 	// offset 20
-	tsOutputChannels->airFuelRatio = Sensor::get(SensorType::Lambda).value_or(0) * 14.7f;
+	float lambdaValue = Sensor::get(SensorType::Lambda).value_or(0);
+	tsOutputChannels->lambda = lambdaValue;
+	tsOutputChannels->airFuelRatio = lambdaValue * ENGINE(engineState.stoichiometricRatio);
 
 	// offset 24
 	tsOutputChannels->engineLoad = getEngineLoadT(PASS_ENGINE_PARAMETER_SIGNATURE);
@@ -617,6 +619,7 @@ void updateTunerStudioState(TunerStudioOutputChannels *tsOutputChannels DECLARE_
 	// offset 112
 	tsOutputChannels->veValue = engine->engineState.currentVe;
 	tsOutputChannels->currentTargetAfr = ENGINE(engineState.targetAFR);
+	tsOutputChannels->targetLambda = ENGINE(engineState.targetLambda);
 
 	if (hasMapSensor(PASS_ENGINE_PARAMETER_SIGNATURE)) {
 		float mapValue = getMap(PASS_ENGINE_PARAMETER_SIGNATURE);
