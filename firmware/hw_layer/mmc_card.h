@@ -12,6 +12,7 @@
 #include "tunerstudio_io.h"
 
 #define DOT_MLG ".mlg"
+#define DOT_CSV ".csv"
 
 bool isLogFile(const char *fileName);
 void initMmcCard(void);

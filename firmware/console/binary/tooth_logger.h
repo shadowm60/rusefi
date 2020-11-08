@@ -18,6 +18,9 @@
 int copyCompositeEvents(CompositeEvent *events);
 #endif // EFI_UNIT_TEST
 
+#define SD_CARD_BUFFER_SIZE	150
+#define EVENTS_AFTER_ERROR  75
+
 int getCompositeRecordCount();
 
 void EnableToothLoggerIfNotEnabled();
@@ -45,3 +48,7 @@ struct ToothLoggerBuffer
 
 // Get a reference to the buffer
 ToothLoggerBuffer GetToothLoggerBuffer();
+
+// signal trigger error
+void LogTriggerError(obd_code_e code DECLARE_ENGINE_PARAMETER_SUFFIX);
+size_t LogTriggerEventToSd(char *ptr);

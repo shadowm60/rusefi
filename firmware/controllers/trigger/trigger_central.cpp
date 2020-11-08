@@ -30,6 +30,9 @@
 #include "map_averaging.h"
 #include "main_trigger_callback.h"
 
+#if EFI_TOOTH_LOGGER
+#include "tooth_logger.h"
+#endif
 
 #if EFI_PROD_CODE
 #include "pin_repository.h"
@@ -199,6 +202,9 @@ void hwHandleVvtCamSignal(trigger_value_e front, efitick_t nowNt DECLARE_ENGINE_
 	tc->vvtPosition = engineConfiguration->vvtOffset - currentPosition;
 	if (tc->vvtPosition < 0 || tc->vvtPosition > ENGINE(engineCycle)) {
 		warning(CUSTOM_ERR_VVT_OUT_OF_RANGE, "Please adjust vvtOffset since position %f", tc->vvtPosition);
+#if EFI_TOOTH_LOGGER		
+		LogTriggerError(CUSTOM_ERR_VVT_OUT_OF_RANGE);
+#endif			
 	}
 
 	switch (engineConfiguration->vvtMode) {

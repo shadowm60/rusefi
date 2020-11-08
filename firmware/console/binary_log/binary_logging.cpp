@@ -10,6 +10,9 @@
 #include "efitime.h"
 #include "crc.h"
 #include "buffered_writer.h"
+//#if EFI_TOOTH_LOGGER
+#include "tooth_logger.h"
+//#endif
 
 #define TIME_PRECISION 1000
 
@@ -111,6 +114,22 @@ void writeHeader(Writer& outBuffer) {
 	}
 }
 
+void writeCsvHeader(Writer& outBuffer) {
+	char buffer[60];
+	
+	memset(buffer, 0, sizeof(buffer));
+
+	strcpy(buffer, "#Firmware: v20200817@25023\n");
+	outBuffer.write(buffer, 27);
+	memset(buffer, 0, sizeof(buffer));
+	strcpy(buffer,"PriLevel,SecLevel,Trigger,Sync,TrigErr,Time,ToothTime\n");
+	outBuffer.write(buffer, 54);
+	memset(buffer, 0, sizeof(buffer));
+	strcpy(buffer,"Flag,Flag,Flag,Flag,Flag,ms,ms\n");
+	outBuffer.write(buffer, 31);
+
+}
+
 static uint8_t blockRollCounter = 0;
 
 size_t writeBlock(char* buffer) {
@@ -148,4 +167,12 @@ size_t writeBlock(char* buffer) {
 
 	// Total size has 4 byte header + 1 byte checksum
 	return dataBlockSize + 5;
+}
+
+size_t writeToothBlock(char* buffer) {
+
+	size_t retVal = 0;
+	retVal = LogTriggerEventToSd(buffer);
+	
+	return retVal;
 }

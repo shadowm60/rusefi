@@ -7,6 +7,10 @@
 
 #include "trigger_universal.h"
 
+#if EFI_TOOTH_LOGGER
+#include "tooth_logger.h"
+#endif
+
 /**
  * @see getCycleDuration
  */
@@ -35,6 +39,9 @@ void initializeSkippedToothTriggerWaveformExt(TriggerWaveform *s, int totalTeeth
 		operation_mode_e operationMode) {
 	if (totalTeethCount <= 0) {
 		firmwareError(CUSTOM_OBD_TRIGGER_WAVEFORM, "Invalid total tooth count for missing tooth decoder: %d", totalTeethCount);
+#if EFI_TOOTH_LOGGER		
+		LogTriggerError(CUSTOM_OBD_TRIGGER_WAVEFORM);
+#endif		
 		s->setShapeDefinitionError(true);
 		return;
 	}

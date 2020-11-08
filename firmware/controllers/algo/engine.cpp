@@ -29,6 +29,10 @@
 #include "sensor.h"
 #include "gppwm.h"
 #include "tachometer.h"
+#if EFI_TOOTH_LOGGER
+#include "tooth_logger.h"
+#endif
+
 #if EFI_MC33816
  #include "mc33816.h"
 #endif // EFI_MC33816
@@ -339,6 +343,9 @@ void Engine::OnTriggerStateDecodingError() {
 			TRIGGER_WAVEFORM(expectedEventCount[2]));
 	triggerCentral.triggerState.setTriggerErrorState();
 
+#if EFI_TOOTH_LOGGER		
+		LogTriggerError(CUSTOM_SYNC_COUNT_MISMATCH);
+#endif	
 
 	triggerCentral.triggerState.totalTriggerErrorCounter++;
 	if (CONFIG(verboseTriggerSynchDetails) || (triggerCentral.triggerState.someSortOfTriggerError && !CONFIG(silentTriggerError))) {
@@ -382,6 +389,9 @@ void Engine::OnTriggerInvalidIndex(int currentIndex) {
 	if (GET_RPM() != 0) {
 		warning(CUSTOM_SYNC_ERROR, "sync error: index #%d above total size %d", currentIndex, triggerCentral.triggerShape.getSize());
 		triggerCentral.triggerState.setTriggerErrorState();
+#if EFI_TOOTH_LOGGER		
+		LogTriggerError(CUSTOM_SYNC_ERROR);
+#endif			
 	}
 }
 

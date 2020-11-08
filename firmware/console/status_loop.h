@@ -15,5 +15,8 @@ void startStatusThreads(void);
 void initStatusLoop(void);
 
 struct Writer;
+/* function used to write current data to log file */
 void writeLogLine(Writer& buffer);
+/* function used to write current tooth log to file */
+void writeToothLog(Writer& buffer);
 void printOverallStatus(systime_t nowSeconds);

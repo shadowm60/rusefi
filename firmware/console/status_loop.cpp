@@ -125,6 +125,11 @@ static uint64_t binaryLogCount = 0;
 
 #endif /* EFI_FILE_LOGGING */
 
+#if EFI_TOOTH_LOGGER
+static char sdToothLogBuffer[100] MAIN_RAM;
+static uint64_t toothLogCount = 0;
+#endif /* EFI_TOOTH_LOGGER */
+
 EXTERN_ENGINE;
 
 /**
@@ -157,6 +162,25 @@ void writeLogLine(Writer& buffer) {
 
 	binaryLogCount++;
 #endif /* EFI_FILE_LOGGING */
+}
+
+void writeToothLog(Writer& buffer) {
+#if EFI_TOOTH_LOGGER
+	if (!main_loop_started)
+		return;
+
+	if (toothLogCount == 0) {
+		writeCsvHeader(buffer);
+		toothLogCount++;
+	} else {
+		/* get data */
+		size_t length = writeToothBlock(sdToothLogBuffer);
+		if (length != 0) {
+			buffer.write(sdToothLogBuffer, length);
+		}
+
+	}
+#endif
 }
 
 static int prevCkpEventCounter = -1;

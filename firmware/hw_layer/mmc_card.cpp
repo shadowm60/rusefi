@@ -124,10 +124,16 @@ static void printError(const char *str, FRESULT f_error) {
 static FIL FDLogFile NO_CACHE;
 static FIL FDCurrFile NO_CACHE;
 
+/* composit logger file handlers */
+static FIL FDToothLogFile NO_CACHE;
+static FIL FDToothCurrFile NO_CACHE;
+
+
 // 10 because we want at least 4 character name
 #define MIN_FILE_INDEX 10
 static int logFileIndex = MIN_FILE_INDEX;
 static char logName[_MAX_FILLER + 20];
+static char trigLogName[_MAX_FILLER + 20];
 
 static void printMmcPinout(void) {
 	scheduleMsg(&logger, "MMC CS %s", hwPortname(CONFIG(sdCardCsPin)));
@@ -186,6 +192,10 @@ static void incLogFileName(void) {
 static void prepareLogFileName(void) {
 	strcpy(logName, RUSEFI_LOG_PREFIX);
 	char *ptr;
+#if EFI_TOOTH_LOGGER
+	strcpy(trigLogName, RUSEFI_LOG_PREFIX);
+	char *ptrLogger;
+#endif	
 /* TS SD protocol supports only short 8 symbol file names :(
 
 	bool result = dateToStringShort(&logName[PREFIX_LEN]);
@@ -195,7 +205,13 @@ static void prepareLogFileName(void) {
  */
 		ptr = itoa10(&logName[PREFIX_LEN], logFileIndex);
 //	}
+#if EFI_TOOTH_LOGGER
+		ptrLogger = itoa10(&trigLogName[PREFIX_LEN],logFileIndex);
+		strcat(ptrLogger, DOT_CSV);
+#endif
+
 	strcat(ptr, DOT_MLG);
+
 }
 
 /**
@@ -241,6 +257,45 @@ static void removeFile(const char *pathx) {
 
 	UNLOCK_SD_SPI;
 }
+
+
+/**
+ * @brief Create a new file with the specified name
+ *
+ * This function saves the name of the file in a global variable
+ * so that we can later append to that file.
+ * Created log File is used for ToothLogger dump in case of trigger
+ * error is detected, we only log some events before and after the 
+ * error is detected, for more details see tooth_logger.cpp
+ */
+static void createLoggerFile(void) {
+
+	LOCK_SD_SPI;
+	memset(&FDToothLogFile, 0, sizeof(FIL));						// clear the memory
+	/* we do not need to prepare log file name since this was already done when creting the mlg log file */
+
+	FRESULT err = f_open(&FDToothLogFile, trigLogName, FA_OPEN_ALWAYS | FA_WRITE);				// Create new file
+	if (err != FR_OK && err != FR_EXIST) {
+		UNLOCK_SD_SPI;
+		sdStatus = SD_STATE_OPEN_FAILED;
+		warning(CUSTOM_ERR_SD_MOUNT_FAILED, "SD: mount failed");
+		printError("FS mount failed", err);	// else - show error
+		return;
+	}
+
+	err = f_lseek(&FDToothLogFile, f_size(&FDToothLogFile)); // Move to end of the file to append data
+	if (err) {
+		UNLOCK_SD_SPI;
+		sdStatus = SD_STATE_SEEK_FAILED;
+		warning(CUSTOM_ERR_SD_SEEK_FAILED, "SD: seek failed");
+		printError("Seek error", err);
+		return;
+	}
+	f_sync(&FDToothLogFile);
+	setSdCardReady(true);						// everything Ok
+	UNLOCK_SD_SPI;
+}
+
 
 int
     mystrncasecmp(const char *s1, const char *s2, size_t n)
@@ -315,10 +370,17 @@ static void mmcUnMount(void) {
 	}
 	f_close(&FDLogFile);						// close file
 	f_sync(&FDLogFile);							// sync ALL
+#if EFI_TOOTH_LOGGER	
+	f_close(&FDToothLogFile);						// close file
+	f_sync(&FDToothLogFile);						// sync ALL
+#endif
 	mmcDisconnect(&MMCD1);						// Brings the driver in a state safe for card removal.
 	mmcStop(&MMCD1);							// Disables the MMC peripheral.
 	f_mount(NULL, 0, 0);						// FATFS: Unregister work area prior to discard it
 	memset(&FDLogFile, 0, sizeof(FIL));			// clear FDLogFile
+#if EFI_TOOTH_LOGGER
+	memset(&FDToothLogFile, 0, sizeof(FIL));	// clear FDToothLogFile
+#endif	
 	setSdCardReady(false);						// status = false
 	scheduleMsg(&logger, "MMC/SD card removed");
 }
@@ -390,6 +452,9 @@ static void MMCmount(void) {
 		sdStatus = SD_STATE_MOUNTED;
 		incLogFileName();
 		createLogFile();
+#if EFI_TOOTH_LOGGER
+		createLoggerFile();
+#endif		
 		fileCreatedCounter++;
 		scheduleMsg(&logger, "MMC/SD mounted!");
 	} else {
@@ -428,7 +493,29 @@ class SdLogBufferWriter final : public BufferedWriter<512> {
 	}
 };
 
+class SdToothLogBufferWriter final : public BufferedWriter<512> {
+	size_t writeInternal(const char* buffer, size_t count) override {
+		size_t bytesWritten;
+
+		LOCK_SD_SPI;
+		FRESULT err = f_write(&FDToothLogFile, buffer, count, &bytesWritten);
+
+		if (bytesWritten != count) {
+			printError("write error or disk full", err); // error or disk full
+			mmcUnMount();
+		} else {
+			/* we sync after every operation since tooth logger is not called aften */
+			f_sync(&FDToothLogFile);
+
+		}
+
+		UNLOCK_SD_SPI;
+		return bytesWritten;
+	}
+};
+
 static SdLogBufferWriter logBuffer MAIN_RAM;
+static SdToothLogBufferWriter logToothBuffer MAIN_RAM;
 
 static THD_FUNCTION(MMCmonThread, arg) {
 	(void)arg;
@@ -454,6 +541,9 @@ static THD_FUNCTION(MMCmonThread, arg) {
 
 		if (isSdCardAlive()) {
 			writeLogLine(logBuffer);
+#if EFI_TOOTH_LOGGER
+			writeToothLog(logToothBuffer);
+#endif			
 		} else {
 			chThdSleepMilliseconds(100);
 		}
