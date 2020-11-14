@@ -177,7 +177,7 @@ static void printOutPin(const char *pinName, brain_pin_e hwPin) {
 }
 #endif /* EFI_PROD_CODE */
 
-void printOverallStatus(systime_t nowSeconds) {
+void printOverallStatus(efitimesec_t nowSeconds) {
 #if EFI_ENGINE_SNIFFER
 	waveChart.publishIfFull();
 #endif /* EFI_ENGINE_SNIFFER */
@@ -325,17 +325,10 @@ static OutputPin *leds[] = { &enginePins.warningLedPin, &enginePins.runningLedPi
 
 static void initStatusLeds(void) {
 	enginePins.communicationLedPin.initPin("led: comm status", engineConfiguration->communicationLedPin);
-	// we initialize this here so that we can blink it on start-up
-	enginePins.checkEnginePin.initPin("Check engine light", CONFIG(malfunctionIndicatorPin), &CONFIG(malfunctionIndicatorPinMode));
+	// checkEnginePin is already initialized by the time we get here
 
 	enginePins.warningLedPin.initPin("led: warning status", engineConfiguration->warningLedPin);
 	enginePins.runningLedPin.initPin("led: running status", engineConfiguration->runningLedPin);
-
-	enginePins.debugTriggerSync.initPin("debug: sync", CONFIG(debugTriggerSync));
-#if EFI_GPIO_HARDWARE && EFI_SHAFT_POSITION_INPUT
-	enginePins.triggerDecoderErrorPin.initPin("led: trigger debug", CONFIG(triggerErrorPin),
-			&CONFIG(triggerErrorPinMode));
-#endif /* EFI_GPIO_HARDWARE */
 }
 
 #if EFI_PROD_CODE
