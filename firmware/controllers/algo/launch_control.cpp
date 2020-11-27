@@ -122,7 +122,7 @@ bool isLaunchConditionMet(int rpm) {
 	return speedCondition && activateSwitchCondition && rpmCondition && tpsCondition;
 }
 
-void updateLaunchConditions(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
+void updateLaunchConditions(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	if (!CONFIG(launchControlEnabled)) {
 		return;
 	}
