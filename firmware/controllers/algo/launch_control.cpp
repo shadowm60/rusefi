@@ -25,6 +25,9 @@
 #include "advance_map.h"
 
 static Logging *logger;
+static bool isInit = false;
+static efitick_t launchTimer = 0;
+static int retardThresholdRpm;
 
 #if EFI_TUNER_STUDIO
 #include "tunerstudio_outputs.h"
@@ -33,27 +36,12 @@ extern TunerStudioOutputChannels tsOutputChannels;
 
 EXTERN_ENGINE;
 
-#define RETART_THD_CALC	CONFIG(launchRpm) +\
-						(CONFIG(enableLaunchRetard) ? CONFIG(launchAdvanceRpmRange) : 0) +\
-						CONFIG(hardCutRpmRange)
-static int retardThresholdRpm;
-
-
-class LaunchControlImpl : public LaunchControlBase, public PeriodicTimerController {
-	int getPeriodMs() override {
-		return 50;
-	}
-
-	void PeriodicTask() {
-		update();
-	}
-};
 
 /**
  * We can have active condition from switch or from clutch.
  * In case we are dependent on VSS we just return true.
  */
-bool LaunchControlBase::isInsideSwitchCondition() const {
+bool isInsideSwitchCondition() {
 	switch (CONFIG(launchActivationMode)) {
 	case SWITCH_INPUT_LAUNCH:
 		if (CONFIG(launchActivatePin) != GPIO_UNASSIGNED) {
@@ -88,7 +76,7 @@ bool LaunchControlBase::isInsideSwitchCondition() const {
  * The condition logic is written in that way, that if we do not use disable by speed
  * then we have to return true, and trust that we would disable by other condition!
  */ 
-bool LaunchControlBase::isInsideSpeedCondition() const {
+bool isInsideSpeedCondition() {
 	int speed = getVehicleSpeed();
 	return (CONFIG(launchSpeedTreshold) > speed) || !engineConfiguration->launchDisableBySpeed;
 }
@@ -96,7 +84,7 @@ bool LaunchControlBase::isInsideSpeedCondition() const {
 /**
  * Returns false if TPS is invalid or TPS > preset trashold
  */
-bool LaunchControlBase::isInsideTpsCondition() const {
+bool isInsideTpsCondition() {
 	auto tps = Sensor::get(SensorType::DriverThrottleIntent);
 
 	// Disallow launch without valid TPS
@@ -110,12 +98,12 @@ bool LaunchControlBase::isInsideTpsCondition() const {
 /**
  * Condition is true as soon as we are above LaunchRpm
  */
-bool LaunchControlBase::isInsideRPMCondition(int rpm) const {
+bool isInsideRPMCondition(int rpm) {
 	int launchRpm = CONFIG(launchRpm);
 	return (launchRpm < rpm);
 }
 
-bool LaunchControlBase::isLaunchConditionMet(int rpm) const {
+bool isLaunchConditionMet(int rpm) {
 
 	bool activateSwitchCondition = isInsideSwitchCondition();
 	bool rpmCondition = isInsideRPMCondition(rpm);
@@ -134,8 +122,12 @@ bool LaunchControlBase::isLaunchConditionMet(int rpm) const {
 	return speedCondition && activateSwitchCondition && rpmCondition && tpsCondition;
 }
 
-void LaunchControlBase::update() {
+void updateLaunchConditions(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	if (!CONFIG(launchControlEnabled)) {
+		return;
+	}
+
+	if (!isInit) {
 		return;
 	}
 
@@ -143,12 +135,13 @@ void LaunchControlBase::update() {
 	bool combinedConditions = isLaunchConditionMet(rpm);
 
 	float timeDelay = CONFIG(launchActivateDelay);
-	int cutRpmRange = CONFIG(hardCutRpmRange);
-	int launchAdvanceRpmRange = CONFIG(launchTimingRpmRange);
+	int cutRpmRange = CONFIG(hardCutRpmRange); //unused
+	int launchAdvanceRpmRange = CONFIG(launchTimingRpmRange); //unused
 
 	//recalculate in periodic task, this way we save time in applyLaunchControlLimiting
 	//and still recalculat in case user changed the values
-	retardThresholdRpm = RETART_THD_CALC;
+	retardThresholdRpm = CONFIG(launchRpm)+(CONFIG(enableLaunchRetard) ? \
+	CONFIG(launchAdvanceRpmRange) : 0)+CONFIG(hardCutRpmRange);
 
 	if (!combinedConditions) {
 		// conditions not met, reset timer
@@ -181,8 +174,6 @@ void LaunchControlBase::update() {
 #endif /* EFI_TUNER_STUDIO */
 }
 
-static LaunchControlImpl Launch;
-
 void setDefaultLaunchParameters(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	engineConfiguration->launchRpm = 4000;    // Rpm to trigger Launch condition
 	engineConfiguration->launchTimingRetard = 10; // retard in absolute degrees ATDC
@@ -210,8 +201,9 @@ void applyLaunchControlLimiting(bool *limitedSpark, bool *limitedFuel DECLARE_EN
 
 void initLaunchControl(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	logger = sharedLogger;
-	retardThresholdRpm = RETART_THD_CALC;
-	Launch.Start();
+	retardThresholdRpm = CONFIG(launchRpm)+(CONFIG(enableLaunchRetard) ? \
+	CONFIG(launchAdvanceRpmRange) : 0) +CONFIG(hardCutRpmRange);
+	isInit = true;
 }
 
 #endif /* EFI_LAUNCH_CONTROL */
