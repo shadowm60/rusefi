@@ -74,7 +74,7 @@ public:
 	brain_pin_e brainPin;
 #endif /* EFI_GPIO_HARDWARE */
 
-	int8_t currentLogicValue = 0;
+	int8_t currentLogicValue = INITIAL_PIN_STATE;
 	/**
 	 * we track current pin status so that we do not touch the actual hardware if we want to write new pin bit
 	 * which is same as current pin value. This maybe helps in case of status leds, but maybe it's a total over-engineering
@@ -145,8 +145,8 @@ public:
 	void init(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 	void unregister();
 	RegisteredOutputPin *next;
-private:
 	const char *registrationName;
+private:
 	short pinOffset;
 	short pinModeOffset;
 	bool isPinConfigurationChanged();
@@ -162,6 +162,7 @@ public:
 	EnginePins();
 	void startPins(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 	void reset();
+	static void debug();
 	bool stopPins();
 	void unregisterPins();
 	RegisteredOutputPin mainRelay;

@@ -60,7 +60,7 @@ void ButtonDebounce::stopConfiguration () {
     if (*m_pin != active_pin || *m_mode != active_mode || (isActiveConfigurationVoid && (*m_pin != 0 || *m_mode != 0))) {
 #endif /* EFI_ACTIVE_CONFIGURATION_IN_FLASH */
 #ifndef EFI_UNIT_TEST
-        brain_pin_markUnused(active_pin);
+    	efiSetPadUnused(active_pin);
         needsInit = true;
 #endif /* EFI_UNIT_TEST */
     }
@@ -118,7 +118,7 @@ void ButtonDebounce::debug() {
     while (listItem != nullptr) {
 #if EFI_PROD_CODE || EFI_UNIT_TEST
         scheduleMsg(logger, "%s timeLast %d", listItem->name, listItem->timeLast);
-        scheduleMsg(logger, "pin %d", efiReadPin(listItem->active_pin));
+        scheduleMsg(logger, "physical state %d value %d", efiReadPin(listItem->active_pin), listItem->storedValue);
 #endif
 
         listItem = listItem->nextDebounce;

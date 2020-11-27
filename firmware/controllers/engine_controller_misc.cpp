@@ -78,6 +78,9 @@ void setMockVBattVoltage(float voltage DECLARE_ENGINE_PARAMETER_SUFFIX) {
 void setMockState(brain_pin_e pin, bool state) {
 #if EFI_UNIT_TEST
 	mockPinStates[static_cast<int>(pin)] = state;
+#else
+	UNUSED(pin);
+	UNUSED(state);
 #endif
 }
 
@@ -150,7 +153,9 @@ static void onStartStopButtonToggle(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 		bool wasStarterEngaged = enginePins.starterControl.getAndSet(1);
 		if (!wasStarterEngaged) {
 		    engine->startStopStateLastPushTime = getTimeNowNt();
-			scheduleMsg(&sharedLogger, "Let's crank this engine for up to %dseconds!", CONFIG(startCrankingDuration));
+		    scheduleMsg(&sharedLogger, "Let's crank this engine for up to %d seconds via %s!",
+		    		CONFIG(startCrankingDuration),
+					hwPortname(CONFIG(starterControlPin)));
 		}
 	} else if (engine->rpmCalculator.isRunning()) {
 		scheduleMsg(&sharedLogger, "Let's stop this engine!");

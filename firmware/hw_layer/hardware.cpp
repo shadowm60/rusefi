@@ -148,7 +148,10 @@ static Logging *sharedLogger;
 static int fastMapSampleIndex;
 static int hipSampleIndex;
 static int tpsSampleIndex;
+
+#if HAL_TRIGGER_USE_ADC
 static int triggerSampleIndex;
+#endif
 
 #if HAL_USE_ADC
 extern AdcDevice fastAdc;
@@ -288,9 +291,9 @@ void stopSpi(spi_device_e device) {
 		return; // not turned on
 	}
 	isSpiInitialized[device] = false;
-	brain_pin_markUnused(getSckPin(device));
-	brain_pin_markUnused(getMisoPin(device));
-	brain_pin_markUnused(getMosiPin(device));
+	efiSetPadUnused(getSckPin(device));
+	efiSetPadUnused(getMisoPin(device));
+	efiSetPadUnused(getMosiPin(device));
 #endif /* HAL_USE_SPI */
 }
 
@@ -368,7 +371,7 @@ void applyNewHardwareSettings(void) {
 	stopBoostPin();
 #endif
 	if (isPinOrModeChanged(clutchUpPin, clutchUpPinMode)) {
-		brain_pin_markUnused(activeConfiguration.clutchUpPin);
+		efiSetPadUnused(activeConfiguration.clutchUpPin);
 	}
 
 	enginePins.unregisterPins();
@@ -466,9 +469,9 @@ void initHardware(Logging *l) {
 
 #ifdef CONFIG_RESET_SWITCH_PORT
 // this pin is not configurable at runtime so that we have a reliable way to reset configuration
-#define SHOULD_INGORE_FLASH() (palReadPad(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN) == 0)
+#define SHOULD_IGNORE_FLASH() (palReadPad(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN) == 0)
 #else
-#define SHOULD_INGORE_FLASH() (false)
+#define SHOULD_IGNORE_FLASH() (false)
 #endif // CONFIG_RESET_SWITCH_PORT
 
 #ifdef CONFIG_RESET_SWITCH_PORT
@@ -482,7 +485,7 @@ void initHardware(Logging *l) {
 	 *
 	 * interesting fact that we have another read from flash before we get here
 	 */
-	if (SHOULD_INGORE_FLASH()) {
+	if (SHOULD_IGNORE_FLASH()) {
 		engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
 		resetConfigurationExt(sharedLogger, engineConfiguration->engineType PASS_ENGINE_PARAMETER_SUFFIX);
 		writeToFlashNow();

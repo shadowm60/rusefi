@@ -9,7 +9,8 @@
 #include "engine_controller.h"
 
 TEST(start, startStop) {
-	WITH_ENGINE_TEST_HELPER(BMW_M73_PROTEUS);
+	std::unordered_map<SensorType, float> sensorVals = {{ SensorType::AcceleratorPedal, 0 }};
+	WITH_ENGINE_TEST_HELPER_SENS(BMW_M73_PROTEUS, sensorVals);
 	eth.smartMoveTimeForwardSeconds(1); // '0' time has special meaning for implementation so let's move forward
 
 	// this is a pull-up, so 'true' on start-up
@@ -19,6 +20,12 @@ TEST(start, startStop) {
 
 	slowStartStopButtonCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
 	ASSERT_FALSE(efiReadPin(engineConfiguration->starterControlPin));
+
+	// startup 'timeout' duration of time is a special case so let's sleep a bit
+	eth.smartMoveTimeForwardSeconds(10);
+	slowStartStopButtonCallback(PASS_ENGINE_PARAMETER_SIGNATURE);
+	ASSERT_FALSE(efiReadPin(engineConfiguration->starterControlPin));
+
 
 
 	eth.smartMoveTimeForwardSeconds(10);
