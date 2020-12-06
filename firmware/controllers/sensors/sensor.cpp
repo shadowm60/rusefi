@@ -69,9 +69,7 @@ public:
 		// If there's somebody already here - a consumer tried to double-register a sensor
 		if (m_sensor) {
 			// This sensor has already been registered. Don't re-register it.
-	#if ! EFI_UNIT_TEST
-			firmwareError(CUSTOM_OBD_26, "Duplicate registration for %s sensor", sensor->getSensorName());
-	#endif
+			firmwareError(CUSTOM_OBD_26, "Duplicate registration for sensor \"%s\"", sensor->getSensorName());
 			return false;
 		} else {
 			// Put the sensor in the registry
@@ -118,12 +116,22 @@ public:
 	float getRaw() const {
 		const auto sensor = m_sensor;
 
-		if (m_sensor) {
-			return m_sensor->getRaw();
+		if (sensor) {
+			return sensor->getRaw();
 		}
 
 		// We've exhausted all valid ways to return something - sensor not found.
 		return 0;
+	}
+
+	bool isRedundant() const {
+		const auto sensor = m_sensor;
+
+		if (sensor) {
+			return sensor->isRedundant();
+		}
+
+		return false;
 	}
 
 private:
@@ -179,6 +187,12 @@ bool Sensor::Register() {
 	const auto entry = getEntryForType(type);
 
 	return entry ? entry->getRaw() : 0;
+}
+
+/*static*/ bool Sensor::isRedundant(SensorType type) {
+	const auto entry = getEntryForType(type);
+
+	return entry ? entry->isRedundant() : false;
 }
 
 /*static*/ bool Sensor::hasSensor(SensorType type) {
