@@ -6,7 +6,7 @@
  */
 
 #include "engine_test_helper.h"
-#include "electronic_throttle.h"
+#include "electronic_throttle_impl.h"
 #include "dc_motor.h"
 #include "engine_controller.h"
 #include "sensor.h"
@@ -295,6 +295,18 @@ TEST(etb, setpointIdle) {
 	EXPECT_FLOAT_EQ(55, etb.getSetpoint().value_or(-1));
 }
 
+TEST(etb, setpointNoPedalMap) {
+	EtbController etb;
+
+	// Must have TPS initialized for ETB setup
+//	Sensor::setMockValue(SensorType::Tps1, 0.0f, true);
+
+	// Don't pass a pedal map
+	etb.init(ETB_Throttle1, nullptr, nullptr, nullptr);
+
+	EXPECT_EQ(etb.getSetpoint(), unexpected);
+}
+
 TEST(etb, setpointIdleValveController) {
 	EtbController etb;
 
@@ -487,4 +499,41 @@ TEST(etb, closedLoopPid) {
 	// Test PID limiting
 	EXPECT_FLOAT_EQ(etb.getClosedLoop(50, 70).value_or(-1), -60);
 	EXPECT_FLOAT_EQ(etb.getClosedLoop(50, 30).value_or(-1), 75);
+}
+
+TEST(etb, openLoopThrottle) {
+	WITH_ENGINE_TEST_HELPER(TEST_ENGINE);
+
+	EtbController etb;
+	INJECT_ENGINE_REFERENCE(&etb);
+	etb.init(ETB_Throttle1, nullptr, nullptr, nullptr);
+
+	// Map [0, 100] -> [-50, 50]
+	setLinearCurve(engineConfiguration->etbBiasBins, 0, 100);
+	setLinearCurve(engineConfiguration->etbBiasValues, -50, 50);
+
+	EXPECT_NEAR(-50, etb.getOpenLoop(0).value_or(-1), EPS4D);
+	EXPECT_NEAR(-25, etb.getOpenLoop(25).value_or(-1), EPS4D);
+	EXPECT_NEAR(0, etb.getOpenLoop(50).value_or(-1), EPS4D);
+	EXPECT_NEAR(25, etb.getOpenLoop(75).value_or(-1), EPS4D);
+	EXPECT_NEAR(50, etb.getOpenLoop(100).value_or(-1), EPS4D);
+}
+
+TEST(etb, openLoopNonThrottle) {
+	WITH_ENGINE_TEST_HELPER(TEST_ENGINE);
+
+	EtbController etb;
+	INJECT_ENGINE_REFERENCE(&etb);
+	etb.init(ETB_Wastegate, nullptr, nullptr, nullptr);
+
+	// Map [0, 100] -> [-50, 50]
+	setLinearCurve(engineConfiguration->etbBiasBins, 0, 100);
+	setLinearCurve(engineConfiguration->etbBiasValues, -50, 50);
+
+	// Should all return 0, as non-throttles don't use open loop table
+	EXPECT_EQ(0, etb.getOpenLoop(0).value_or(-1));
+	EXPECT_EQ(0, etb.getOpenLoop(25).value_or(-1));
+	EXPECT_EQ(0, etb.getOpenLoop(50).value_or(-1));
+	EXPECT_EQ(0, etb.getOpenLoop(75).value_or(-1));
+	EXPECT_EQ(0, etb.getOpenLoop(100).value_or(-1));
 }
