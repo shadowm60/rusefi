@@ -1,6 +1,7 @@
 package com.rusefi;
 
 import com.rusefi.functional_tests.EcuTestHelper;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static com.rusefi.functional_tests.EcuTestHelper.FAIL;
