@@ -101,7 +101,7 @@ typedef enum {
 	// used by unit test
 	// see https://github.com/rusefi/rusefi/issues/898
 	// see TriggerWaveform::bothFrontsRequired
-	ISSUE_898 = 27,
+	TEST_ISSUE_898 = 27,
 
 	MAZDA_626 = 28,
 
@@ -187,10 +187,14 @@ typedef enum {
 
 	VW_B6 = ET_VW_B6,
 
-	BMW_M73_PROTEUS = ET_BMW_M73_PROTEUS,
+	BMW_M73_PROTEUS = ET_PROTEUS_BMW_M73,
 
 	DODGE_RAM = 64,
 	CITROEN_TU3JP = ET_CITROEN_TU3JP,
+
+	MRE_M111 = ET_MRE_M111,
+
+	PROTEUS_MIATA_NB2 = ET_PROTEUS_MIATA_NB2,
 
 
 	/**
@@ -767,8 +771,8 @@ typedef enum {
 	DBG_FSIO_SPECIAL = 42,
 	DBG_INJECTOR_COMPENSATION = 43,
 	DBG_DYNO_VIEW = 44,
-	DBG_LOGIC_ANALYZER = 45,
-	DBG_46 = 46,
+	DBG_LOGIC_ANALYZER = DBG_DBG_LOGIC_ANALYZER,
+	DBG_RUSEFI_WIDEBAND = 46,
 	DBG_47 = 47,
 	DBG_48 = 48,
 

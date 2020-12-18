@@ -1,6 +1,6 @@
 package com.rusefi.config.generated;
 
-// this file was generated automatically by rusEfi tool ConfigDefinition.jar based on gen_config.sh integration/rusefi_config.txt Mon Dec 14 13:30:48 UTC 2020
+// this file was generated automatically by rusEfi tool ConfigDefinition.jar based on gen_config.sh integration/rusefi_config.txt Fri Dec 18 17:41:16 UTC 2020
 
 // by class com.rusefi.output.FileJavaFieldsConsumer
 import com.rusefi.config.*;
@@ -322,6 +322,7 @@ public class Fields {
 	public static final int cutSparkOnHardLimit_offset = 1464;
 	public static final int cylinderBore_offset = 408;
 	public static final int cylindersCount_offset = 400;
+	public static final int DBG_DBG_LOGIC_ANALYZER = 45;
 	public static final int dc_io_size = 4;
 	public static final int DC_PER_STEPPER = 2;
 	public static final int debugMapAveraging_offset = 807;
@@ -378,7 +379,6 @@ public class Fields {
 	public static final int ERROR_BUFFER_SIZE = 120;
 	public static final int ET_BMW_E34 = 25;
 	public static final int ET_BMW_M73_F = 40;
-	public static final int ET_BMW_M73_PROTEUS = 63;
 	public static final int ET_CAMARO = 35;
 	public static final int ET_CITROEN_TU3JP = 65;
 	public static final int ET_DEFAULT_FRANKENSO = 0;
@@ -394,6 +394,7 @@ public class Fields {
 	public static final int ET_MIATA_TCU_PROTEUS = 1;
 	public static final int ET_MRE_BODY_CONTROL = 23;
 	public static final int ET_MRE_DEFAULTS = 60;
+	public static final int ET_MRE_M111 = 68;
 	public static final int ET_MRE_MIATA_94_MAP = 20;
 	public static final int ET_MRE_MIATA_NA6_MAP = 66;
 	public static final int ET_MRE_MIATA_NA6_VAF = 12;
@@ -402,6 +403,8 @@ public class Fields {
 	public static final int ET_MRE_NEW_TEST_BOARD = 31;
 	public static final int ET_MRE_OLD_TEST_BOARD = 30;
 	public static final int ET_MRE_SUBARU_EJ18 = 37;
+	public static final int ET_PROTEUS_BMW_M73 = 63;
+	public static final int ET_PROTEUS_MIATA_NB2 = 67;
 	public static final int ET_ROVER_V8 = 10;
 	public static final int ET_SACHS = 29;
 	public static final int ET_VW_ABA = 32;
@@ -1180,6 +1183,7 @@ public class Fields {
 	public static final int servoOutputPins8_offset = 3147;
 	public static final int showHumanReadableWarning_offset = 976;
 	public static final int showSdCardWarning_offset = 76;
+	public static final int SIGNATURE_HASH = 1597869;
 	public static final int silentTriggerError_offset = 1464;
 	public static final int slowAdcAlpha_offset = 2088;
 	public static final int sparkDwellRpmBins_offset = 332;
@@ -1460,7 +1464,7 @@ public class Fields {
 	public static final char TS_SD_R_COMMAND = 'r';
 	public static final char TS_SD_W_COMMAND = 'w';
 	public static final char TS_SET_LOGGER_SWITCH = 'l';
-	public static final String TS_SIGNATURE = "rusEFI 2020.12.14.all.2658502448";
+	public static final String TS_SIGNATURE = "rusEFI 2020.12.18.all.1597869";
 	public static final char TS_SINGLE_WRITE_COMMAND = 'W';
 	public static final int TT_TT_1_16 = 50;
 	public static final int TT_TT_2JZ_1_12 = 29;
@@ -2383,7 +2387,7 @@ public class Fields {
 	public static final Field TPSDECELENLEANMENTTHRESHOLD = Field.create("TPSDECELENLEANMENTTHRESHOLD", 2080, FieldType.FLOAT);
 	public static final Field TPSDECELENLEANMENTMULTIPLIER = Field.create("TPSDECELENLEANMENTMULTIPLIER", 2084, FieldType.FLOAT);
 	public static final Field SLOWADCALPHA = Field.create("SLOWADCALPHA", 2088, FieldType.FLOAT);
-	public static final String[] debug_mode_e = {"Alternator PID", "TPS acceleration enrichment", "GPPWM", "Idle Control", "Engine Load accl enrich", "Trigger Counters", "FSIO_ADC", "AUX_PID_1", "VVT input", "Cranking", "Timing", "Closed-loop fuel corr PID", "VSS", "SD card", "sr5", "Knock", "mode16", "Electronic Throttle", "Executor", "Bench Test / TS commands", "Aux Valves", "Analog inputs #1", "INSTANT_RPM", "FSIO_EXPRESSION_1_7", "Status", "CJ125", "CAN", "MAP", "Metrics", "ETB#2", "Ion Sense", "TLE8888", "Analog inputs #2", "Dwell Metric", "INVALID", "ETB Logic", "Boost Control", "Start/Stop", "Launch", "ETB Autotune", "FSIO_COMPOSITE_LOG", "FSIO_EXPRESSION_8_14", "FSIO_SPECIAL", "Injector Compensation", "Dyno_View", "Logic_Analyzer", "Mode46", "Mode47", "Mode48"};
+	public static final String[] debug_mode_e = {"Alternator PID", "TPS acceleration enrichment", "GPPWM", "Idle Control", "Engine Load accl enrich", "Trigger Counters", "FSIO_ADC", "AUX_PID_1", "VVT input", "Cranking", "Timing", "Closed-loop fuel corr PID", "VSS", "SD card", "sr5", "Knock", "mode16", "Electronic Throttle", "Executor", "Bench Test / TS commands", "Aux Valves", "Analog inputs #1", "INSTANT_RPM", "FSIO_EXPRESSION_1_7", "Status", "CJ125", "CAN", "MAP", "Metrics", "ETB#2", "Ion Sense", "TLE8888", "Analog inputs #2", "Dwell Metric", "INVALID", "ETB Logic", "Boost Control", "Start/Stop", "Launch", "ETB Autotune", "FSIO_COMPOSITE_LOG", "FSIO_EXPRESSION_8_14", "FSIO_SPECIAL", "Injector Compensation", "Dyno_View", "Logic_Analyzer", "rusEFI Wideband", "Mode47", "Mode48"};
 	public static final Field DEBUGMODE = Field.create("DEBUGMODE", 2092, FieldType.INT, debug_mode_e);
 	public static final Field AUXSERIALSPEED = Field.create("AUXSERIALSPEED", 2096, FieldType.INT);
 	public static final Field THROTTLEPEDALSECONDARYUPVOLTAGE = Field.create("THROTTLEPEDALSECONDARYUPVOLTAGE", 2100, FieldType.FLOAT);
