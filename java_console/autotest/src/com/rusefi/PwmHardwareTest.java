@@ -56,10 +56,6 @@ public class PwmHardwareTest {
         /* +-1% is still acceptable */
         EcuTestHelper.assertEquals("Idle PWM freq", 160, SensorCentral.getInstance().getValue(Sensor.debugIntField1),0.01);
 
-
-        if (ControllerConnectorState.firmwareVersion == null)
-            throw new IllegalStateException("firmwareVersion has not arrived");
-
     }
 
 }
