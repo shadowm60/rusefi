@@ -195,12 +195,6 @@ public:
 	 */
 	efitimems64_t callFromPitStopEndTime = 0;
 
-	/**
-	 * This flag indicated a big enough problem that engine control would be
-	 * prohibited if this flag is set to true.
-	 */
-	bool withError = false;
-
 	RpmCalculator rpmCalculator;
 	persistent_config_s *config = nullptr;
 	/**
@@ -318,9 +312,6 @@ public:
 	 * todo: update documentation
 	 */
 	int ignitionPin[IGNITION_PIN_COUNT];
-
-	// Store current ignition mode for prepareIgnitionPinIndices()
-	ignition_mode_e ignitionModeForPinIndices = Force_4_bytes_size_ignition_mode;
 
 	/**
 	 * this is invoked each time we register a trigger tooth signal

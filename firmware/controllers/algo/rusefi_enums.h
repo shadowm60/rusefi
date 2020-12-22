@@ -55,9 +55,6 @@ typedef enum {
 	 */
 	GY6_139QMB = 8,
 
-
-	ROVER_V8 = ET_ROVER_V8,
-
 	MIATA_PROTEUS_TCU = ET_MIATA_TCU_PROTEUS,
 	MAZDA_MIATA_NB1 = 9,
 	MRE_MIATA_NB2_MAP = ET_MRE_MIATA_NB2_MAP,
@@ -130,8 +127,7 @@ typedef enum {
 
 	BMW_M73_F = ET_BMW_M73_F,
 
-
-	ZIL_130 = 42,
+	PROTEUS_QC_TEST_BOARD = ET_PROTEUS_QC_TEST_BOARD,
 
 	HONDA_600 = 43,
 
@@ -183,7 +179,7 @@ typedef enum {
 
 	MICRO_RUS_EFI = ET_MRE_DEFAULTS,
 
-	PROTEUS = 61,
+	PROTEUS_DEFAULTS = 61,
 
 	VW_B6 = ET_VW_B6,
 
@@ -771,7 +767,9 @@ typedef enum {
 	DBG_FSIO_SPECIAL = 42,
 	DBG_INJECTOR_COMPENSATION = 43,
 	DBG_DYNO_VIEW = 44,
-	DBG_LOGIC_ANALYZER = DBG_DBG_LOGIC_ANALYZER,
+	// todo: because of getEnumOptionsForTunerStudio 'getEnumOptionsForTunerStudio' would not work here
+	// todo: https://github.com/rusefi/rusefi/issues/2102
+	DBG_LOGIC_ANALYZER = 45,
 	DBG_RUSEFI_WIDEBAND = 46,
 	DBG_47 = 47,
 	DBG_48 = 48,
