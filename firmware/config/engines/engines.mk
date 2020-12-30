@@ -3,7 +3,6 @@ ENGINES_SRC =
 
 ENGINES_SRC_CPP = $(PROJECT_DIR)/config/engines/ford_aspire.cpp \
 	$(PROJECT_DIR)/config/engines/custom_engine.cpp \
-	$(PROJECT_DIR)/config/engines/bmw_e34.cpp \
 	$(PROJECT_DIR)/config/engines/bmw_m73.cpp \
 	$(PROJECT_DIR)/config/engines/bmw_m73_mre.cpp \
 	$(PROJECT_DIR)/config/engines/mazda_miata.cpp \
@@ -14,7 +13,6 @@ ENGINES_SRC_CPP = $(PROJECT_DIR)/config/engines/ford_aspire.cpp \
 	$(PROJECT_DIR)/config/engines/mazda_miata_custom_hunchback.cpp \
 	$(PROJECT_DIR)/config/engines/citroenBerlingoTU3JP.cpp \
 	$(PROJECT_DIR)/config/engines/dodge_neon.cpp \
-	$(PROJECT_DIR)/config/engines/ford_fiesta.cpp \
 	$(PROJECT_DIR)/config/engines/ford_1995_inline_6.cpp \
 	$(PROJECT_DIR)/config/engines/nissan_primera.cpp \
 	$(PROJECT_DIR)/config/engines/mazda_miata_nb.cpp \

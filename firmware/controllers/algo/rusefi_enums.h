@@ -40,11 +40,7 @@ typedef enum {
 	 * http://rusefi.com/forum/viewtopic.php?t=375
 	 */
 	FORD_ASPIRE_1996 = ET_FORD_ASPIRE,
-	/**
-	 * 36-1 toothed wheel engine
-	 * http://rusefi.com/forum/viewtopic.php?t=282
-	 */
-	FORD_FIESTA = ET_FORD_FIESTA,
+
 	NISSAN_PRIMERA = 5,
 	HONDA_ACCORD_CD = 6,
 	FORD_INLINE_6_1995 = 7,
@@ -90,8 +86,6 @@ typedef enum {
 	 */
 	MRE_BODY_CONTROL = ET_MRE_BODY_CONTROL,
 	BMW_M73_M = 24,
-
-	BMW_E34 = ET_BMW_E34,
 
 	TEST_ENGINE = 26,
 

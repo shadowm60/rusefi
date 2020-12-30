@@ -625,8 +625,6 @@ case LM_SPEED_DENSITY:
 }
 const char *getEngine_type_e(engine_type_e value){
 switch(value) {
-case BMW_E34:
-  return "BMW_E34";
 case BMW_M73_F:
   return "BMW_M73_F";
 case BMW_M73_M:
@@ -655,8 +653,6 @@ case FORD_ASPIRE_1996:
   return "FORD_ASPIRE_1996";
 case FORD_ESCORT_GT:
   return "FORD_ESCORT_GT";
-case FORD_FIESTA:
-  return "FORD_FIESTA";
 case FORD_INLINE_6_1995:
   return "FORD_INLINE_6_1995";
 case FRANKENSO_QA_ENGINE:

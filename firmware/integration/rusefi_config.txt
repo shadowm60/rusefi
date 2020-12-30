@@ -433,10 +433,8 @@ end_struct
 ! todo https://github.com/rusefi/rusefi/issues/2102
 #define ET_DODGE_NEON_1995 2
 #define ET_FORD_ASPIRE 3
-#define ET_FORD_FIESTA 4
 #define ET_FORD_INLINE_6 7
 #define ET_FORD_ESCORT_GT 14
-#define ET_BMW_E34 25
 #define ET_SACHS 29
 #define ET_VW_ABA 32
 #define ET_CAMARO 35
@@ -857,7 +855,7 @@ custom uart_device_e 1 bits,U32,   @OFFSET@, [0:1], "Off", "UART1", "UART2", "UA
 	switch_input_pin_e startStopButtonPin;See also starterControlPin
 	
 	int mapMinBufferLength;;"count",        1,     0,  0,    24,  0
-	int16_t idlePidDeactivationTpsThreshold;;"%",        1,     0,  0,    100.0,  0
+	int16_t idlePidDeactivationTpsThreshold;+Below this throttle position, the engine is considered idling.;"%",        1,     0,  0,    100.0,  0
 	int16_t stepperParkingExtraSteps;;"%",        1,     0,  0,    3000.0,  0
 	uint16_t tps1SecondaryMin;;"ADC", 1, 0, 0, 1000, 0
 	uint16_t tps1SecondaryMax;;"ADC", 1, 0, 0, 1000, 0
