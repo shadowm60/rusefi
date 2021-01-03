@@ -209,7 +209,7 @@ enable2ndByteCanID = false
 
 ; RPM, vss
       RPMValue        = scalar,  U16,      4,      "RPM",    1,   0.00000
-      rpmAcceleration = scalar,  S16,      6,     "dRpm",{1/@@PACK_MULT_PERCENT@@},         0
+      rpmAcceleration = scalar,  S16,      6,     "RPM/s", 1,         0
       speedToRpmRatio = scalar,  S16,      8,    "value",{1/@@PACK_MULT_PERCENT@@},         0
       vehicleSpeedKph = scalar,  U08,     10,      "kph",    1,       0.0
 
@@ -937,7 +937,7 @@ gaugeCategory = Sensors - Extra 2
    egt6Gauge         = egt6, "EGT#6", "C", 0, 2000
    egt7Gauge         = egt7, "EGT#7", "C", 0, 2000
    egt8Gauge         = egt8, "EGT#8", "C", 0, 2000
-   rpmAccelerationGa = rpmAcceleration,     "rpm delta",        "dRpm",        0,      3,       0,      1,       3,     4,   1,   1
+   rpmAccelerationGa = rpmAcceleration,     "rpm delta",        "RPM/s",        -2000,      2000,       -2000,      2000,       -2000,     2000,   0,   0
    knockLevelGauge   = knockLevel,"Knock level",           "volts",        0,      7,      10,     10,     100,   100,   1,   2
    fuelTankLevelGauge   = fuelTankLevel,"Fuel level",           "x",        0,      7,      10,     10,     100,   100,   1,   2
    speedToRpmRatioGauge = speedToRpmRatio, "speed2rpm", "",     0,   100,     0,    0,    100,  100,   4,   4
@@ -1203,7 +1203,7 @@ gaugeCategory = DynoView
    entry = knockLevel,	    @@GAUGE_NAME_KNOCK_LEVEL@@, 	   float,  "%.2f"
    entry = vehicleSpeedKph,	@@GAUGE_NAME_VVS@@,	   float,  "%.2f"
    entry = speedToRpmRatio, "s2rpm",	   float,  "%.3f"
-   entry = rpmAcceleration, "dRPM",        float,  "%.3f"
+   entry = rpmAcceleration, "dRPM",        int,  "%d"
    entry = massAirFlowValue,@@GAUGE_NAME_AIR_FLOW@@,    float,  "%.3f"
    entry = chargeAirMass,   @@GAUGE_NAME_AIR_MASS@@,    float,  "%.3f"
    entry = throttlePedalPosition,   @@GAUGE_NAME_THROTTLE_PEDAL@@,       float,  "%.3f"
@@ -1524,6 +1524,7 @@ menuDialog = main
 		subMenu = multisparkSettings,		"Multispark", 0, {isIgnitionEnabled == 1}
 		subMenu = mc33Dialog,			"GDI Dreams"
 		subMenu = widebandConfig,			"rusEFI Wideband Controller", 0, { canReadEnabled && canWriteEnabled }
+		subMenu = cylinderBankSelect,		"Cylinder Bank Selection"
 		subMenu = std_separator
 		
 		subMenu = hipFunction,				"HIP9011 settings (knock sensor) (alpha version)" @@if_ts_show_hip9011
@@ -1812,10 +1813,10 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Use only first half of pins for batch mode"
 		field = "Injection Pin 1",						injectionPins1, {isInjectionEnabled == 1}
 		field = "Injection Pin 2",						injectionPins2, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 1}
-		field = "Injection Pin 3",						injectionPins3, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 2}
+		field = "Injection Pin 3",						injectionPins3, {isInjectionEnabled == 1 && injectionMode != @@IM_IM_SINGLE_POINT@@ && cylindersCount > 2}
 		field = "Injection Pin 4",						injectionPins4, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 3}
-		field = "Injection Pin 5 ",						injectionPins5, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 4}
-		field = "Injection Pin 6 ",						injectionPins6, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 5}
+		field = "Injection Pin 5 ",						injectionPins5, {isInjectionEnabled == 1 && injectionMode != @@IM_IM_SINGLE_POINT@@ && cylindersCount > 4}
+		field = "Injection Pin 6 ",						injectionPins6, {isInjectionEnabled == 1 && injectionMode != @@IM_IM_SINGLE_POINT@@ && cylindersCount > 5}
 		field = "Injection Pin 7 ",						injectionPins7, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 6}
 		field = "Injection Pin 8 ",						injectionPins8, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 7}
 		field = "Injection Pin 9 ",						injectionPins9, {isInjectionEnabled == 1 && cylindersCount > 8}
@@ -1824,6 +1825,20 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Injection Pin 12 ",					injectionPins12, {isInjectionEnabled == 1 && cylindersCount > 11}
 		field = ""
 		field = "injection Pin Mode",       			injectionPinMode, {isInjectionEnabled == 1}
+
+	dialog = cylinderBankSelect, "Cylinder Banks", yAxis
+		field = "Cylinder 1",						cylinderBankSelect1, {isInjectionEnabled == 1}
+		field = "Cylinder 2",						cylinderBankSelect2, {isInjectionEnabled == 1 && injectionMode != @@IM_IM_SINGLE_POINT@@ && cylindersCount > 1}
+		field = "Cylinder 3",						cylinderBankSelect3, {isInjectionEnabled == 1 && injectionMode != @@IM_IM_SINGLE_POINT@@ && cylindersCount > 2}
+		field = "Cylinder 4",						cylinderBankSelect4, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 3}
+		field = "Cylinder 5 ",						cylinderBankSelect5, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 4}
+		field = "Cylinder 6 ",						cylinderBankSelect6, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 5}
+		field = "Cylinder 7 ",						cylinderBankSelect7, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 6}
+		field = "Cylinder 8 ",						cylinderBankSelect8, {isInjectionEnabled == 1 && injectionMode != 3 && cylindersCount > 7}
+		field = "Cylinder 9 ",						cylinderBankSelect9, {isInjectionEnabled == 1 && cylindersCount > 8}
+		field = "Cylinder 10 ",						cylinderBankSelect10, {isInjectionEnabled == 1 && cylindersCount > 9}
+		field = "Cylinder 11 ",						cylinderBankSelect11, {isInjectionEnabled == 1 && cylindersCount > 10}
+		field = "Cylinder 12 ",						cylinderBankSelect12, {isInjectionEnabled == 1 && cylindersCount > 11}
 
 	dialog = testFsio, "FSIO Test"
 		commandButton = "FSIO#1",	cmd_test_fsio1
@@ -2529,7 +2544,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		slider = "Open loop idle position",				manIdlePosition, horizontal
 		field = ""
 
-		panel = idleGating, ""
+		panel = idleGating
 		panel = idlePidSettings, { idleMode == 0}
 		panel = idleExtra
 

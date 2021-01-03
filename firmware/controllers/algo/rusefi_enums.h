@@ -186,6 +186,8 @@ typedef enum {
 
 	PROTEUS_MIATA_NB2 = ET_PROTEUS_MIATA_NB2,
 
+	HELLEN_NB2 = ET_HELLEN_NB2,
+
 
 	/**
 	 * this configuration has as few pins configured as possible
@@ -614,7 +616,7 @@ typedef enum {
 	/**
 	 * only one injector located in throttle body
 	 */
-	IM_SINGLE_POINT = 3,
+	IM_SINGLE_POINT = IM_IM_SINGLE_POINT,
 
 
 	Force_4_bytes_size_injection_mode = ENUM_32_BITS,
