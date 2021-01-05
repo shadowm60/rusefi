@@ -8,8 +8,9 @@
 #include "engine.h"
 
 #if EFI_DYNO_VIEW
-#include "dynoview.h"
 #include "vehicle_speed.h"
+#include "biquad.h"
+#include "dynoview.h"
 
 static Logging *logger;
 
@@ -21,6 +22,8 @@ extern TunerStudioOutputChannels tsOutputChannels;
 EXTERN_ENGINE;
 
 DynoView dynoInstance;
+//filter
+Biquad bqf;
 
 void DynoView::update(vssSrc src) {
 
@@ -29,17 +32,20 @@ void DynoView::update(vssSrc src) {
 	static float deltaSpeed = 0.0;
     timeNow = currentTimeMillis();
     speed = getVehicleSpeed();
+
     if (src == ICU) {
         speed = efiRound(speed,0.1);
     } else {
         //use speed with 0.001 precision from source CAN
         speed = efiRound(speed,0.001);
     }
-	//printf("update %f %lld\n",speed,timeNow);
+	
+	speed = bqf.filter(speed);
+	
     if(timeStamp != 0) {
 		
 		deltaTime = timeNow - timeStamp;
-        if (deltaTime >= 400) {
+        if (vss != speed) {
             
             if (vss > speed) {
                 deltaSpeed = (vss - speed);
@@ -49,30 +55,18 @@ void DynoView::update(vssSrc src) {
                 direction = 0; //acceleration
             }
 
-			//limit 
-			//if (deltaSpeed > 0.3) {
-			//	deltaSpeed = 0.3;
-			//}
-
-			
             //save data
             timeStamp = timeNow;
             vss = speed;
 
-            updateAcceleration(deltaTime, deltaSpeed);
-            updateHP();
+            //updateAcceleration(deltaTime, deltaSpeed);
+            //updateHP();
 
-        } else {
-			//if (deltaTime > 150) {
-			//	/* reset ! */
-			//	timeStamp = timeNow;
-			//	vss = speed;
-			//}
-		}
+        }
         
         //updating here would display acceleration = 0 at constant speed
-//        updateAcceleration(deltaTime, deltaSpeed);
-//        updateHP();
+        updateAcceleration(deltaTime, deltaSpeed);
+        updateHP();
 #if EFI_TUNER_STUDIO
 	    if (CONFIG(debugMode) == DBG_DYNO_VIEW) {
 		    tsOutputChannels.debugIntField1 = deltaTime;
@@ -80,8 +74,6 @@ void DynoView::update(vssSrc src) {
 		    tsOutputChannels.debugFloatField2 = speed;
 		    tsOutputChannels.debugFloatField3 = deltaSpeed;
             tsOutputChannels.debugFloatField4 = acceleration;
-			tsOutputChannels.debugFloatField5 = engineHP;
-
 	    }
 #endif /* EFI_TUNER_STUDIO */        
 
@@ -198,6 +190,8 @@ void updateDynoViewCan(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 void initDynoView(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	logger = sharedLogger;
+
+	bqf.configureLowpass(1,0.01f);
 }
 
 #endif /* EFI_DYNO_VIEW */
