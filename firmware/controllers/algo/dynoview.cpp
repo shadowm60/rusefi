@@ -25,20 +25,22 @@ DynoView dynoInstance;
 void DynoView::update(vssSrc src) {
 
     efitimeus_t timeNow, deltaTime = 0.0;
-    float speed,deltaSpeed = 0.0;
-    timeNow = getTimeNowUs();
+    float speed = 0.0;
+	static float deltaSpeed = 0.0;
+    timeNow = currentTimeMillis();
     speed = getVehicleSpeed();
     if (src == ICU) {
-        speed = efiRound(speed,1.0);
+        speed = efiRound(speed,0.1);
     } else {
         //use speed with 0.001 precision from source CAN
         speed = efiRound(speed,0.001);
     }
-
+	//printf("update %f %lld\n",speed,timeNow);
     if(timeStamp != 0) {
-
-        if (vss != speed) {
-            deltaTime = timeNow - timeStamp;
+		
+		deltaTime = timeNow - timeStamp;
+        if (deltaTime >= 400) {
+            
             if (vss > speed) {
                 deltaSpeed = (vss - speed);
                 direction = 1; //decceleration
@@ -47,23 +49,41 @@ void DynoView::update(vssSrc src) {
                 direction = 0; //acceleration
             }
 
+			//limit 
+			//if (deltaSpeed > 0.3) {
+			//	deltaSpeed = 0.3;
+			//}
+
+			
             //save data
             timeStamp = timeNow;
             vss = speed;
-        }
+
+            updateAcceleration(deltaTime, deltaSpeed);
+            updateHP();
+
+        } else {
+			//if (deltaTime > 150) {
+			//	/* reset ! */
+			//	timeStamp = timeNow;
+			//	vss = speed;
+			//}
+		}
         
         //updating here would display acceleration = 0 at constant speed
-        updateAcceleration(deltaTime, deltaSpeed);
+//        updateAcceleration(deltaTime, deltaSpeed);
+//        updateHP();
 #if EFI_TUNER_STUDIO
-	    if (CONFIG(debugMode) == DBG_LOGIC_ANALYZER) {
+	    if (CONFIG(debugMode) == DBG_DYNO_VIEW) {
 		    tsOutputChannels.debugIntField1 = deltaTime;
 		    tsOutputChannels.debugFloatField1 = vss;
 		    tsOutputChannels.debugFloatField2 = speed;
 		    tsOutputChannels.debugFloatField3 = deltaSpeed;
             tsOutputChannels.debugFloatField4 = acceleration;
+			tsOutputChannels.debugFloatField5 = engineHP;
+
 	    }
 #endif /* EFI_TUNER_STUDIO */        
-        updateHP();
 
     } else {
         //ensure we grab init values
@@ -74,11 +94,15 @@ void DynoView::update(vssSrc src) {
 
 /**
  * input units: deltaSpeed in km/h
- *              deltaTime in uS
+ *              deltaTime in mS
+ * a = dV/dt
+ * dv = m/s  -> dv/3.6
+ * dt = s -> dT/1000000
+ * a = m/s2
  */
 void DynoView::updateAcceleration(efitimeus_t deltaTime, float deltaSpeed) {
     if (deltaSpeed != 0.0) {
-        acceleration = ((deltaSpeed / 3.6) / (deltaTime / 1000000.0));
+		acceleration  = (((deltaSpeed / 3.6) / (deltaTime / 1000.0)));
         if (direction) {
             //decceleration
             acceleration *= -1;

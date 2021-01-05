@@ -43,7 +43,7 @@ public:
 private:
 	efitimeus_t timeStamp = 0;
     //km/h unit
-    float vss = 0;
+    float vss = 0.0;
     //m/s/s unit
     float acceleration = 0;
     //engine force in N
