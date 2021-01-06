@@ -39,9 +39,11 @@ void DynoView::update(vssSrc src) {
         //use speed with 0.001 precision from source CAN
         speed = efiRound(speed,0.001);
     }
-	
+
+#if ! EFI_UNIT_TEST	
 	speed = bqf.filter(speed);
-	
+#endif	
+
     if(timeStamp != 0) {
 		
 		deltaTime = timeNow - timeStamp;
