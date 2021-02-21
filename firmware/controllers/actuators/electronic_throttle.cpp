@@ -312,7 +312,7 @@ expected<percent_t> EtbController::getOpenLoop(percent_t target) const {
 	// Don't apply open loop for wastegate/idle valve, only real ETB
 	if (m_function != ETB_Wastegate
 		&& m_function != ETB_IdleValve) {
-		ff = interpolate2d("etbb", target, engineConfiguration->etbBiasBins, engineConfiguration->etbBiasValues);
+		ff = interpolate2d(target, engineConfiguration->etbBiasBins, engineConfiguration->etbBiasValues);
 	}
 
 	engine->engineState.etbFeedForward = ff;
@@ -493,6 +493,15 @@ void EtbController::update() {
 	if (!cisnan(directPwmValue)) {
 		m_motor->set(directPwmValue);
 		return;
+	}
+
+	if (CONFIG(disableEtbWhenEngineStopped)) {
+		if (engine->triggerCentral.getTimeSinceTriggerEvent(getTimeNowNt()) > 1) {
+			// If engine is stopped and so configured, skip the ETB update entirely
+			// This is quieter and pulls less power than leaving it on all the time
+			m_motor->disable();
+			return;
+		}
 	}
 
 #if EFI_TUNER_STUDIO

@@ -78,7 +78,7 @@ void startSimultaniousInjection(Engine *engine) {
 	EXPAND_Engine;
 #endif // EFI_UNIT_TEST
 	efitick_t nowNt = getTimeNowNt();
-	for (int i = 0; i < engine->engineConfigurationPtr->specs.cylindersCount; i++) {
+	for (int i = 0; i < CONFIG(specs.cylindersCount); i++) {
 		enginePins.injectors[i].open(nowNt PASS_ENGINE_PARAMETER_SUFFIX);
 	}
 }
@@ -88,7 +88,7 @@ static void endSimultaniousInjectionOnlyTogglePins(Engine *engine) {
 	EXPAND_Engine;
 #endif
 	efitick_t nowNt = getTimeNowNt();
-	for (int i = 0; i < engine->engineConfigurationPtr->specs.cylindersCount; i++) {
+	for (int i = 0; i < CONFIG(specs.cylindersCount); i++) {
 		enginePins.injectors[i].close(nowNt PASS_ENGINE_PARAMETER_SUFFIX);
 	}
 }
@@ -320,7 +320,7 @@ static void handleFuel(const bool limitedFuel, uint32_t trgEventIndex, int rpm, 
 	efiAssertVoid(CUSTOM_STACK_6627, getCurrentRemainingStack() > 128, "lowstck#3");
 	efiAssertVoid(CUSTOM_ERR_6628, trgEventIndex < engine->engineCycleEventCount, "handleFuel/event index");
 
-	if (!isInjectionEnabled(PASS_ENGINE_PARAMETER_SIGNATURE) || limitedFuel) {
+	if (limitedFuel) {
 		return;
 	}
 	if (ENGINE(isCylinderCleanupMode)) {
@@ -371,7 +371,7 @@ uint32_t *cyccnt = (uint32_t*) &DWT->CYCCNT;
 void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	ScopePerf perf(PE::MainTriggerCallback);
 
-	if (CONFIG(vvtMode) == MIATA_NB2 && ENGINE(triggerCentral.vvtSyncTimeNt) == 0) {
+	if (CONFIG(vvtMode[0]) == VVT_MIATA_NB2 && ENGINE(triggerCentral.vvtSyncTimeNt) == 0) {
 		// this is a bit spaghetti code for sure
 		// do not spark & do not fuel until we have VVT sync. NB2 is a special case
 		// due to symmetrical crank wheel and we need to make sure no spark happens out of sync
@@ -554,8 +554,6 @@ void initMainEventListener(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX
 	addConsoleActionP("maininfo", (VoidPtr) showMainInfo, engine);
 
 	printMsg(logger, "initMainLoop: %d", currentTimeMillis());
-	if (!isInjectionEnabled(PASS_ENGINE_PARAMETER_SIGNATURE))
-		printMsg(logger, "!!!!!!!!!!!!!!!!!!! injection disabled");
 #endif
 
 

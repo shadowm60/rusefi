@@ -48,7 +48,7 @@
 #include "trigger_central.h"
 #include "svnversion.h"
 #include "engine_configuration.h"
-#include "aux_pid.h"
+#include "vvt_pid.h"
 #include "perf_trace.h"
 #include "trigger_emulator_algo.h"
 #include "boost_control.h"
@@ -71,13 +71,12 @@
 
 EXTERN_ENGINE;
 
-#if HAL_USE_SPI
-extern bool isSpiInitialized[5];
-
 /**
  * #311 we want to test RTC before engine start so that we do not test it while engine is running
  */
 bool rtcWorks = true;
+#if HAL_USE_SPI
+extern bool isSpiInitialized[5];
 
 /**
  * Only one consumer can use SPI bus at a given time
@@ -161,12 +160,13 @@ static int adcCallbackCounter = 0;
 static volatile int averagedSamples[ADC_MAX_CHANNELS_COUNT];
 static adcsample_t avgBuf[ADC_MAX_CHANNELS_COUNT];
 
-void adc_callback_fast_internal(ADCDriver *adcp, adcsample_t *buffer, size_t n);
+void adc_callback_fast_internal(ADCDriver *adcp);
 
-void adc_callback_fast(ADCDriver *adcp, adcsample_t *buffer, size_t n) {
+void adc_callback_fast(ADCDriver *adcp) {
+	adcsample_t *buffer = adcp->samples;
+	//size_t n = adcp->depth;
+
 	if (adcp->state == ADC_COMPLETE) {
-		fastAdc.invalidateSamplesCache();
-
 #if HAL_TRIGGER_USE_ADC
 		// we need to call this ASAP, because trigger processing is time-critical
 		if (triggerSampleIndex >= 0)
@@ -186,7 +186,7 @@ void adc_callback_fast(ADCDriver *adcp, adcsample_t *buffer, size_t n) {
 			}
 
 			// call the real callback (see below)
-			adc_callback_fast_internal(adcp, avgBuf, fastAdc.size());
+			adc_callback_fast_internal(adcp);
 
 			// reset the avg buffer & counter
 			for (int i = fastAdc.size() - 1; i >= 0; i--) {
@@ -197,14 +197,18 @@ void adc_callback_fast(ADCDriver *adcp, adcsample_t *buffer, size_t n) {
 	}
 }
 
-#define adc_callback_fast adc_callback_fast_internal
-
 #endif /* EFI_FASTER_UNIFORM_ADC */
 
 /**
  * This method is not in the adc* lower-level file because it is more business logic then hardware.
  */
-void adc_callback_fast(ADCDriver *adcp, adcsample_t *buffer, size_t n) {
+#if EFI_FASTER_UNIFORM_ADC
+void adc_callback_fast_internal(ADCDriver *adcp) {
+#else
+void adc_callback_fast(ADCDriver *adcp) {
+#endif
+	adcsample_t *buffer = adcp->samples;
+	size_t n = adcp->depth;
 	(void) buffer;
 	(void) n;
 
@@ -216,8 +220,6 @@ void adc_callback_fast(ADCDriver *adcp, adcsample_t *buffer, size_t n) {
 	 * */
 	if (adcp->state == ADC_COMPLETE) {
 		ScopePerf perf(PE::AdcCallbackFastComplete);
-
-		fastAdc.invalidateSamplesCache();
 
 		/**
 		 * this callback is executed 10 000 times a second, it needs to be as fast as possible
@@ -332,13 +334,6 @@ void applyNewHardwareSettings(void) {
 	stopHip9001_pins();
 #endif /* EFI_HIP_9011 */
 
-#if EFI_IDLE_CONTROL
-	bool isIdleRestartNeeded = isIdleHardwareRestartNeeded();
-	if (isIdleRestartNeeded) {
-		stopIdleHardware();
-	}
-#endif
-
 #if (BOARD_EXT_GPIOCHIPS > 0)
 	stopSmartCsPins();
 #endif /* (BOARD_EXT_GPIOCHIPS > 0) */
@@ -356,7 +351,7 @@ void applyNewHardwareSettings(void) {
 #endif /* EFI_EMULATE_POSITION_SENSORS */
 
 #if EFI_AUX_PID
-	stopAuxPins();
+	stopVvtControlPins();
 #endif /* EFI_AUX_PID */
 
 	if (isConfigurationChanged(is_enabled_spi_1)) {
@@ -379,9 +374,6 @@ void applyNewHardwareSettings(void) {
 	stopHD44780_pins();
 #endif /* #if EFI_HD44780_LCD */
 
-#if EFI_BOOST_CONTROL
-	stopBoostPin();
-#endif
 	if (isPinOrModeChanged(clutchUpPin, clutchUpPinMode)) {
 		efiSetPadUnused(activeConfiguration.clutchUpPin);
 	}
@@ -437,7 +429,7 @@ void applyNewHardwareSettings(void) {
 
 
 #if EFI_IDLE_CONTROL
-	if (isIdleRestartNeeded) {
+	if (isIdleHardwareRestartNeeded()) {
 		 initIdleHardware(sharedLogger);
 	}
 #endif
@@ -456,7 +448,7 @@ void applyNewHardwareSettings(void) {
 	startLogicAnalyzerPins();
 #endif /* EFI_LOGIC_ANALYZER */
 #if EFI_AUX_PID
-	startAuxPins();
+	startVvtControlPins();
 #endif /* EFI_AUX_PID */
 
 	adcConfigListener(engine);
@@ -475,7 +467,6 @@ void showBor(void) {
 void initHardware(Logging *l) {
 	efiAssertVoid(CUSTOM_IH_STACK, getCurrentRemainingStack() > EXPECTED_REMAINING_STACK, "init h");
 	sharedLogger = l;
-	engine_configuration_s *engineConfiguration = engine->engineConfigurationPtr;
 	efiAssertVoid(CUSTOM_EC_NULL, engineConfiguration!=NULL, "engineConfiguration");
 	
 

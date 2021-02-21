@@ -361,10 +361,10 @@ void TriggerWaveform::setTriggerSynchronizationGap3(int gapIndex, float syncRati
 /**
  * this method is only used on initialization
  */
-int TriggerWaveform::findAngleIndex(TriggerFormDetails *details, float target) const {
-	int engineCycleEventCount = getLength();
+uint16_t TriggerWaveform::findAngleIndex(TriggerFormDetails *details, float target) const {
+	size_t engineCycleEventCount = getLength();
 
-	efiAssert(CUSTOM_ERR_ASSERT, engineCycleEventCount > 0, "engineCycleEventCount", 0);
+	efiAssert(CUSTOM_ERR_ASSERT, engineCycleEventCount <= 0xFFFF, "engineCycleEventCount", 0);
 
 	uint32_t left = 0;
 	uint32_t right = engineCycleEventCount - 1;
@@ -433,11 +433,13 @@ void TriggerWaveform::prepareShape(TriggerFormDetails *details DECLARE_ENGINE_PA
 
 	int engineCycleInt = (int) getEngineCycle(operationMode);
 	for (int angle = 0; angle < engineCycleInt; angle++) {
-		int triggerShapeIndex = findAngleIndex(details, angle);
+		uint16_t triggerShapeIndex = findAngleIndex(details, angle);
+
 		if (useOnlyRisingEdgeForTriggerTemp) {
-			// we need even index for front_only mode - so if odd indexes are rounded down
-			triggerShapeIndex = triggerShapeIndex & 0xFFFFFFFE;
+			// we need even index for front_only mode - so if odd indexes are rounded down by clearing the low bit
+			triggerShapeIndex &= 0xFFFE;
 		}
+
 		details->triggerIndexByAngle[angle] = triggerShapeIndex;
 	}
 #endif
@@ -536,6 +538,14 @@ void TriggerWaveform::initializeTriggerWaveform(Logging *logger, operation_mode_
 
 	case TT_FORD_ASPIRE:
 		configureFordAspireTriggerWaveform(this);
+		break;
+
+	case TT_SKODA_FAVORIT:
+		setSkodaFavorit(this);
+		break;
+
+	case TT_GM_60_2_2_2:
+		configureGm60_2_2_2(this);
 		break;
 
 	case TT_GM_7X:

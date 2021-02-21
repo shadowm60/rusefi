@@ -37,14 +37,12 @@
 
 #define EFI_HPFP TRUE
 
+#ifndef HAL_USE_USB_MSD
 #define HAL_USE_USB_MSD FALSE
+#endif
 
 #define EFI_ENABLE_CRITICAL_ENGINE_STOP TRUE
 #define EFI_ENABLE_ENGINE_WARNING TRUE
-
-#if !defined(EFI_ENABLE_ASSERTS)
- #define EFI_USE_CCM TRUE
-#endif
 
 #ifndef SC_BUFFER_SIZE
 #define SC_BUFFER_SIZE 4000
@@ -202,8 +200,6 @@
 
 #define EFI_NARROW_EGO_AVERAGING TRUE
 
-#define EFI_DENSO_ADC FALSE
-
 #ifndef EFI_CAN_SUPPORT
 #define EFI_CAN_SUPPORT TRUE
 #endif
@@ -304,7 +300,7 @@
 
 // todo: most of this should become configurable
 
-// todo: switch to continues ADC conversion for fast ADC?
+// todo: switch to continuous ADC conversion for fast ADC?
 #define EFI_INTERNAL_FAST_ADC_GPT	&GPTD6
 
 #define EFI_SPI1_AF 5
@@ -351,8 +347,6 @@
 //#define EFI_CONSOLE_SERIAL_DEVICE (&SD3)
 #endif
 
-#define EFI_CONSOLE_UART_DEVICE (&UARTD3)
-
 /**
  * Use 'HAL_USE_UART' DMA-mode driver instead of 'HAL_USE_SERIAL'
  *
@@ -361,10 +355,16 @@
  *  STM32_UART_USE_USARTx
  * in mcuconf.h
  */
+#ifndef TS_UART_DMA_MODE
 #define TS_UART_DMA_MODE FALSE
+#endif
 
 #ifndef PRIMARY_UART_DMA_MODE
 #define PRIMARY_UART_DMA_MODE TRUE
+#endif
+
+#if (PRIMARY_UART_DMA_MODE || TS_UART_DMA_MODE || TS_UART_MODE)
+#define EFI_CONSOLE_UART_DEVICE (&UARTD3)
 #endif
 
 //#define TS_UART_DEVICE (&UARTD3)
