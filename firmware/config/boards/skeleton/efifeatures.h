@@ -45,11 +45,6 @@
 
 // Internal MCU features
 
-// Support USB Mass Storage Devices
-// Typically off as it requires USB OTG and power output.
-#define HAL_USE_USB_MSD FALSE
-
-
 // Hardware feature and chip support
 // Some require a non-zero count to include support, others are TRUE/FALSE
 // Other inconsistencies, such as naming, abound.
@@ -334,7 +329,6 @@
 
 // Enable file logging (like SD card) logic
 #define EFI_FILE_LOGGING FALSE
-#define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
 
 #define EFI_USB_SERIAL TRUE
 
@@ -352,7 +346,6 @@
 #undef TS_SERIAL_DEVICE
 #undef TS_UART_MODE
 #define EFI_CONSOLE_SERIAL_DEVICE (&SD1)
-//#define EFI_CONSOLE_USB_DEVICE SDU1
 #define EFI_UART_ECHO_TEST_MODE TRUE
 
 // USART3 is Alternate Function 7, UART4 is AF8

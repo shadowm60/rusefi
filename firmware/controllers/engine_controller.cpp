@@ -50,7 +50,7 @@
 #include "spark_logic.h"
 #include "aux_valves.h"
 #include "accelerometer.h"
-#include "actuators/vvt_pid.h"
+#include "vvt.h"
 #include "perf_trace.h"
 #include "boost_control.h"
 #include "launch_control.h"
@@ -211,7 +211,7 @@ static void resetAccel(void) {
 	engine->engineLoadAccelEnrichment.resetAE();
 	engine->tpsAccelEnrichment.resetAE();
 
-	for (unsigned int i = 0; i < efi::size(engine->injectionEvents.elements); i++)
+	for (size_t i = 0; i < efi::size(engine->injectionEvents.elements); i++)
 	{
 		engine->injectionEvents.elements[i].wallFuel.resetWF();
 	}
@@ -553,11 +553,6 @@ void commonInitEngineController(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_S
 #if EFI_SENSOR_CHART
 	initSensorChart();
 #endif /* EFI_SENSOR_CHART */
-
-
-#if EFI_TUNER_STUDIO
-	startTunerStudioConnectivity();
-#endif /* EFI_TUNER_STUDIO */
 
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	initSettings();

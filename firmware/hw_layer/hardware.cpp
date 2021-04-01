@@ -32,14 +32,13 @@
 #include "serial_hw.h"
 
 #include "mpu_util.h"
-//#include "usb_msd.h"
+#include "mmc_card.h"
 
 #include "AdcConfiguration.h"
 #include "idle_hardware.h"
 #include "mcp3208.h"
 #include "hip9011.h"
 #include "histogram.h"
-#include "mmc_card.h"
 #include "neo6m.h"
 #include "lcd_HD44780.h"
 #include "settings.h"
@@ -48,7 +47,7 @@
 #include "trigger_central.h"
 #include "svnversion.h"
 #include "engine_configuration.h"
-#include "vvt_pid.h"
+#include "vvt.h"
 #include "perf_trace.h"
 #include "trigger_emulator_algo.h"
 #include "boost_control.h"
@@ -249,7 +248,7 @@ void adc_callback_fast(ADCDriver *adcp) {
 #endif /* HAL_USE_ADC */
 
 static void calcFastAdcIndexes(void) {
-#if HAL_USE_ADC
+#if HAL_USE_ADC && EFI_USE_FAST_ADC
 	fastMapSampleIndex = fastAdc.internalAdcIndexByHardwareIndex[engineConfiguration->map.sensor.hwChannel];
 	hipSampleIndex =
 			isAdcChannelValid(engineConfiguration->hipOutputChannel) ?
@@ -464,16 +463,16 @@ void showBor(void) {
 	scheduleMsg(sharedLogger, "BOR=%d", (int)BOR_Get());
 }
 
-void initHardware(Logging *l) {
+// This function initializes hardware that can do so before configuration is loaded
+void initHardwareNoConfig(Logging *l) {
 	efiAssertVoid(CUSTOM_IH_STACK, getCurrentRemainingStack() > EXPECTED_REMAINING_STACK, "init h");
 	sharedLogger = l;
 	efiAssertVoid(CUSTOM_EC_NULL, engineConfiguration!=NULL, "engineConfiguration");
 	
 
-	printMsg(sharedLogger, "initHardware()");
-	// todo: enable protection. it's disabled because it takes
-	// 10 extra seconds to re-flash the chip
-	//flashProtect();
+	scheduleMsg(sharedLogger, "initHardware()");
+
+	initPinRepository();
 
 #if EFI_HISTOGRAMS
 	/**
@@ -487,45 +486,26 @@ void initHardware(Logging *l) {
 	 */
 	initPrimaryPins(sharedLogger);
 
-	if (hasFirmwareError()) {
-		return;
-	}
-
-#if EFI_INTERNAL_FLASH
-
-#ifdef CONFIG_RESET_SWITCH_PORT
-// this pin is not configurable at runtime so that we have a reliable way to reset configuration
-#define SHOULD_IGNORE_FLASH() (palReadPad(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN) == 0)
-#else
-#define SHOULD_IGNORE_FLASH() (false)
-#endif // CONFIG_RESET_SWITCH_PORT
-
-#ifdef CONFIG_RESET_SWITCH_PORT
-	palSetPadMode(CONFIG_RESET_SWITCH_PORT, CONFIG_RESET_SWITCH_PIN, PAL_MODE_INPUT_PULLUP);
-#endif /* CONFIG_RESET_SWITCH_PORT */
-
-	initFlash(sharedLogger);
-	/**
-	 * this call reads configuration from flash memory or sets default configuration
-	 * if flash state does not look right.
-	 *
-	 * interesting fact that we have another read from flash before we get here
-	 */
-	if (SHOULD_IGNORE_FLASH()) {
-		engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
-		resetConfigurationExt(sharedLogger, engineConfiguration->engineType PASS_ENGINE_PARAMETER_SUFFIX);
-		writeToFlashNow();
-	} else {
-		readFromFlash();
-	}
-#else
-	engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
-	resetConfigurationExt(sharedLogger, engineConfiguration->engineType PASS_ENGINE_PARAMETER_SUFFIX);
-#endif /* EFI_INTERNAL_FLASH */
-
 	// it's important to initialize this pretty early in the game before any scheduling usages
 	initSingleTimerExecutorHardware();
 
+	initRtc();
+
+#if EFI_INTERNAL_FLASH
+	initFlash(sharedLogger);
+#endif
+
+#if EFI_SHAFT_POSITION_INPUT
+	// todo: figure out better startup logic
+	initTriggerCentral(sharedLogger);
+#endif /* EFI_SHAFT_POSITION_INPUT */
+
+#if EFI_FILE_LOGGING
+	initEarlyMmcCard();
+#endif // EFI_FILE_LOGGING
+}
+
+void initHardware() {
 #if EFI_HD44780_LCD
 	lcd_HD44780_init(sharedLogger);
 	if (hasFirmwareError())
@@ -549,8 +529,6 @@ void initHardware(Logging *l) {
 #if EFI_SOFTWARE_KNOCK
 	initSoftwareKnock();
 #endif /* EFI_SOFTWARE_KNOCK */
-
-	initRtc();
 
 #if HAL_USE_SPI
 	initSpiModules(engineConfiguration);
@@ -583,32 +561,19 @@ void initHardware(Logging *l) {
 //	init_adc_mcp3208(&adcState, &SPID2);
 //	requestAdcValue(&adcState, 0);
 
-#if EFI_SHAFT_POSITION_INPUT
-	// todo: figure out better startup logic
-	initTriggerCentral(sharedLogger);
-#endif /* EFI_SHAFT_POSITION_INPUT */
-
 	turnOnHardware(sharedLogger);
 
 #if EFI_HIP_9011
 	initHip9011(sharedLogger);
 #endif /* EFI_HIP_9011 */
 
-#if EFI_FILE_LOGGING
-	initMmcCard();
-#endif /* EFI_FILE_LOGGING */
-
 #if EFI_MEMS
 	initAccelerometer(PASS_ENGINE_PARAMETER_SIGNATURE);
 #endif
-//	initFixedLeds();
-
 
 #if EFI_BOSCH_YAW
 	initBoschYawRateSensor();
 #endif /* EFI_BOSCH_YAW */
-
-	//	initBooleanInputs();
 
 #if EFI_UART_GPS
 	initGps();
@@ -640,7 +605,7 @@ void initHardware(Logging *l) {
 
 	calcFastAdcIndexes();
 
-	printMsg(sharedLogger, "initHardware() OK!");
+	scheduleMsg(sharedLogger, "initHardware() OK!");
 }
 
 #endif /* EFI_PROD_CODE */

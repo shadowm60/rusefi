@@ -237,6 +237,9 @@ public:
 	 */
 	floatms_t injectionDuration = 0;
 
+	// Per-injection fuel mass, including TPS accel enrich
+	float injectionMass = 0;
+
 	/**
 	 * This one with wall wetting accounted for, used for logging.
 	 */
@@ -313,10 +316,9 @@ public:
 	/**
 	 * this is invoked each time we register a trigger tooth signal
 	 */
-	void onTriggerSignalEvent(efitick_t nowNt);
+	void onTriggerSignalEvent();
 	EngineState engineState;
 	SensorsState sensors;
-	efitick_t lastTriggerToothEventTimeNt = 0;
 	efitick_t mainRelayBenchStartNt = 0;
 
 	/**

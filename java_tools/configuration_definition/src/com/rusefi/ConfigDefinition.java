@@ -530,31 +530,35 @@ public class ConfigDefinition {
         }
     }
 
-    private static boolean checkIfOutputFilesAreOutdated(List<String> inputFiles, String cachePath, String cacheZipFile) {
+    private static boolean checkIfOutputFilesAreOutdated(List<String> inputFileNames, String cachePath, String cacheZipFile) {
         if (cachePath == null)
             return true;
         // find if any input file was changed from the cached version
-        for (String iFile : inputFiles) {
-            File newFile = new File(iFile);
+        for (String inputFileName : inputFileNames) {
+            File inputFile = new File(inputFileName);
             try {
-                byte[] f1 = Files.readAllBytes(newFile.toPath());
+                byte[] inputFileContent = Files.readAllBytes(inputFile.toPath());
                 byte[] f2;
                 if (cacheZipFile != null) {
-                    f2 = unzipFileContents(cacheZipFile, cachePath + File.separator + iFile);
+                    f2 = unzipFileContents(cacheZipFile, cachePath + File.separator + inputFileName);
                 } else {
-                    String cachedFileName = getCachedInputFileName(newFile.getName(), cachePath);
+                    String cachedFileName = getCachedInputFileName(cachePath, inputFile.getName());
+                    SystemOut.println("* cache ZIP file not specified, reading " + cachedFileName + " vs " + inputFileName);
+                    /**
+                     * todo: do we have a bug in this branch? how often do we simply read same 'inputFile'?
+                     */
                     File cachedFile = new File(cachedFileName);
                     f2 = Files.readAllBytes(cachedFile.toPath());
                 }
-                boolean isEqual = Arrays.equals(f1, f2);
+                boolean isEqual = Arrays.equals(inputFileContent, f2);
                 if (!isEqual) {
-                    SystemOut.println("* the file " + iFile + " is changed!");
+                    SystemOut.println("* the file " + inputFileName + " is changed!");
                     return true;
                 } else {
-                    SystemOut.println("* the file " + iFile + " is NOT changed!");
+                    SystemOut.println("* the file " + inputFileName + " is NOT changed!");
                 }
-            } catch (java.io.IOException e) {
-                SystemOut.println("* cannot validate the file " + iFile + ", so assuming it's changed.");
+            } catch (IOException e) {
+                SystemOut.println("* cannot validate the file " + inputFileName + ", so assuming it's changed.");
                 return true;
             }
         }
@@ -573,11 +577,11 @@ public class ConfigDefinition {
         } else {
             for (String iFile : inputFiles) {
                 File newFile = new File(iFile);
-                File cachedFile = new File(getCachedInputFileName(newFile.getName(), cachePath));
+                File cachedFile = new File(getCachedInputFileName(cachePath, newFile.getName()));
                 cachedFile.mkdirs();
                 try {
                     Files.copy(newFile.toPath(), cachedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                } catch (java.io.IOException e) {
+                } catch (IOException e) {
                     SystemOut.println("* cannot store the cached file for " + iFile);
                     throw e;
                 }
@@ -587,22 +591,21 @@ public class ConfigDefinition {
         return true;
     }
 
-    private static String getCachedInputFileName(String inputFile, String cachePath) {
+    private static String getCachedInputFileName(String cachePath, String inputFile) {
         return cachePath + File.separator + inputFile;
     }
 
     private static long getCrc32(String fileName) throws IOException {
         File file = new File(fileName);
-        byte[] f1 = Files.readAllBytes(file.toPath());
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        for (int i = 0; i < fileContent.length; i++) {
+            byte aByte = fileContent[i];
+            if (aByte == '\r')
+                throw new IllegalStateException("CR \\r 0x0D byte not allowed in cacheable content " + fileName + " at index=" + i);
+        }
         CRC32 c = new CRC32();
-        c.update(f1, 0, f1.length);
+        c.update(fileContent, 0, fileContent.length);
         return c.getValue();
-    }
-
-    private static void deleteFile(String fileName) throws IOException {
-        File file = new File(fileName);
-        // todo: validate?
-        file.delete();
     }
 
     private static byte[] unzipFileContents(String zipFileName, String fileName) throws IOException {
@@ -612,19 +615,14 @@ public class ConfigDefinition {
         while ((zipEntry = zis.getNextEntry()) != null) {
             Path zippedName = Paths.get(zipEntry.getName()).normalize();
             Path searchName = Paths.get(fileName).normalize();
-            if (zippedName.equals(searchName) && zipEntry.getSize() >= 0) {
-                int offset = 0;
-                byte[] tmpData = new byte[(int) zipEntry.getSize()];
-                int bytesLeft = tmpData.length, bytesRead;
-                while (bytesLeft > 0 && (bytesRead = zis.read(tmpData, offset, bytesLeft)) >= 0) {
-                    offset += bytesRead;
-                    bytesLeft -= bytesRead;
+            if (zippedName.equals(searchName)) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = zis.read(buffer)) != -1) {
+                    baos.write(buffer, 0, read);
                 }
-                if (bytesLeft == 0) {
-                    data = tmpData;
-                } else {
-                    System.out.println("Unzip: error extracting file " + fileName);
-                }
+                data = baos.toByteArray();
                 break;
             }
         }

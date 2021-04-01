@@ -1,12 +1,16 @@
 # List of all the board related files.
 BOARDCPPSRC =  $(PROJECT_DIR)/config/boards/proteus/board_configuration.cpp \
 				$(PROJECT_DIR)/config/boards/proteus/adc_hack.cpp
+
 BOARDINC = $(PROJECT_DIR)/config/boards/proteus
 
 # Target processor details
-ifeq ($(PROJECT_CPU),ARCH_STM32F4)
-else
+ifeq ($(PROJECT_CPU),ARCH_STM32F7)
   PROTEUS_LEGACY = TRUE
+endif
+
+ifeq ($(PROJECT_CPU),ARCH_STM32F4)
+  IS_STM32F429 = yes
 endif
 
 # Override DEFAULT_ENGINE_TYPE
@@ -17,12 +21,22 @@ DDEFS += -DEFI_ICU_INPUTS=FALSE -DHAL_TRIGGER_USE_PAL=TRUE
 DDEFS += -DEFI_LOGIC_ANALYZER=FALSE
 # todo: refactor HAL_VSS_USE_PAL
 DDEFS += -DHAL_VSS_USE_PAL=TRUE
-DDEFS += -DSTM32_ADC_USE_ADC3=TRUE
-DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE
-DDEFS += -DEFI_CONSOLE_TX_BRAIN_PIN=GPIO_UNASSIGNED -DEFI_CONSOLE_RX_BRAIN_PIN=GPIO_UNASSIGNED
 
-# USB mass storage support
-DDEFS += -DHAL_USE_COMMUNITY=TRUE -DHAL_USE_USB_MSD=TRUE
+# This stuff doesn't work on H7 yet
+ifneq ($(PROJECT_CPU),ARCH_STM32H7)
+	DDEFS += -DSTM32_ADC_USE_ADC3=TRUE
+	DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE
+endif
+
+# disable hardware serial ports on H7
+ifeq ($(PROJECT_CPU),ARCH_STM32H7)
+  DDEFS += -DTS_NO_PRIMARY -DTS_NO_SECONDARY
+else
+	# Hardware serial port on UART 2 -> PD5/PD6
+	DDEFS += -DSTM32_UART_USE_USART2=TRUE
+	DDEFS += -DTS_PRIMARY_UART=UARTD2
+	DDEFS += -DEFI_CONSOLE_TX_BRAIN_PIN=GPIOD_5 -DEFI_CONSOLE_RX_BRAIN_PIN=GPIOD_6
+endif
 
 # We are running on Proteus hardware!
 DDEFS += -DHW_PROTEUS=1

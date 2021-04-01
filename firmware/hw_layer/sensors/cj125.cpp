@@ -18,6 +18,7 @@
 #include "cj125.h"
 #include "pwm_generator_logic.h"
 #include "rpm_calculator.h"
+#include "thread_priority.h"
 
 EXTERN_ENGINE;
 
@@ -62,7 +63,7 @@ static SPIConfig cj125spicfg = {
 
 #endif /* HAL_USE_SPI */
 
-static volatile int lastSlowAdcCounter = 0;
+static uint32_t lastSlowAdcCounter = 0;
 
 // LSU conversion tables. See cj125_sensor_type_e
 // For LSU4.2, See http://www.bosch-motorsport.com/media/catalog_resources/Lambda_Sensor_LSU_42_Datasheet_51_en_2779111435pdf.pdf
@@ -647,7 +648,7 @@ void initCJ125(Logging *sharedLogger DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	addConsoleAction("cj125_restart", cjRestart);
 	addConsoleAction("cj125_calibrate", cjStartCalibration);
 
-	chThdCreateStatic(cj125ThreadStack, sizeof(cj125ThreadStack), LOWPRIO, (tfunc_t)(void*) cjThread, NULL);
+	chThdCreateStatic(cj125ThreadStack, sizeof(cj125ThreadStack), PRIO_CJ125, (tfunc_t)(void*) cjThread, NULL);
 #endif /* ! EFI_UNIT_TEST */
 }
 

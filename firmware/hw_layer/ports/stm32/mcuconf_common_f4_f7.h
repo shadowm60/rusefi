@@ -200,7 +200,7 @@
  * SERIAL driver system settings.
  */
 #define STM32_SERIAL_USE_USART1             TRUE
-#define STM32_SERIAL_USE_USART2             TRUE
+#define STM32_SERIAL_USE_USART2             FALSE
 #define STM32_SERIAL_USE_USART3             FALSE
 #define STM32_SERIAL_USE_UART4              FALSE
 #define STM32_SERIAL_USE_UART5              FALSE
@@ -258,7 +258,9 @@
 #define STM32_UART_USE_USART1               FALSE
 #endif
 
+#ifndef STM32_UART_USE_USART2
 #define STM32_UART_USE_USART2               FALSE
+#endif
 
 #ifndef STM32_UART_USE_USART3
 #define STM32_UART_USE_USART3               TRUE
@@ -314,7 +316,6 @@
 #define STM32_USB_OTG2_IRQ_PRIORITY         14
 #define STM32_USB_OTG1_RX_FIFO_SIZE         512
 #define STM32_USB_OTG2_RX_FIFO_SIZE         1024
-#define STM32_USB_OTG_THREAD_PRIO           LOWPRIO
 #define STM32_USB_OTG_THREAD_STACK_SIZE     1024
 #define STM32_USB_OTGFIFO_FILL_BASEPRI      0
 

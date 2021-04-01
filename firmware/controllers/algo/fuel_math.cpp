@@ -300,7 +300,7 @@ static float getCycleFuelMass(bool isCranking, float baseFuelMass DECLARE_ENGINE
  * @returns	Length of each individual fuel injection, in milliseconds
  *     in case of single point injection mode the amount of fuel into all cylinders, otherwise the amount for one cylinder
  */
-floatms_t getInjectionDuration(int rpm DECLARE_ENGINE_PARAMETER_SUFFIX) {
+floatms_t getInjectionMass(int rpm DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	ScopePerf perf(PE::GetInjectionDuration);
 
 #if EFI_SHAFT_POSITION_INPUT
@@ -317,16 +317,19 @@ floatms_t getInjectionDuration(int rpm DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	float durationMultiplier = getInjectionModeDurationMultiplier(PASS_ENGINE_PARAMETER_SIGNATURE);
 	float injectionFuelMass = cycleFuelMass * durationMultiplier;
 
+	// Prepare injector flow rate & deadtime
 	ENGINE(injectorModel)->prepare();
-
-	// TODO: move everything below here to injector scheduling, so that wall wetting works properly
-	floatms_t injectionDuration = ENGINE(injectorModel)->getInjectionDuration(injectionFuelMass);
 
 	floatms_t tpsAccelEnrich = ENGINE(tpsAccelEnrichment.getTpsEnrichment(PASS_ENGINE_PARAMETER_SIGNATURE));
 	efiAssert(CUSTOM_ERR_ASSERT, !cisnan(tpsAccelEnrich), "NaN tpsAccelEnrich", 0);
 	ENGINE(engineState.tpsAccelEnrich) = tpsAccelEnrich;
 
-	return injectionDuration + (durationMultiplier * tpsAccelEnrich);
+	// For legacy reasons, the TPS accel table is in units of milliseconds, so we have to convert BACK to mass
+	float tpsAccelPerInjection = durationMultiplier * tpsAccelEnrich;
+
+	float tpsFuelMass = ENGINE(injectorModel)->getFuelMassForDuration(tpsAccelPerInjection);
+
+	return injectionFuelMass + tpsFuelMass;
 #else
 	return 0;
 #endif
@@ -474,14 +477,4 @@ float getStandardAirCharge(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 }
 
 #endif
-
-float getFuelRate(floatms_t totalInjDuration, efitick_t timePeriod DECLARE_ENGINE_PARAMETER_SUFFIX) {
-	if (timePeriod <= 0.0f)
-		return 0.0f;
-	float timePeriodMs = (float)NT2US(timePeriod) / 1000.0f;
-	float fuelRate = totalInjDuration / timePeriodMs;
-	const float cc_min_to_L_h = 60.0f / 1000.0f;
-	return fuelRate * CONFIG(injector.flow) * cc_min_to_L_h;
-}
-
 #endif

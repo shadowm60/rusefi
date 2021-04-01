@@ -57,7 +57,7 @@ public:
 	TriggerNoiseFilter noiseFilter;
 
 	trigger_type_e vvtTriggerType[CAMS_PER_BANK];
-	angle_t getVVTPosition();
+	angle_t getVVTPosition(uint8_t bankIndex, uint8_t camIndex);
 
 #if EFI_UNIT_TEST
 	// latest VVT event position (could be not synchronization event)
@@ -67,10 +67,7 @@ public:
 	// synchronization event position
 	angle_t vvtPosition[BANKS_COUNT][CAMS_PER_BANK];
 
-	/**
-	 * this is similar to TriggerState#startOfCycleNt but with the crank-only sensor magic
-	 */
-	efitick_t timeAtVirtualZeroNt = 0;
+	Timer virtualZeroTimer;
 
 	efitick_t vvtSyncTimeNt[BANKS_COUNT][CAMS_PER_BANK];
 

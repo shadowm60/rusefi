@@ -12,7 +12,7 @@ jobs:
       matrix:
         # What boards should we build for? In the 'include' section below,
         # set up what each of these boards needs to build.
-        build-target: [hellen72, cypress, frankenso_na6, kinetis, mre_f4, mre_f4_recovery, mre_f4_hardware_QC_special_build, mre_f7, prometheus_405, prometheus_469, proteus_f4, proteus_f4_hardware_QC_special_build, proteus_f7, stm32f767_nucleo, stm32h743_nucleo, subaru_eg33_f7]
+        build-target: [hellen72, cypress, frankenso_na6, kinetis, mre_f4, mre_f4_recovery, mre_f4_hardware_QC_special_build, mre_f7, prometheus_405, prometheus_469, proteus_f4, proteus_f4_hardware_QC_special_build, proteus_f7, proteus_h7, stm32f767_nucleo, stm32h743_nucleo, subaru_eg33_f7]
         
         include:
           # Board configurations
@@ -70,6 +70,10 @@ jobs:
             folder: proteus
             ini-file: rusefi_proteus_f7.ini
 
+          - build-target: proteus_h7
+            folder: proteus
+            ini-file: rusefi_proteus_h7.ini
+
           - build-target: stm32f767_nucleo
             folder: nucleo_f767
             ini-file: no
@@ -89,9 +93,15 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: recursive
+
     - uses: actions/setup-java@v1
       with:
         java-version: '8'
+
+    - name: Install multilib, mingw, ncftp and mtools
+      run: |
+        sudo apt-get update
+        sudo apt-get install gcc-multilib g++-multilib g++-mingw-w64 gcc-mingw-w64 ncftp mtools
 
     - name: Generate Configs
       if: ${{ matrix.skip-config != 'yes' }}
@@ -137,12 +147,6 @@ jobs:
     - name: Test Compiler
       run: arm-none-eabi-gcc -v
 
-    - name: Install multilib, mingw, and ncftp
-      run: |
-        sudo apt-get update
-        sudo apt-get install gcc-multilib g++-multilib g++-mingw-w64 gcc-mingw-w64 ncftp
-
-
     - name: Configs Set FTP variables
       env:
         ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
@@ -183,28 +187,28 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: rusefi_${{matrix.build-target}}.bin
-        path: ./firmware/deliver/rusefi_${{matrix.build-target}}.bin
+        path: ./firmware/deliver/rusefi*.bin
 
     - name: Upload build hex
       if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
       uses: actions/upload-artifact@v2
       with:
         name: rusefi_${{matrix.build-target}}.hex
-        path: ./firmware/deliver/rusefi_${{matrix.build-target}}.hex
+        path: ./firmware/deliver/rusefi*.hex
 
     - name: Upload build dfu
       if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
       uses: actions/upload-artifact@v2
       with:
         name: rusefi_${{matrix.build-target}}.dfu
-        path: ./firmware/deliver/rusefi_${{matrix.build-target}}.dfu
+        path: ./firmware/deliver/rusefi*.dfu
 
     - name: Upload bundle
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
       uses: actions/upload-artifact@v2
       with:
         name: rusefi_bundle_${{matrix.build-target}}.zip
-        path: ./artifacts/rusefi_bundle_${{matrix.build-target}}.zip
+        path: ./artifacts/rusefi_bundle*.zip
 
     - name: Upload autoupdate bundle
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}

@@ -98,6 +98,8 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 		return TT_ONE;
 	case VVT_FORD_ST170:
 		return TT_FORD_ST170;
+	case VVT_BARRA_3_PLUS_1:
+		return TT_VVT_BARRA_3_PLUS_1;
 	default:
 		return TT_ONE;
 	}
@@ -236,6 +238,11 @@ void Engine::periodicSlowCallback(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 	slowCallBackWasInvoked = true;
 
+#if HW_PROTEUS
+	void baroUpdate();
+	baroUpdate();
+#endif
+
 #if ANALOG_HW_CHECK_MODE
 	efiAssertVoid(OBD_PCM_Processor_Fault, isAdcChannelValid(CONFIG(clt).adcChannel), "No CLT setting");
 	efitimesec_t secondsNow = getTimeNowSeconds();
@@ -275,19 +282,9 @@ void Engine::updateSlowSensors(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 	engineState.updateSlowSensors(PASS_ENGINE_PARAMETER_SIGNATURE);
 
-	// todo: move this logic somewhere to sensors folder?
-	if (isAdcChannelValid(CONFIG(fuelLevelSensor))) {
-		float fuelLevelVoltage = getVoltageDivided("fuel", engineConfiguration->fuelLevelSensor PASS_ENGINE_PARAMETER_SUFFIX);
-		sensors.fuelTankLevel = interpolateMsg("fgauge", CONFIG(fuelLevelEmptyTankVoltage), 0,
-				CONFIG(fuelLevelFullTankVoltage), 100,
-				fuelLevelVoltage);
-	}
-
-	sensors.vBatt = Sensor::get(SensorType::BatteryVoltage).value_or(12);
-
 #if (BOARD_TLE8888_COUNT > 0)
 	// nasty value injection into C driver which would not be able to access Engine class
-	vBattForTle8888 = sensors.vBatt;
+	vBattForTle8888 = Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE);
 #endif /* BOARD_TLE8888_COUNT */
 
 #if EFI_MC33816
@@ -323,9 +320,8 @@ void Engine::updateSwitchInputs(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #endif // EFI_GPIO_HARDWARE
 }
 
-void Engine::onTriggerSignalEvent(efitick_t nowNt) {
+void Engine::onTriggerSignalEvent() {
 	isSpinning = true;
-	lastTriggerToothEventTimeNt = nowNt;
 }
 
 Engine::Engine() {
@@ -515,30 +511,22 @@ void Engine::watchdog() {
 		}
 		return;
 	}
-	efitick_t nowNt = getTimeNowNt();
-// note that we are ignoring the number of tooth here - we
-// check for duration between tooth as if we only have one tooth per revolution which is not the case
-#define REVOLUTION_TIME_HIGH_THRESHOLD (60 * US_PER_SECOND_LL / RPM_LOW_THRESHOLD)
+
 	/**
 	 * todo: better watch dog implementation should be implemented - see
 	 * http://sourceforge.net/p/rusefi/tickets/96/
-	 *
-	 * note that the result of this subtraction could be negative, that would happen if
-	 * we have a trigger event between the time we've invoked 'getTimeNow' and here
 	 */
-	efitick_t timeSinceLastTriggerEvent = nowNt - lastTriggerToothEventTimeNt;
-	if (timeSinceLastTriggerEvent < US2NT(REVOLUTION_TIME_HIGH_THRESHOLD)) {
+	float secondsSinceTriggerEvent = engine->triggerCentral.getTimeSinceTriggerEvent(getTimeNowNt());
+
+	if (secondsSinceTriggerEvent < 0.5f) {
+		// Engine moved recently, no need to safe pins.
 		return;
 	}
 	isSpinning = false;
 	ignitionEvents.isReady = false;
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	scheduleMsg(&engineLogger, "engine has STOPPED");
-	scheduleMsg(&engineLogger, "templog engine has STOPPED [%x][%x] [%x][%x] %d",
-			(int)(nowNt >> 32), (int)nowNt,
-			(int)(lastTriggerToothEventTimeNt >> 32), (int)lastTriggerToothEventTimeNt,
-			(int)timeSinceLastTriggerEvent
-			);
+	scheduleMsg(&engineLogger, "templog engine has STOPPED %f", secondsSinceTriggerEvent);
 	triggerInfo();
 #endif
 
@@ -560,7 +548,7 @@ void Engine::checkShutdown(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 		// if the ignition key is turned on again,
 		// we cancel the shutdown mode, but only if all shutdown procedures are complete
 		const float vBattThresholdOn = 8.0f;
-		if ((sensors.vBatt > vBattThresholdOn) && !isInShutdownMode(PASS_ENGINE_PARAMETER_SIGNATURE)) {
+		if ((Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE) > vBattThresholdOn) && !isInShutdownMode(PASS_ENGINE_PARAMETER_SIGNATURE)) {
 			ignitionOnTimeNt = getTimeNowNt();
 			stopEngineRequestTimeNt = 0;
 			scheduleMsg(&engineLogger, "Ignition voltage detected! Cancel the engine shutdown!");
@@ -582,7 +570,7 @@ bool Engine::isInShutdownMode(DECLARE_ENGINE_PARAMETER_SIGNATURE) const {
 	if (stopEngineRequestTimeNt == 0 && ignitionOnTimeNt > 0) {
 		const float vBattThresholdOff = 5.0f;
 		// start the shutdown process if the ignition voltage dropped low
-		if (sensors.vBatt <= vBattThresholdOff) {
+		if (Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE) <= vBattThresholdOff) {
 			scheduleStopEngine();
 		}
 	}

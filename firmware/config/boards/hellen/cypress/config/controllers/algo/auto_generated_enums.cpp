@@ -1,7 +1,7 @@
 #include "global.h"
 #include "rusefi_enums.h"
 #include "rusefi_hw_enums.h"
-// was generated automatically by rusEfi tool  from rusefi_hw_enums.h // was generated automatically by rusEfi tool  from rusefi_enums.h // by enum2string.jar tool on Mon Feb 08 18:09:24 EST 2021
+// was generated automatically by rusEfi tool  from rusefi_hw_enums.h // was generated automatically by rusEfi tool  from rusefi_enums.h // by enum2string.jar tool on Mon Mar 29 13:05:34 UTC 2021
 // see also gen_config_and_enums.bat
 
 
@@ -629,6 +629,8 @@ case CAN_BUS_Haltech:
   return "CAN_BUS_Haltech";
 case CAN_BUS_MAZDA_RX8:
   return "CAN_BUS_MAZDA_RX8";
+case CAN_BUS_MQB:
+  return "CAN_BUS_MQB";
 case CAN_BUS_NBC_BMW:
   return "CAN_BUS_NBC_BMW";
 case CAN_BUS_NBC_FIAT:
@@ -1026,6 +1028,10 @@ case REVERSE:
 }
 const char *getGppwm_channel_e(gppwm_channel_e value){
 switch(value) {
+case GPPWM_AuxTemp1:
+  return "GPPWM_AuxTemp1";
+case GPPWM_AuxTemp2:
+  return "GPPWM_AuxTemp2";
 case GPPWM_Clt:
   return "GPPWM_Clt";
 case GPPWM_FuelLoad:
@@ -1453,6 +1459,8 @@ case TT_TRI_TACH:
   return "TT_TRI_TACH";
 case TT_UNUSED:
   return "TT_UNUSED";
+case TT_VVT_BARRA_3_PLUS_1:
+  return "TT_VVT_BARRA_3_PLUS_1";
 case TT_VVT_BOSCH_QUICK_START:
   return "TT_VVT_BOSCH_QUICK_START";
 case TT_VVT_JZ:
@@ -1516,6 +1524,8 @@ case VVT_2JZ:
   return "VVT_2JZ";
 case VVT_4_1:
   return "VVT_4_1";
+case VVT_BARRA_3_PLUS_1:
+  return "VVT_BARRA_3_PLUS_1";
 case VVT_BOSCH_QUICK_START:
   return "VVT_BOSCH_QUICK_START";
 case VVT_FIRST_HALF:

@@ -5,12 +5,14 @@
 #include "perf_trace.h"
 #include "thread_controller.h"
 #include "software_knock.h"
+#include "thread_priority.h"
 
 #if EFI_SOFTWARE_KNOCK
 
 EXTERN_ENGINE;
 
 #include "knock_config.h"
+#include "ch.hpp"
 
 NO_CACHE adcsample_t sampleBuffer[2000];
 int8_t currentCylinderIndex = 0;
@@ -20,7 +22,7 @@ static volatile bool knockIsSampling = false;
 static volatile bool knockNeedsProcess = false;
 static volatile size_t sampleCount = 0;
 
-binary_semaphore_t knockSem;
+chibios_rt::BinarySemaphore knockSem(/* taken =*/ true);
 
 static void completionCallback(ADCDriver* adcp) {
 	palClearPad(GPIOD, 2);
@@ -30,7 +32,7 @@ static void completionCallback(ADCDriver* adcp) {
 
 		// Notify the processing thread that it's time to process this sample
 		chSysLockFromISR();
-		chBSemSignalI(&knockSem);
+		knockSem.signalI();
 		chSysUnlockFromISR();
 	}
 }
@@ -162,15 +164,13 @@ void startKnockSampling(uint8_t cylinderIndex) {
 
 class KnockThread : public ThreadController<256> {
 public:
-	KnockThread() : ThreadController("knock", NORMALPRIO - 10) {}
+	KnockThread() : ThreadController("knock", PRIO_KNOCK_PROCESS) {}
 	void ThreadTask() override;
 };
 
 static KnockThread kt;
 
 void initSoftwareKnock() {
-	chBSemObjectInit(&knockSem, TRUE);
-
 	if (CONFIG(enableSoftwareKnock)) {
 		knockFilter.configureBandpass(KNOCK_SAMPLE_RATE, 1000 * CONFIG(knockBandCustom), 3);
 		adcStart(&KNOCK_ADC, nullptr);
@@ -223,7 +223,7 @@ void processLastKnockEvent() {
 
 void KnockThread::ThreadTask() {
 	while (1) {
-		chBSemWait(&knockSem);
+		knockSem.wait();
 
 		ScopePerf perf(PE::SoftwareKnockProcess);
 		processLastKnockEvent();

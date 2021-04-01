@@ -21,17 +21,17 @@
 #define LED_RUNING_BRAIN_PIN_MODE		INVERTED_OUTPUT
 
 /* debug console */
-#undef EFI_USE_UART_FOR_CONSOLE
-#define EFI_USE_UART_FOR_CONSOLE		TRUE
-#undef EFI_CONSOLE_SERIAL_DEVICE
-#define EFI_CONSOLE_SERIAL_DEVICE		(&SD1)
+#undef TS_PRIMARY_SERIAL
+#undef TS_PRIMARY_UART
+#define TS_PRIMARY_SERIAL		SD1
 
-/* TunerStudio binary protocol */
-/* do not use UART  device for console */
-#undef TS_UART_DEVICE
+// no secondary channel
+#undef TS_SECONDARY_UART
+#undef TS_SECONDARY_SERIAL
 
-/* do not use serial device for console */
-#undef TS_SERIAL_DEVICE
+/* Knock detection */
+#undef EFI_HIP_9011
+#define EFI_HIP_9011				TRUE
 
 #undef BOARD_TLE6240_COUNT
 #define BOARD_TLE6240_COUNT			1
@@ -84,8 +84,7 @@
 #undef EFI_FUEL_PUMP
 #define EFI_FUEL_PUMP				TRUE
 
-#undef MMC_CARD_SPI
-#define MMC_CARD_SPI				SPID1
+#define EFI_SDC_DEVICE				SDCD2
 
 #define ADC_CHANNEL_VREF			ADC_CHANNEL_IN14
 
@@ -98,7 +97,7 @@
 #undef SERIAL_SPEED
 #define SERIAL_SPEED				115200
 
-#ifdef EFI_CONSOLE_SERIAL_DEVICE
+#ifdef TS_PRIMARY_SERIAL
 	#undef EFI_CONSOLE_TX_PORT
 	#define EFI_CONSOLE_TX_PORT 		GPIOA
 	#undef EFI_CONSOLE_TX_PIN
@@ -137,8 +136,6 @@
 
 #define RPM_LOW_THRESHOLD 			8				// RPM=8 is an empirical lower sensitivity threshold of MAX9926 for 60-2
 #define NO_RPM_EVENTS_TIMEOUT_SECS	5	// (RPM < 12)
-
-#define EFI_PRINT_ERRORS_AS_WARNINGS	TRUE
 
 #define EFI_NARROW_EGO_AVERAGING		TRUE
 

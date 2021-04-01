@@ -377,13 +377,15 @@ typedef enum {
 	 */
 	TT_SKODA_FAVORIT = TT_TT_SKODA_FAVORIT,
 
+	TT_VVT_BARRA_3_PLUS_1 = TT_TT_VVT_BARRA_3_PLUS_1,
+
 	// do not forget to edit "#define trigger_type_e_enum" line in integration/rusefi_config.txt file to propogate new value to rusefi.ini TS project
 	// do not forget to invoke "gen_config.bat" once you make changes to integration/rusefi_config.txt
 	// todo: one day a hero would integrate some of these things into Makefile in order to reduce manual magic
 	//
 	// Another point: once you add a new trigger, run get_trigger_images.bat which would run rusefi_test.exe from unit_tests
 	//
-	TT_UNUSED = 56, // this is used if we want to iterate over all trigger types
+	TT_UNUSED = 57, // this is used if we want to iterate over all trigger types
 
 	Force_4_bytes_size_trigger_type = ENUM_32_BITS,
 } trigger_type_e;
@@ -456,6 +458,8 @@ typedef enum  __attribute__ ((__packed__)) {
 	VVT_4_1 = 6,
 
 	VVT_FORD_ST170 = 7,
+
+	VVT_BARRA_3_PLUS_1 = 8,
 } vvt_mode_e;
 
 /**
@@ -912,6 +916,8 @@ typedef enum {
 	CAN_BUS_W202_C180 = 5,
     CAN_BUS_BMW_E90 = 6,
 	CAN_BUS_Haltech = 7,
+	CAN_BUS_MQB = 8,
+
 	Internal_ForceMyEnumIntSize_can_nbc = ENUM_32_BITS,
 } can_nbc_e;
 
@@ -1003,6 +1009,8 @@ typedef enum __attribute__ ((__packed__)) {
 	GPPWM_Iat = 3,
 	GPPWM_FuelLoad = 4,
 	GPPWM_IgnLoad = 5,
+	GPPWM_AuxTemp1 = 6,
+	GPPWM_AuxTemp2 = 7,
 } gppwm_channel_e;
 
 typedef enum __attribute__ ((__packed__)) {

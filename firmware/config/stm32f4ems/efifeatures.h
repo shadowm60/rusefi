@@ -37,10 +37,6 @@
 
 #define EFI_HPFP TRUE
 
-#ifndef HAL_USE_USB_MSD
-#define HAL_USE_USB_MSD FALSE
-#endif
-
 #define EFI_ENABLE_CRITICAL_ENGINE_STOP TRUE
 #define EFI_ENABLE_ENGINE_WARNING TRUE
 
@@ -150,8 +146,7 @@
  * MCP42010 digital potentiometer support. This could be useful if you are stimulating some
  * stock ECU
  */
-//#define EFI_POTENTIOMETER FALSE
-#define EFI_POTENTIOMETER TRUE
+#define EFI_POTENTIOMETER FALSE
 
 #ifndef BOARD_TLE6240_COUNT
 #define BOARD_TLE6240_COUNT         1
@@ -197,6 +192,8 @@
 #ifndef EFI_INTERNAL_ADC
 #define EFI_INTERNAL_ADC TRUE
 #endif
+
+#define EFI_USE_FAST_ADC TRUE
 
 #define EFI_NARROW_EGO_AVERAGING TRUE
 
@@ -256,11 +253,20 @@
 #define EFI_FILE_LOGGING TRUE
 #endif
 
+#ifndef EFI_EMBED_INI_MSD
+#define EFI_EMBED_INI_MSD TRUE
+#endif
+
 #ifndef EFI_USB_SERIAL
 #define EFI_USB_SERIAL TRUE
 #endif
 
 #define EFI_CONSOLE_USB_DEVICE SDU1
+
+// F42x has more memory, so we can use compressed USB MSD image (requires 32k of memory)
+#ifdef EFI_IS_F42x
+#define EFI_USE_COMPRESSED_INI_MSD
+#endif
 
 #ifndef EFI_ENGINE_SNIFFER
 #define EFI_ENGINE_SNIFFER TRUE
@@ -341,41 +347,18 @@
  *  PE5
  */
 
-
-// todo: start using consoleUartDevice? Not sure
-#ifndef EFI_CONSOLE_SERIAL_DEVICE
-//#define EFI_CONSOLE_SERIAL_DEVICE (&SD3)
+// allow override of EFI_USE_UART_DMA from cmdline passed defs
+#ifndef EFI_USE_UART_DMA
+#define EFI_USE_UART_DMA TRUE
 #endif
 
-/**
- * Use 'HAL_USE_UART' DMA-mode driver instead of 'HAL_USE_SERIAL'
- *
- * See also
- *  STM32_SERIAL_USE_USARTx
- *  STM32_UART_USE_USARTx
- * in mcuconf.h
- */
-#ifndef TS_UART_DMA_MODE
-#define TS_UART_DMA_MODE FALSE
+#ifndef TS_PRIMARY_UART
+#define TS_PRIMARY_UART UARTD3
 #endif
 
-#ifndef PRIMARY_UART_DMA_MODE
-#define PRIMARY_UART_DMA_MODE TRUE
-#endif
-
-#if (PRIMARY_UART_DMA_MODE || TS_UART_DMA_MODE || TS_UART_MODE)
-#define EFI_CONSOLE_UART_DEVICE (&UARTD3)
-#endif
-
-//#define TS_UART_DEVICE (&UARTD3)
-//#define TS_SERIAL_DEVICE (&SD3)
+#undef TS_SECONDARY_UART
 
 #define AUX_SERIAL_DEVICE (&SD6)
-
-// todo: add DMA-mode for Console?
-#if (TS_UART_DMA_MODE || TS_UART_MODE)
-#undef EFI_CONSOLE_SERIAL_DEVICE
-#endif
 
 // todo: start using consoleSerialTxPin? Not sure
 #ifndef EFI_CONSOLE_TX_BRAIN_PIN

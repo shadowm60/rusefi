@@ -13,14 +13,15 @@ ifeq ($(DEBUG_LEVEL_OPT),)
 endif
 
 # disable some modules to shrink bootloader binary
-DDEFS += -DHAL_USE_ADC=FALSE -DHAL_USE_CAN=FALSE -DHAL_USE_EXT=FALSE -DHAL_USE_GPT=FALSE -DHAL_USE_ICU=FALSE -DHAL_USE_PWM=FALSE -DHAL_USE_RTC=FALSE
+DDEFS += -DEFI_BOOTLOADER
+DDEFS += -DHAL_USE_EXT=FALSE -DHAL_USE_ICU=FALSE -DHAL_USE_PWM=FALSE -DHAL_USE_RTC=FALSE
 #disable ChibiOS flsah driver and prevent header from include
 DDEFS += -DHAL_USE_FLASH=FALSE
 
-DDEFS += -DPRIMARY_UART_DMA_MODE=FALSE
+DDEFS += -DEFI_USE_UART_DMA=FALSE
 
 # disable USB (The bootloader has currently UART support only)
-DDEFS += -DEFI_USB_SERIAL=FALSE -DHAL_USE_SERIAL_USB=FALSE -DHAL_USE_USB=FALSE -DHAL_USE_USB_MSD=FALSE
+DDEFS += -DEFI_USB_SERIAL=FALSE
 # disable CAN
 DDEFS += -DEFI_CAN_SUPPORT=FALSE
 
@@ -172,6 +173,7 @@ CPPSRC = $(ALLCPPSRC) \
 	$(TUNERSTUDIO_SRC_CPP) \
 	$(CONSOLE_SRC_CPP) \
 	$(PROJECT_DIR)/console/binary/tunerstudio_io.cpp \
+	$(PROJECT_DIR)/console/binary/tunerstudio_io_serial.cpp \
 	$(PROJECT_DIR)/controllers/system/efi_gpio.cpp \
 	$(PROJECT_DIR)/controllers/algo/engine_configuration.cpp \
 	$(PROJECT_DIR)/controllers/persistent_store.cpp \

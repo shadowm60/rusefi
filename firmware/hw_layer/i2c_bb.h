@@ -9,8 +9,9 @@
 #pragma once
 
 #if EFI_PROD_CODE
-
 #include "hal.h"
+#endif
+
 #include "rusefi_hw_enums.h"
 #include <cstdint>
 #include <cstddef>
@@ -22,6 +23,8 @@ public:
 
 	// Write a sequence of bytes to the specified device
 	void write(uint8_t addr, const uint8_t* data, size_t size);
+	// Read a sequence of bytes from the device
+	void read(uint8_t addr, uint8_t* data, size_t size);
 	// Write some bytes then read some bytes back after a repeated start bit
 	void writeRead(uint8_t addr, const uint8_t* writeData, size_t writeSize, uint8_t* readData, size_t readSize);
 
@@ -53,10 +56,10 @@ private:
 	// Wait for 1/4 of a bit time
 	void waitQuarterBit();
 
+#if EFI_PROD_CODE
 	ioportid_t m_sclPort = 0;
 	ioportmask_t m_sclPin = 0;
 	ioportid_t m_sdaPort = 0;
 	ioportmask_t m_sdaPin = 0;
+#endif
 };
-
-#endif // EFI_PROD_CODE

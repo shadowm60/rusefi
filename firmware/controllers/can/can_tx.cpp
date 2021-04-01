@@ -16,13 +16,14 @@
 #include "can_dash.h"
 #include "obd2.h"
 #include "can_sensor.h"
+#include "thread_priority.h"
 
 EXTERN_ENGINE;
 
-extern CanSensorBase* cansensors_head;
+extern CanListener* canListeners_head;
 
 CanWrite::CanWrite()
-	: PeriodicController("CAN TX", NORMALPRIO, 50)
+	: PeriodicController("CAN TX", PRIO_CAN_TX, 50)
 {
 }
 
@@ -34,7 +35,7 @@ void CanWrite::PeriodicTask(efitime_t nowNt) {
 		sendCanVerbose();
 	}
 
-	CanSensorBase* current = cansensors_head;
+	CanListener* current = canListeners_head;
 
 	while (current) {
 		current = current->request();
@@ -59,6 +60,9 @@ void CanWrite::PeriodicTask(efitime_t nowNt) {
 		break;
 	case CAN_BUS_BMW_E90:
 		canDashboardBMWE90();
+		break;
+	case CAN_BUS_MQB:
+		canDashboardVagMqb();
 		break;
 	default:
 		break;

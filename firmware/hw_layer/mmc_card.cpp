@@ -16,6 +16,7 @@
 
 #if EFI_FILE_LOGGING
 
+#include "ch.hpp"
 #include <stdio.h>
 #include <string.h>
 #include "mmc_card.h"
@@ -26,6 +27,7 @@
 #include "status_loop.h"
 #include "buffered_writer.h"
 #include "null_device.h"
+#include "thread_priority.h"
 
 #include "rtc_helper.h"
 
@@ -55,7 +57,6 @@ static int totalSyncCounter = 0;
  * on't re-read SD card spi device after boot - it could change mid transaction (TS thread could preempt),
  * which will cause disaster (usually multiple-unlock of the same mutex in UNLOCK_SD_SPI)
  */
-
 spi_device_e mmcSpiDevice = SPI_NONE;
 
 #define LOG_INDEX_FILENAME "index.txt"
@@ -74,46 +75,28 @@ spi_device_e mmcSpiDevice = SPI_NONE;
 #else
   USBDriver *usb_driver = &USBD1;
 #endif
-extern const USBConfig msdusbcfg;
 #endif /* HAL_USE_USB_MSD */
 
-// TODO: this is NO_CACHE because of https://github.com/rusefi/rusefi/issues/2356
-static NO_CACHE THD_WORKING_AREA(mmcThreadStack,3 * UTILITY_THREAD_STACK_SIZE);		// MMC monitor thread
+static THD_WORKING_AREA(mmcThreadStack, 3 * UTILITY_THREAD_STACK_SIZE);		// MMC monitor thread
 
+#if HAL_USE_MMC_SPI
 /**
  * MMC driver instance.
  */
 MMCDriver MMCD1;
 
-// SD cards are good up to 25MHz in "slow" mode, and 50MHz in "fast" mode
-// 168mhz F4:
-// Slow mode is 10.5 or 5.25 MHz, depending on which SPI device
-// Fast mode is 42 or 21 MHz
-// 216mhz F7:
-// Slow mode is 13.5 or 6.75 MHz
-// Fast mode is 54 or 27 MHz (technically out of spec, needs testing!)
-static SPIConfig hs_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_2,
-		.cr2 = 0};
-static SPIConfig ls_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_8,
-		.cr2 = 0};
-
 /* MMC/SD over SPI driver configuration.*/
-static MMCConfig mmccfg = { NULL, &ls_spicfg, &hs_spicfg };
+static MMCConfig mmccfg = { NULL, &mmc_ls_spicfg, &mmc_hs_spicfg };
+
+#define LOCK_SD_SPI lockSpi(mmcSpiDevice)
+#define UNLOCK_SD_SPI unlockSpi(mmcSpiDevice)
+
+#endif /* HAL_USE_MMC_SPI */
 
 /**
  * fatfs MMC/SPI
  */
-static FATFS MMC_FS;
+static NO_CACHE FATFS MMC_FS;
 
 static LoggingWithStorage logger("mmcCard");
 
@@ -162,7 +145,6 @@ static void sdStatistics(void) {
 }
 
 static void incLogFileName(void) {
-	LOCK_SD_SPI;
 	memset(&FDCurrFile, 0, sizeof(FIL));						// clear the memory
 	FRESULT err = f_open(&FDCurrFile, LOG_INDEX_FILENAME, FA_READ);				// This file has the index for next log file name
 
@@ -194,7 +176,6 @@ static void incLogFileName(void) {
 	f_write(&FDCurrFile, (void*)data, strlen(data), &result);
 	f_close(&FDCurrFile);
 	scheduleMsg(&logger, "Done %d", logFileIndex);
-	UNLOCK_SD_SPI;
 }
 
 static void prepareLogFileName(void) {
@@ -224,13 +205,11 @@ static void prepareLogFileName(void) {
  * so that we can later append to that file
  */
 static void createLogFile(void) {
-	LOCK_SD_SPI;
 	memset(&FDLogFile, 0, sizeof(FIL));						// clear the memory
 	prepareLogFileName();
 
 	FRESULT err = f_open(&FDLogFile, logName, FA_OPEN_ALWAYS | FA_WRITE);				// Create new file
 	if (err != FR_OK && err != FR_EXIST) {
-		UNLOCK_SD_SPI;
 		sdStatus = SD_STATE_OPEN_FAILED;
 		warning(CUSTOM_ERR_SD_MOUNT_FAILED, "SD: mount failed");
 		printError("FS mount failed", err);	// else - show error
@@ -239,7 +218,6 @@ static void createLogFile(void) {
 
 	err = f_lseek(&FDLogFile, f_size(&FDLogFile)); // Move to end of the file to append data
 	if (err) {
-		UNLOCK_SD_SPI;
 		sdStatus = SD_STATE_SEEK_FAILED;
 		warning(CUSTOM_ERR_SD_SEEK_FAILED, "SD: seek failed");
 		printError("Seek error", err);
@@ -247,7 +225,6 @@ static void createLogFile(void) {
 	}
 	f_sync(&FDLogFile);
 	setSdCardReady(true);						// everything Ok
-	UNLOCK_SD_SPI;
 }
 
 static void removeFile(const char *pathx) {
@@ -255,10 +232,8 @@ static void removeFile(const char *pathx) {
 		scheduleMsg(&logger, "Error: No File system is mounted");
 		return;
 	}
-	LOCK_SD_SPI;
-	f_unlink(pathx);
 
-	UNLOCK_SD_SPI;
+	f_unlink(pathx);
 }
 
 int
@@ -286,14 +261,12 @@ static void listDirectory(const char *path) {
 		scheduleMsg(&logger, "Error: No File system is mounted");
 		return;
 	}
-	LOCK_SD_SPI;
 
 	DIR dir;
 	FRESULT res = f_opendir(&dir, path);
 
 	if (res != FR_OK) {
 		scheduleMsg(&logger, "Error opening directory %s", path);
-		UNLOCK_SD_SPI;
 		return;
 	}
 
@@ -321,7 +294,6 @@ static void listDirectory(const char *path) {
 //					(fno.fdate >> 5) & 15, fno.fdate & 31, (fno.ftime >> 11), (fno.ftime >> 5) & 63, fno.fsize,
 //					fno.fname);
 	}
-	UNLOCK_SD_SPI;
 }
 
 /*
@@ -334,8 +306,16 @@ static void mmcUnMount(void) {
 	}
 	f_close(&FDLogFile);						// close file
 	f_sync(&FDLogFile);							// sync ALL
+
+#if HAL_USE_MMC_SPI
 	mmcDisconnect(&MMCD1);						// Brings the driver in a state safe for card removal.
 	mmcStop(&MMCD1);							// Disables the MMC peripheral.
+	UNLOCK_SD_SPI;
+#endif
+#ifdef EFI_SDC_DEVICE
+	sdcDisconnect(&EFI_SDC_DEVICE);
+	sdcStop(&EFI_SDC_DEVICE);
+#endif
 	f_mount(NULL, 0, 0);						// FATFS: Unregister work area prior to discard it
 	memset(&FDLogFile, 0, sizeof(FIL));			// clear FDLogFile
 	setSdCardReady(false);						// status = false
@@ -359,14 +339,15 @@ static const scsi_inquiry_response_t scsi_inquiry_response = {
     {'v',CH_KERNEL_MAJOR+'0','.',CH_KERNEL_MINOR+'0'}
 };
 
-static binary_semaphore_t usbConnectedSemaphore;
+static chibios_rt::BinarySemaphore usbConnectedSemaphore(/* taken =*/ true);
 
 void onUsbConnectedNotifyMmcI() {
-	chBSemSignalI(&usbConnectedSemaphore);
+	usbConnectedSemaphore.signalI();
 }
 
 #endif /* HAL_USE_USB_MSD */
 
+#if HAL_USE_MMC_SPI
 /*
  * Attempts to initialize the MMC card.
  * Returns a BaseBlockDevice* corresponding to the SD card if successful, otherwise nullptr.
@@ -382,9 +363,14 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 	efiAssert(OBD_PCM_Processor_Fault, mmcSpiDevice != SPI_NONE, "SD card enabled, but no SPI device configured!", nullptr);
 
 	// todo: reuse initSpiCs method?
-	hs_spicfg.ssport = ls_spicfg.ssport = getHwPort("mmc", CONFIG(sdCardCsPin));
-	hs_spicfg.sspad = ls_spicfg.sspad = getHwPin("mmc", CONFIG(sdCardCsPin));
+	mmc_hs_spicfg.ssport = mmc_ls_spicfg.ssport = getHwPort("mmc", CONFIG(sdCardCsPin));
+	mmc_hs_spicfg.sspad = mmc_ls_spicfg.sspad = getHwPin("mmc", CONFIG(sdCardCsPin));
 	mmccfg.spip = getSpiDevice(mmcSpiDevice);
+
+	// Invalid SPI device, abort.
+	if (!mmccfg.spip) {
+		return nullptr;
+	}
 
 	// We think we have everything for the card, let's try to mount it!
 	mmcObjectInit(&MMCD1);
@@ -395,14 +381,35 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 	sdStatus = SD_STATE_CONNECTING;
 	if (mmcConnect(&MMCD1) != HAL_SUCCESS) {
 		sdStatus = SD_STATE_NOT_CONNECTED;
-		warning(CUSTOM_OBD_MMC_ERROR, "Can't connect or mount MMC/SD");
 		UNLOCK_SD_SPI;
 		return nullptr;
 	}
 
-	UNLOCK_SD_SPI;
-	return (BaseBlockDevice*)&MMCD1;
+	return reinterpret_cast<BaseBlockDevice*>(&MMCD1);
 }
+#endif /* HAL_USE_MMC_SPI */
+
+// Some ECUs are wired for SDIO/SDMMC instead of SPI
+#ifdef EFI_SDC_DEVICE
+static const SDCConfig sdcConfig = {
+	SDC_MODE_4BIT
+};
+
+static BaseBlockDevice* initializeMmcBlockDevice() {
+	if (!CONFIG(isSdCardEnabled)) {
+		return nullptr;
+	}
+
+	sdcStart(&EFI_SDC_DEVICE, &sdcConfig);
+	sdStatus = SD_STATE_CONNECTING;
+	if (sdcConnect(&EFI_SDC_DEVICE) != HAL_SUCCESS) {
+		sdStatus = SD_STATE_NOT_CONNECTED;
+		return nullptr;
+	}
+
+	return reinterpret_cast<BaseBlockDevice*>(&EFI_SDC_DEVICE);
+}
+#endif /* EFI_SDC_DEVICE */
 
 // Initialize and mount the SD card.
 // Returns true if the filesystem was successfully mounted for writing.
@@ -411,7 +418,7 @@ static bool mountMmc() {
 
 #if HAL_USE_USB_MSD
 	// Wait for the USB stack to wake up, or a 5 second timeout, whichever occurs first
-	msg_t usbResult = chBSemWaitTimeout(&usbConnectedSemaphore, TIME_MS2I(5000));
+	msg_t usbResult = usbConnectedSemaphore.wait(TIME_MS2I(5000));
 
 	bool hasUsb = usbResult == MSG_OK;
 
@@ -459,7 +466,6 @@ struct SdLogBufferWriter final : public BufferedWriter<512> {
 
 		totalLoggedBytes += count;
 
-		LOCK_SD_SPI;
 		FRESULT err = f_write(&FDLogFile, buffer, count, &bytesWritten);
 
 		if (bytesWritten != count) {
@@ -467,7 +473,6 @@ struct SdLogBufferWriter final : public BufferedWriter<512> {
 
 			// Close file and unmount volume
 			mmcUnMount();
-			UNLOCK_SD_SPI;
 			failed = true;
 			return 0;
 		} else {
@@ -484,7 +489,6 @@ struct SdLogBufferWriter final : public BufferedWriter<512> {
 			}
 		}
 
-		UNLOCK_SD_SPI;
 		return bytesWritten;
 	}
 };
@@ -531,19 +535,18 @@ bool isSdCardAlive(void) {
 	return fs_ready;
 }
 
-void initMmcCard(void) {
+// Pre-config load init
+void initEarlyMmcCard() {
 	logName[0] = 0;
-
-#if HAL_USE_USB_MSD
-	chBSemObjectInit(&usbConnectedSemaphore, true);
-#endif
-
-	chThdCreateStatic(mmcThreadStack, sizeof(mmcThreadStack), LOWPRIO, (tfunc_t)(void*) MMCmonThread, NULL);
 
 	addConsoleAction("sdinfo", sdStatistics);
 	addConsoleActionS("ls", listDirectory);
 	addConsoleActionS("del", removeFile);
 	addConsoleAction("incfilename", incLogFileName);
+}
+
+void initMmcCard() {
+	chThdCreateStatic(mmcThreadStack, sizeof(mmcThreadStack), PRIO_MMC, (tfunc_t)(void*) MMCmonThread, NULL);
 }
 
 #endif /* EFI_FILE_LOGGING */

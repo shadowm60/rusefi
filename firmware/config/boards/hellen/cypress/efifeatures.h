@@ -21,8 +21,6 @@
 
 #define EFI_PWM_TESTER FALSE
 
-#define HAL_USE_USB_MSD FALSE
-
 #define EFI_ENABLE_CRITICAL_ENGINE_STOP FALSE
 #define EFI_ENABLE_ENGINE_WARNING TRUE
 
@@ -46,10 +44,6 @@
 #define EFI_TEXT_LOGGING TRUE
 
 //#define EFI_UART_ECHO_TEST_MODE FALSE
-
-//#define EFI_USE_UART_FOR_CONSOLE FALSE
-
-#define EFI_CONSOLE_NO_THREAD
 
 /**
  * Build-in logic analyzer support. Logic analyzer viewer is one of the java console panes.
@@ -165,6 +159,7 @@
 #endif
 
 #define EFI_INTERNAL_ADC TRUE
+#define EFI_USE_FAST_ADC TRUE
 
 #define EFI_NARROW_EGO_AVERAGING FALSE
 
@@ -284,28 +279,23 @@
  *  STM32_UART_USE_USARTx
  * in mcuconf.h
  */
-#define TS_UART_DMA_MODE FALSE
-#define TS_UART_MODE FALSE
-#define PRIMARY_UART_DMA_MODE FALSE
+#define EFI_USE_UART_DMA FALSE
 
-#undef TS_UART_DEVICE
-#undef TS_SERIAL_DEVICE
-
-#define TS_USB_DEVICE SDU1
-//#undef TS_USB_DEVICE
+#undef TS_SECONDARY_UART
+#undef TS_SECONDARY_SERIAL
 
 // todo: add CAN support
 //#define TS_CAN_DEVICE CAND1
 #define TS_CAN_AF PAL_MODE_ALTERNATIVE_CAN
 #define TS_CAN_DEVICE_SHORT_PACKETS_IN_ONE_FRAME
 
-#undef EFI_CONSOLE_SERIAL_DEVICE
-#undef EFI_CONSOLE_UART_DEVICE
+#undef TS_PRIMARY_SERIAL
+#undef TS_PRIMARY_UART
 
 #define EFI_USB_SERIAL TRUE
 #define EFI_CONSOLE_USB_DEVICE SDU1
-
-#define SERIAL_USB_DRIVER BaseChannel
+// Cypress uses a fake USB device that's just a plain channel
+#define SerialUSBDriver BaseChannel
 
 #define EFI_CONSOLE_TX_PORT GPIOA
 #define EFI_CONSOLE_TX_PIN 10
@@ -395,15 +385,13 @@
 #define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
 //#define EFI_PRINT_MESSAGES_TO_TERMINAL TRUE
 
-//#define EFI_ACTIVE_CONFIGURATION_IN_FLASH (FLASH_ADDR + offsetof(persistent_config_container_s, persistentConfiguration.engineConfiguration))
-
 //#define PWM_PHASE_MAX_COUNT 122
 
 //!!!!!!!!!!!!!!!!!!!!!!
 #define debugLog(fmt,...) { \
 	extern int __debugEnabled; \
 	if (__debugEnabled) { \
-		extern SERIAL_USB_DRIVER EFI_CONSOLE_USB_DEVICE; \
+		extern SerialUSBDriver EFI_CONSOLE_USB_DEVICE; \
 		extern char __debugBuffer[200]; \
 		chsnprintf(__debugBuffer, sizeof(__debugBuffer), fmt, ##__VA_ARGS__); \
 		chnWriteTimeout(&EFI_CONSOLE_USB_DEVICE, (const uint8_t *)__debugBuffer, strlen(__debugBuffer), TIME_MS2I(1000)); \
