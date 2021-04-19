@@ -125,6 +125,7 @@
 #include "mpu_util.h"
 #include "tunerstudio.h"
 #include "mmc_card.h"
+#include "mass_storage_init.h"
 #include "trigger_emulator_algo.h"
 
 #if EFI_HD44780_LCD
@@ -174,6 +175,12 @@ void runRusEfi(void) {
 	efiAssertVoid(CUSTOM_RM_STACK_1, getCurrentRemainingStack() > 512, "init s");
 	assertEngineReference();
 	engine->setConfig();
+
+#if EFI_TEXT_LOGGING
+	// Initialize logging system early - we can't log until this is called
+	startLoggingProcessor();
+#endif
+
 	addConsoleAction(CMD_REBOOT, scheduleReboot);
 	addConsoleAction(CMD_REBOOT_DFU, jump_to_bootloader);
 
@@ -199,6 +206,10 @@ void runRusEfi(void) {
 
 #if EFI_USB_SERIAL
 	startUsbConsole();
+#endif
+
+#if HAL_USE_USB_MSD
+	initUsbMsd();
 #endif
 
 	/**

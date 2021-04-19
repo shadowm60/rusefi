@@ -159,8 +159,6 @@ void rememberCurrentConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #endif /* EFI_ACTIVE_CONFIGURATION_IN_FLASH */
 }
 
-extern LoggingWithStorage sharedLogger;
-
 static void wipeString(char *string, int size) {
 	// we have to reset bytes after \0 symbol in order to calculate correct tune CRC from MSQ file
 	for (int i = strlen(string) + 1; i < size; i++) {
@@ -194,7 +192,7 @@ void onBurnRequest(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 void incrementGlobalConfigurationVersion(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	ENGINE(globalConfigurationVersion++);
 #if EFI_DEFAILED_LOGGING
-	scheduleMsg(&sharedLogger, "set globalConfigurationVersion=%d", globalConfigurationVersion);
+	efiPrintf("set globalConfigurationVersion=%d", globalConfigurationVersion);
 #endif /* EFI_DEFAILED_LOGGING */
 /**
  * All these callbacks could be implemented as listeners, but these days I am saving RAM
@@ -670,7 +668,7 @@ void setDefaultEngineNoiseTable(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	engineConfiguration->knockNoise[7] = 2; // 7000
 }
 
-static void setHip9011FrankensoPinout() {
+static void setHip9011FrankensoPinout(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	/**
 	 * SPI on PB13/14/15
 	 */
@@ -971,7 +969,6 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	engineConfiguration->ignitionMode = IM_ONE_COIL;
 	engineConfiguration->globalTriggerAngleOffset = 0;
 	engineConfiguration->extraInjectionOffset = 0;
-	engineConfiguration->sensorChartFrequency = 20;
 
 	engineConfiguration->fuelAlgorithm = LM_SPEED_DENSITY;
 
@@ -1161,7 +1158,7 @@ void setDefaultFrankensoConfiguration(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 #endif /* EFI_MEMS */
 
 #if EFI_HIP_9011
-	setHip9011FrankensoPinout();
+	setHip9011FrankensoPinout(PASS_CONFIG_PARAMETER_SIGNATURE);
 #endif /* EFI_HIP_9011 */
 
 #if EFI_FILE_LOGGING
@@ -1327,6 +1324,12 @@ void resetConfigurationExt(Logging * logger, configuration_callback_t boardCallb
 #if HW_HELLEN
 	case HELLEN_NB2:
 		setMiataNB2_Hellen72(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
+	case HELLEN72_ETB:
+		setHellen72etb(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
+	case HELLEN_NA6:
+		setHellenNA6(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 #endif // HW_HELLEN
 #if HW_FRANKENSO

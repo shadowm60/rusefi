@@ -39,10 +39,10 @@ static void setInjectorPins() {
 }
 
 static void setIgnitionPins() {
-	engineConfiguration->ignitionPins[0] = GPIOI_8;
-	engineConfiguration->ignitionPins[1] = GPIOE_5;
-	engineConfiguration->ignitionPins[2] = GPIOE_4;
-	engineConfiguration->ignitionPins[3] = GPIOE_3;
+	engineConfiguration->ignitionPins[0] = GPIOI_8; // 3F - IGN_1 (1&4)
+	engineConfiguration->ignitionPins[1] = GPIO_UNASSIGNED ; // GPIOE_4
+	engineConfiguration->ignitionPins[2] = GPIOE_5; // 3I - IGN_2 (2&3)
+	engineConfiguration->ignitionPins[3] = GPIO_UNASSIGNED; // GPIOE_3
 
 	//engineConfiguration->ignitionPins[4] = GPIOE_2;
 	//engineConfiguration->ignitionPins[5] = GPIOI_5;
@@ -76,7 +76,7 @@ static void setupVbatt() {
 	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
 
 	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_NONE; // EFI_ADC_5 on ADC3
+	engineConfiguration->vbattAdcChannel = EFI_ADC_5; // 4T
 
 	engineConfiguration->adcVcc = 3.29f;
 }
@@ -174,10 +174,16 @@ void setBoardDefaultConfiguration(void) {
  * @todo    Add your board-specific code, if any.
  */
 void setSdCardConfigurationOverrides(void) {
-	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_2;
-	engineConfiguration->spi2mosiPin = GPIOB_15;
-	engineConfiguration->spi2misoPin = GPIOB_14;
-	engineConfiguration->spi2sckPin = GPIOB_13;
-	engineConfiguration->sdCardCsPin = GPIOB_12;
-	CONFIG(is_enabled_spi_2) = true;
+	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_3;
+
+	engineConfiguration->spi3mosiPin = GPIOC_12;
+	engineConfiguration->spi3misoPin = GPIOC_11;
+	engineConfiguration->spi3sckPin = GPIOC_10;
+	engineConfiguration->sdCardCsPin = GPIOA_15;
+
+//	engineConfiguration->spi2mosiPin = GPIOB_15;
+//	engineConfiguration->spi2misoPin = GPIOB_14;
+//	engineConfiguration->spi2sckPin = GPIOB_13;
+//	engineConfiguration->sdCardCsPin = GPIOB_12;
+	CONFIG(is_enabled_spi_3) = true;
 }

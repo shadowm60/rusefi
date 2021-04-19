@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Mon Mar 29 13:06:07 UTC 2021
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Sun Apr 18 13:37:17 UTC 2021
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -432,6 +432,7 @@ typedef struct specs_s specs_s;
 // start of trigger_config_s
 struct trigger_config_s {
 	/**
+	 * https://github.com/rusefi/rusefi/wiki/All-Supported-Triggers
 	 * set trigger_type X
 	 * offset 0
 	 */
@@ -650,7 +651,7 @@ struct engine_configuration_s {
 	bool isForcedInduction : 1;
 	/**
 	offset 76 bit 1 */
-	bool unused_294_1 : 1;
+	bool useFordRedundantTps : 1;
 	/**
 	offset 76 bit 2 */
 	bool isVerboseAuxPid1 : 1;
@@ -726,6 +727,8 @@ struct engine_configuration_s {
 	offset 76 bit 23 */
 	bool useRunningMathForCranking : 1;
 	/**
+	 * Shall we display real life signal or just the part consumed by trigger decoder.
+	 * enable logic_level_trigger
 	offset 76 bit 24 */
 	bool displayLogicLevelsInEngineSniffer : 1;
 	/**
@@ -1011,7 +1014,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 520
 	 */
-	int sensorChartFrequency;
+	int unused520;
 	/**
 	 * offset 524
 	 */
@@ -3216,22 +3219,22 @@ struct engine_configuration_s {
 	 */
 	brain_pin_e servoOutputPins[SERVO_COUNT];
 	/**
-	 * This sets the RPM limit above which the fuel cut is deactivated, activating this maintains fuel flow at high RPM to help cool pistons
+	 * This sets the RPM above which fuel cut is active.
 	 * offset 3148
 	 */
 	int16_t coastingFuelCutRpmHigh;
 	/**
-	 * This sets the RPM limit below which the fuel cut is deactivated, this prevents jerking or issues transitioning to idle
+	 * This sets the RPM below which fuel cut is deactivated, this prevents jerking or issues transitioning to idle
 	 * offset 3150
 	 */
 	int16_t coastingFuelCutRpmLow;
 	/**
-	 * percent between 0 and 100 below which the fuel cut is deactivated, this helps low speed drivability.
+	 * Throttle position below which fuel cut is active.
 	 * offset 3152
 	 */
 	int16_t coastingFuelCutTps;
 	/**
-	 * Fuel cutoff is deactivated below this coolant threshold.
+	 * Fuel cutoff is disabled when the engine is cold.
 	 * offset 3154
 	 */
 	int16_t coastingFuelCutClt;
@@ -3866,4 +3869,4 @@ struct persistent_config_s {
 typedef struct persistent_config_s persistent_config_s;
 
 // end
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Mon Mar 29 13:06:07 UTC 2021
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on hellen_cypress_gen_config.bat integration/rusefi_config.txt Sun Apr 18 13:37:17 UTC 2021
