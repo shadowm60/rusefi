@@ -12,6 +12,7 @@
 #include "os_access.h"
 #include "os_util.h"
 #include "rtc_helper.h"
+#include <sys/time.h>
 
 #if EFI_RTC
 static RTCDateTime timespec;
@@ -34,6 +35,13 @@ void date_get_tm(struct tm *timp) {
         rtcConvertDateTimeToStructTm(&timespec, timp, NULL);
 #endif /* EFI_RTC */
 }
+
+#if EFI_PROD_CODE
+// Lua needs this function, but we don't necessarily have to implement it
+extern "C" int _gettimeofday(timeval* tv, void* tzvp) {
+	return 0;
+}
+#endif
 
 static time_t GetTimeUnixSec(void) {
 #if EFI_RTC
@@ -143,7 +151,7 @@ void printDateTime(void) {
 		efiPrintf("%D - unix time", unix_time);
 		date_get_tm(&timp);
 
-		scheduleMsg(nullptr, "Current RTC localtime is: %04u-%02u-%02u %02u:%02u:%02u w=%d", timp.tm_year + 1900, timp.tm_mon + 1, timp.tm_mday, timp.tm_hour,
+		efiPrintf("Current RTC localtime is: %04u-%02u-%02u %02u:%02u:%02u w=%d", timp.tm_year + 1900, timp.tm_mon + 1, timp.tm_mday, timp.tm_hour,
 				timp.tm_min, timp.tm_sec, rtcWorks);
 	}
 }
