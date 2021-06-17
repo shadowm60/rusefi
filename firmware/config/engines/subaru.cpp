@@ -88,7 +88,6 @@ void setSubaruEG33Defaults(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	engineConfiguration->injector.flow = 250;
 
 	engineConfiguration->cranking.baseFuel = 5;		// ???
-	engineConfiguration->crankingChargeAngle = 70;
 	engineConfiguration->cranking.rpm = 400;
 
 	engineConfiguration->rpmHardLimit = 6500;
@@ -100,9 +99,9 @@ void setSubaruEG33Defaults(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	engineConfiguration->canReadEnabled = true;
 	engineConfiguration->canWriteEnabled = false;
 
-	/* Reversed: fully closed - 4.7V, fully opened - 0.9 */
-	engineConfiguration->tpsMin = convertVoltageTo10bitADC(4.7);
-	engineConfiguration->tpsMax = convertVoltageTo10bitADC(0.9);
+	/* Fully closed - 0.9V, fully opened - 4.7 (?) */
+	engineConfiguration->tpsMin = convertVoltageTo10bitADC(0.9);
+	engineConfiguration->tpsMax = convertVoltageTo10bitADC(4.7);
 	engineConfiguration->tpsErrorDetectionTooLow = -10; // -10% open
 	engineConfiguration->tpsErrorDetectionTooHigh = 110; // 110% open
 

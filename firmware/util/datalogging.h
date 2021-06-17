@@ -21,7 +21,6 @@ public:
 
 	void reset();
 
-	void vappendPrintf(const char *fmt, va_list arg);
 	void append(const char *text);
 	void appendFast(const char *text);
 	void appendPrintf(const char *fmt, ...);
@@ -48,7 +47,7 @@ public:
 	}
 
 //private:
-	bool validateBuffer(const char *text, uint32_t extraLen);
+	bool validateBuffer(uint32_t extraLen);
 
 	const char* const name = nullptr;
 

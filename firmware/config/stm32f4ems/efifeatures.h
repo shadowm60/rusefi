@@ -44,8 +44,6 @@
 #define SC_BUFFER_SIZE 4000
 #endif
 
-#define EFI_LUA FALSE
-
 /**
  * if you have a 60-2 trigger, or if you just want better performance, you
  * probably want EFI_ENABLE_ASSERTS to be FALSE. Also you would probably want to FALSE
@@ -264,9 +262,19 @@
 
 #define EFI_CONSOLE_USB_DEVICE SDU1
 
-// F42x has more memory, so we can use compressed USB MSD image (requires 32k of memory)
+// F42x has more memory, so we can:
+//  - use compressed USB MSD image (requires 32k of memory)
+//  - use perf trace (requires ~16k of memory)
 #ifdef EFI_IS_F42x
-#define EFI_USE_COMPRESSED_INI_MSD
+	#define EFI_USE_COMPRESSED_INI_MSD
+	#define ENABLE_PERF_TRACE TRUE
+#else
+	// small memory F40x can't fit perf trace
+	#define ENABLE_PERF_TRACE FALSE
+#endif
+
+#ifndef EFI_LUA
+#define EFI_LUA TRUE
 #endif
 
 #ifndef EFI_ENGINE_SNIFFER
@@ -395,10 +403,5 @@
 #ifndef CONFIG_RESET_SWITCH_PIN
 #define CONFIG_RESET_SWITCH_PIN 6
 #endif
-
-/**
- * This is the size of the MemoryStream used by chvprintf
- */
-#define INTERMEDIATE_LOGGING_BUFFER_SIZE 2000
 
 #define EFI_JOYSTICK TRUE

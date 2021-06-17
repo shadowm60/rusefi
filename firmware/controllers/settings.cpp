@@ -167,12 +167,7 @@ void printConfiguration(const engine_configuration_s *engineConfiguration) {
 	efiPrintf("crankingRpm: %d", engineConfiguration->cranking.rpm);
 	efiPrintf("cranking injection %s", getInjection_mode_e(engineConfiguration->crankingInjectionMode));
 
-	if (engineConfiguration->useConstantDwellDuringCranking) {
-		efiPrintf("ignitionDwellForCrankingMs=%.2f", engineConfiguration->ignitionDwellForCrankingMs);
-	} else {
-		efiPrintf("cranking charge charge angle=%.2f fire at %.2f", engineConfiguration->crankingChargeAngle,
-				engineConfiguration->crankingTimingAngle);
-	}
+	efiPrintf("cranking timing %.2f", engineConfiguration->crankingTimingAngle);
 
 	efiPrintf("=== ignition ===");
 
@@ -462,12 +457,6 @@ static void setToothedWheel(int total, int skipped DECLARE_ENGINE_PARAMETER_SUFF
 	doPrintConfiguration();
 }
 
-static void setCrankingChargeAngle(float value) {
-	engineConfiguration->crankingChargeAngle = value;
-	incrementGlobalConfigurationVersion(PASS_ENGINE_PARAMETER_SIGNATURE);
-	doPrintConfiguration();
-}
-
 static void setGlobalFuelCorrection(float value) {
 	if (value < 0.01 || value > 50)
 		return;
@@ -496,9 +485,7 @@ static void setWholeTimingMap(float value) {
 
 static void setWholePhaseMapCmd(float value) {
 	efiPrintf("Setting whole injection phase map to %.2f", value);
-#if IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT
-	setMap(config->injectionPhase, value);
-#endif
+	setTable(config->injectionPhase, value);
 }
 
 static void setWholeTimingMapCmd(float value) {
@@ -512,7 +499,7 @@ static void setWholeVeCmd(float value) {
 	if (engineConfiguration->fuelAlgorithm != LM_SPEED_DENSITY) {
 		efiPrintf("WARNING: setting VE map not in SD mode is pointless");
 	}
-	setMap(config->veTable, value);
+	setTable(config->veTable, value);
 	engine->resetEngineSnifferIfInTestMode();
 }
 
@@ -814,8 +801,6 @@ static void enableOrDisable(const char *param, bool isEnabled) {
 		CONFIG(enableVerboseCanTx) = isEnabled;
 	} else if (strEqualCaseInsensitive(param, "etb_auto")) {
 		engine->etbAutoTune = isEnabled;
-	} else if (strEqualCaseInsensitive(param, "cranking_constant_dwell")) {
-		engineConfiguration->useConstantDwellDuringCranking = isEnabled;
 	} else if (strEqualCaseInsensitive(param, "cj125")) {
 		engineConfiguration->isCJ125Enabled = isEnabled;
 	} else if (strEqualCaseInsensitive(param, "cj125verbose")) {
@@ -1009,7 +994,6 @@ const plain_get_float_s getF_plain[] = {
 		{"iat_bias", &engineConfiguration->iat.config.bias_resistor},
 		{"cranking_fuel", &engineConfiguration->cranking.baseFuel},
 		{"cranking_timing_angle", &engineConfiguration->crankingTimingAngle},
-		{"cranking_charge_angle", &engineConfiguration->crankingChargeAngle},
 };
 #endif /* EFI_UNIT_TEST */
 
@@ -1114,7 +1098,6 @@ const command_f_s commandsF[] = {
 		{"cranking_fuel", setCrankingFuel},
 		{"cranking_iac", setCrankingIACExtra},
 		{"cranking_timing_angle", setCrankingTimingAngle},
-		{"cranking_charge_angle", setCrankingChargeAngle},
 		{"tps_accel_threshold", setTpsAccelThr},
 		{"tps_decel_threshold", setTpsDecelThr},
 		{"tps_decel_multiplier", setTpsDecelMult},

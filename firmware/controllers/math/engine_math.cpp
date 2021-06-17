@@ -58,26 +58,6 @@ float getIgnitionLoad(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 }
 
 /**
- * @brief Returns engine load according to selected engine_load_mode
- *
- */
-float getEngineLoadT(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-	efiAssert(CUSTOM_ERR_ASSERT, engine!=NULL, "engine 2NULL", NAN);
-	efiAssert(CUSTOM_ERR_ASSERT, engineConfiguration!=NULL, "engineConfiguration 2NULL", NAN);
-	switch (engineConfiguration->fuelAlgorithm) {
-	case LM_SPEED_DENSITY:
-		return Sensor::get(SensorType::Map).value_or(0);
-	case LM_ALPHA_N:
-		return Sensor::get(SensorType::Tps1).value_or(0);
-	case LM_REAL_MAF:
-		return getRealMaf(PASS_ENGINE_PARAMETER_SIGNATURE);
-	default:
-		firmwareError(CUSTOM_UNKNOWN_ALGORITHM, "Unexpected engine load parameter: %d", engineConfiguration->fuelAlgorithm);
-		return 0;
-	}
-}
-
-/**
  * see also setConstantDwell
  */
 void setSingleCoilDwell(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
@@ -96,16 +76,6 @@ void setSingleCoilDwell(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	engineConfiguration->sparkDwellValues[7] = 0;
 }
 
-static floatms_t getCrankingSparkDwell(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-	if (engineConfiguration->useConstantDwellDuringCranking) {
-		return engineConfiguration->ignitionDwellForCrankingMs;
-	} else {
-		// technically this could be implemented via interpolate2d
-		float angle = engineConfiguration->crankingChargeAngle;
-		return getOneDegreeTimeMs(GET_RPM()) * angle;
-	}
-}
-
 /**
  * @return Spark dwell time, in milliseconds. 0 if tables are not ready.
  */
@@ -113,7 +83,7 @@ floatms_t getSparkDwell(int rpm DECLARE_ENGINE_PARAMETER_SUFFIX) {
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	float dwellMs;
 	if (ENGINE(rpmCalculator).isCranking()) {
-		dwellMs = getCrankingSparkDwell(PASS_ENGINE_PARAMETER_SIGNATURE);
+		dwellMs = CONFIG(ignitionDwellForCrankingMs);
 	} else {
 		efiAssert(CUSTOM_ERR_ASSERT, !cisnan(rpm), "invalid rpm", NAN);
 

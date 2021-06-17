@@ -74,7 +74,7 @@ AdcDevice::AdcDevice(ADCConversionGroup* hwConfig, adcsample_t *buf, size_t buf_
 	hwConfig->sqr5 = 0;
 #endif /* ADC_MAX_CHANNELS_COUNT */
 	memset(hardwareIndexByIndernalAdcIndex, EFI_ADC_NONE, sizeof(hardwareIndexByIndernalAdcIndex));
-	memset(internalAdcIndexByHardwareIndex, 0xFFFFFFFF, sizeof(internalAdcIndexByHardwareIndex));
+	memset(internalAdcIndexByHardwareIndex, 0xFF, sizeof(internalAdcIndexByHardwareIndex));
 }
 
 #if !defined(GPT_FREQ_FAST) || !defined(GPT_PERIOD_FAST)
@@ -114,8 +114,7 @@ static adcsample_t getAvgAdcValue(int index, adcsample_t *samples, int bufDepth,
 }
 
 
-// See https://github.com/rusefi/rusefi/issues/976 for discussion on these values
-#define ADC_SAMPLING_SLOW ADC_SAMPLE_56
+// See https://github.com/rusefi/rusefi/issues/976 for discussion on this value
 #define ADC_SAMPLING_FAST ADC_SAMPLE_28
 
 #if EFI_USE_FAST_ADC
@@ -221,7 +220,7 @@ int getInternalAdcValue(const char *msg, adc_channel_e hwChannel) {
 	}
 #endif // EFI_USE_FAST_ADC
 
-	return slowAdcSamples[hwChannel - 1];
+	return slowAdcSamples[hwChannel - EFI_ADC_0];
 }
 
 #if EFI_USE_FAST_ADC
@@ -273,14 +272,17 @@ bool AdcDevice::isHwUsed(adc_channel_e hwChannelIndex) const {
 }
 
 void AdcDevice::enableChannel(adc_channel_e hwChannel) {
-	if (channelCount >= efi::size(values.adc_data)) {
+	if ((channelCount + 1) >= ADC_MAX_CHANNELS_COUNT) {
 		firmwareError(OBD_PCM_Processor_Fault, "Too many ADC channels configured");
 		return;
 	}
 
 	int logicChannel = channelCount++;
 
-	size_t channelAdcIndex = hwChannel - 1;
+	/* TODO: following is correct for STM32 ADC1/2.
+	 * ADC3 has another input to gpio mapping
+	 * and should be handled separately */
+	size_t channelAdcIndex = hwChannel - EFI_ADC_0;
 
 	internalAdcIndexByHardwareIndex[hwChannel] = logicChannel;
 	hardwareIndexByIndernalAdcIndex[logicChannel] = hwChannel;
@@ -323,48 +325,38 @@ static void printAdcValue(int channel) {
 static uint32_t slowAdcConversionCount = 0;
 static uint32_t slowAdcErrorsCount = 0;
 
-static void printFullAdcReport(Logging *logger) {
+static void printFullAdcReport(void) {
 #if EFI_USE_FAST_ADC
-	efiPrintf("fast %d slow %d", fastAdc.conversionCount, slowAdcConversionCount);
+	efiPrintf("fast %d samples", fastAdc.conversionCount);
 
-	for (int index = 0; index < fastAdc.size(); index++) {
-		appendMsgPrefix(logger);
-
-		adc_channel_e hwIndex = fastAdc.getAdcHardwareIndexByInternalIndex(index);
+	for (int internalIndex = 0; internalIndex < fastAdc.size(); internalIndex++) {
+		adc_channel_e hwIndex = fastAdc.getAdcHardwareIndexByInternalIndex(internalIndex);
 
 		if (isAdcChannelValid(hwIndex)) {
 			ioportid_t port = getAdcChannelPort("print", hwIndex);
 			int pin = getAdcChannelPin(hwIndex);
-
-			int adcValue = getAvgAdcValue(hwIndex, fastAdc.samples, ADC_BUF_DEPTH_FAST, fastAdc.size());
-			logger->appendPrintf(" F ch%d %s%d", index, portname(port), pin);
-			logger->appendPrintf(" ADC%d 12bit=%d", hwIndex, adcValue);
+			int adcValue = getAvgAdcValue(internalIndex, fastAdc.samples, ADC_BUF_DEPTH_FAST, fastAdc.size());
 			float volts = adcToVolts(adcValue);
-			logger->appendPrintf(" v=%.2f", volts);
-
-			appendMsgPostfix(logger);
-			scheduleLogging(logger);
+			/* Human index starts from 1 */
+			efiPrintf(" F ch[%2d] @ %s%d ADC%d 12bit=%4d %.2fV",
+				internalIndex, portname(port), pin, hwIndex - EFI_ADC_0 + 1, adcValue, volts);
 		}
 	}
 #endif // EFI_USE_FAST_ADC
+	efiPrintf("slow %d samples", slowAdcConversionCount);
 
-	for (int index = 0; index < ADC_MAX_CHANNELS_COUNT; index++) {
-		appendMsgPrefix(logger);
-
-		adc_channel_e hwIndex = static_cast<adc_channel_e>(index + EFI_ADC_0);
+	/* we assume that all slow ADC channels are enabled */
+	for (int internalIndex = 0; internalIndex < ADC_MAX_CHANNELS_COUNT; internalIndex++) {
+		adc_channel_e hwIndex = static_cast<adc_channel_e>(internalIndex + EFI_ADC_0);
 
 		if (isAdcChannelValid(hwIndex)) {
 			ioportid_t port = getAdcChannelPort("print", hwIndex);
 			int pin = getAdcChannelPin(hwIndex);
-
-			int adcValue = slowAdcSamples[index];
-			logger->appendPrintf(" S ch%d %s%d", index, portname(port), pin);
-			logger->appendPrintf(" ADC%d 12bit=%d", hwIndex, adcValue);
+			int adcValue = slowAdcSamples[internalIndex];
 			float volts = adcToVolts(adcValue);
-			logger->appendPrintf(" v=%.2f", volts);
-
-			appendMsgPostfix(logger);
-			scheduleLogging(logger);
+			/* Human index starts from 1 */
+			efiPrintf(" S ch[%2d] @ %s%d ADC%d 12bit=%4d %.2fV",
+				internalIndex, portname(port), pin, hwIndex - EFI_ADC_0 + 1, adcValue, volts);
 		}
 	}
 }
@@ -467,46 +459,20 @@ static void configureInputs(void) {
 	 */
 
 	addChannel("MAP", engineConfiguration->map.sensor.hwChannel, ADC_FAST);
-	addChannel("MAF", engineConfiguration->mafAdcChannel, ADC_SLOW);
 
 	addChannel("HIP9011", engineConfiguration->hipOutputChannel, ADC_FAST);
 
 	addChannel("Baro Press", engineConfiguration->baroSensor.hwChannel, ADC_SLOW);
 
-	addChannel("TPS 1 Primary", engineConfiguration->tps1_1AdcChannel, ADC_SLOW);
-	addChannel("TPS 1 Secondary", engineConfiguration->tps1_2AdcChannel, ADC_SLOW);
-	addChannel("TPS 2 Primary", engineConfiguration->tps2_1AdcChannel, ADC_SLOW);
-	addChannel("TPS 2 Secondary", engineConfiguration->tps2_2AdcChannel, ADC_SLOW);
-
-	addChannel("Wastegate Position", engineConfiguration->wastegatePositionSensor, ADC_SLOW);
-	addChannel("Idle Position Sensor", engineConfiguration->idlePositionSensor, ADC_SLOW);
-
-	addChannel("Fuel Level", engineConfiguration->fuelLevelSensor, ADC_SLOW);
-	addChannel("Acc Pedal1", engineConfiguration->throttlePedalPositionAdcChannel, ADC_SLOW);
-	addChannel("Acc Pedal2", engineConfiguration->throttlePedalPositionSecondAdcChannel, ADC_SLOW);
-	addChannel("VBatt", engineConfiguration->vbattAdcChannel, ADC_SLOW);
 	// not currently used	addChannel("Vref", engineConfiguration->vRefAdcChannel, ADC_SLOW);
-	addChannel("CLT", engineConfiguration->clt.adcChannel, ADC_SLOW);
-	addChannel("IAT", engineConfiguration->iat.adcChannel, ADC_SLOW);
-	addChannel("AUX Temp 1", engineConfiguration->auxTempSensor1.adcChannel, ADC_SLOW);
-	addChannel("AUX Temp 2", engineConfiguration->auxTempSensor2.adcChannel, ADC_SLOW);
 
 	addChannel("AUXF#1", engineConfiguration->auxFastSensor1_adcChannel, ADC_FAST);
 
 	addChannel("AFR", engineConfiguration->afr.hwChannel, ADC_SLOW);
-	addChannel("Oil Pressure", engineConfiguration->oilPressure.hwChannel, ADC_SLOW);
-
-	addChannel("LFP", engineConfiguration->lowPressureFuel.hwChannel, ADC_SLOW);
-	addChannel("HFP", engineConfiguration->highPressureFuel.hwChannel, ADC_SLOW);
-
 
 	if (CONFIG(isCJ125Enabled)) {
 		addChannel("CJ125 UR", engineConfiguration->cj125ur, ADC_SLOW);
 		addChannel("CJ125 UA", engineConfiguration->cj125ua, ADC_SLOW);
-	}
-
-	for (int i = 0; i < FSIO_ANALOG_INPUT_COUNT ; i++) {
-		addChannel("FSIOadc", engineConfiguration->fsioAdc[i], ADC_SLOW);
 	}
 
 	setAdcChannelOverrides();
@@ -541,10 +507,10 @@ void initAdcInputs() {
 #endif
 }
 
-void printFullAdcReportIfNeeded(Logging *logger) {
+void printFullAdcReportIfNeeded(void) {
 	if (!adcDebugReporting)
 		return;
-	printFullAdcReport(logger);
+	printFullAdcReport();
 }
 
 #else /* not HAL_USE_ADC */

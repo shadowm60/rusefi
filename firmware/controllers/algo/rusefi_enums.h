@@ -108,11 +108,11 @@ typedef enum {
 
 	HELLEN72_ETB = 33,
 
-	HELLEN_NA6 = 34,
+	HELLEN_NA6 = ET_HELLEN_NA6,
 
 	CAMARO_4 = ET_CAMARO,
 
-	UNUSED_36 = 36,
+	HELLEN_128_MERCEDES = ET_HELLEN_128_MERCEDES,
 
 	MRE_SUBARU_EJ18 = ET_MRE_SUBARU_EJ18,
 
@@ -192,6 +192,19 @@ typedef enum {
 	HELLEN_NB2 = ET_HELLEN_NB2,
 
 	SUBARUEG33_DEFAULTS = 70,
+
+	HELLEN_121_VAG = ET_HELLEN_121_VAG,
+	HELLEN_121_NISSAN = ET_HELLEN_121_NISSAN,
+	HELLEN_55_BMW = ET_HELLEN_55_BMW,
+	HELLEN_88_BMW = ET_HELLEN_88_BMW,
+	HELLEN_134_BMW = ET_HELLEN_134_BMW,
+	HELLEN_154_VAG = ET_HELLEN_154_VAG,
+
+	HELLEN_121_VAG_5_CYL = ET_HELLEN_121_VAG_5_CYL,
+	HELLEN_121_VAG_6_CYL = ET_HELLEN_121_VAG_6_CYL,
+	HELLEN_121_VAG_8_CYL = ET_HELLEN_121_VAG_8_CYL,
+
+	HELLEN_NA94 = ET_HELLEN_NA94,
 
 	/**
 	 * this configuration has as few pins configured as possible
@@ -390,7 +403,7 @@ typedef enum {
 	TT_UNUSED = 58, // this is used if we want to iterate over all trigger types
 
 	Force_4_bytes_size_trigger_type = ENUM_32_BITS,
-} trigger_type_e;
+} trigger_type_e; // TriggerProcessor.java has this "trigger_type_e" name hard-coded!
 
 typedef enum {
 	ADC_OFF = 0,
@@ -787,7 +800,7 @@ typedef enum {
 	DBG_LOGIC_ANALYZER = 45,
 	DBG_RUSEFI_WIDEBAND = 46,
 	DBG_TCU = 47,
-	DBG_48 = 48,
+	DBG_LUA = 48,
 
 	Force_4_bytes_size_debug_mode_e = ENUM_32_BITS,
 } debug_mode_e;
@@ -924,31 +937,6 @@ typedef enum {
 } can_nbc_e;
 
 typedef enum {
-	NOT_READY,
-	/**
-	 * the step after this one is always IS_INTEGRATING
-	 * We only integrate if we have RPM
-	 */
-	READY_TO_INTEGRATE,
-	/**
-	 * the step after this one is always WAITING_FOR_ADC_TO_SKIP
-	 */
-	IS_INTEGRATING,
-	/**
-	 * the step after this one is always WAITING_FOR_RESULT_ADC
-	 */
-	WAITING_FOR_ADC_TO_SKIP,
-	/**
-	 * the step after this one is always IS_SENDING_SPI_COMMAND or READY_TO_INTEGRATE
-	 */
-	WAITING_FOR_RESULT_ADC,
-	/**
-	 * the step after this one is always READY_TO_INTEGRATE
-	 */
-	IS_SENDING_SPI_COMMAND,
-} hip_state_e;
-
-typedef enum {
 	TCHARGE_MODE_RPM_TPS = 0,
 	TCHARGE_MODE_AIR_INTERP = 1,
 	Force_4bytes_size_tChargeMode_e = ENUM_32_BITS,
@@ -1014,6 +1002,7 @@ typedef enum __attribute__ ((__packed__)) {
 	GPPWM_AuxTemp1 = 6,
 	GPPWM_AuxTemp2 = 7,
 	GPPWM_Zero = 8,
+	GPPWM_AccelPedal = 9,
 } gppwm_channel_e;
 
 typedef enum __attribute__ ((__packed__)) {

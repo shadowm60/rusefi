@@ -179,8 +179,7 @@ enable2ndByteCanID = false
 ; Bit flags
 	  hasSdCard       = bits,    U32,      0,    [0:0], "true", "false";
 	  isIgnitionEnabledIndicator=bits,U32, 0,    [1:1], "true", "false";
-	  isInjectionEnabledIndicator=bits,U32,      0,    [2:2], "true", "false";
-	  isCylinderCleanupEnabled=bits,U32,   0,    [3:3], "true", "false";
+	  isInjectionEnabledIndicator=bits,U32,0,    [2:2], "true", "false";
 	  isCylinderCleanupActivated=bits,U32, 0,    [4:4], "true", "false";
 	  ind_fuel_pump   = bits,    U32,      0,    [5:5], "true", "false";
 	  ind_fan         = bits,    U32,      0,    [6:6], "true", "false";
@@ -206,6 +205,7 @@ enable2ndByteCanID = false
 	  ind_pedal_error  =bits,    U32,      0,  [26:26], "true", "false";
 	  isTps2Error     = bits,    U32,      0,  [29:29], "true", "false";
 	  isIdleClosedLoop= bits,    U32,      0,  [30:30], "true", "false";
+	  isIdleCoasting  = bits,    U32,      0,  [31:31], "true", "false";
 
 ; RPM, vss
       RPMValue        = scalar,  U16,      4,      "RPM",    1,   0.00000
@@ -232,7 +232,6 @@ enable2ndByteCanID = false
       MAPValue        = scalar,  U16,     30,     "kPa",{1/@@PACK_MULT_PRESSURE@@},       0.0
       baroPressure    = scalar,  U16,     32,     "kPa",{1/@@PACK_MULT_PRESSURE@@},       0.0
       lambdaValue     = scalar,  U16,     34,      "",{1/@@PACK_MULT_LAMBDA@@},       0.0
-      engineLoad      = scalar,  U16,     36,        "%",{1/@@PACK_MULT_PERCENT@@},       0.0 ; Blend of MAP and TPS, depends on algorithm
 
 ; misc sensors
       VBatt           = scalar,	 U16,     38,        "V",{1/@@PACK_MULT_VOLTAGE@@},       0.0
@@ -259,7 +258,8 @@ enable2ndByteCanID = false
       iatCorrection   = scalar,  S16,     64,        "%",{1/@@PACK_MULT_PERCENT@@},         0
       cltCorrection   = scalar,  S16,     66,        "%",{1/@@PACK_MULT_PERCENT@@},         0
       baroCorrection  = scalar,  S16,     68,        "%",{1/@@PACK_MULT_PERCENT@@},         0
-      fuelPidCorrection=scalar,  S16,     70,       "%",{1/@@PACK_MULT_PERCENT@@},         0
+      fuelPidCorrection=scalar,  S16,    296,       "%",{1/@@PACK_MULT_PERCENT@@},         0
+	  fuelPidCorrection2=scalar, S16,    298,       "%",{1/@@PACK_MULT_PERCENT@@},         0
 
 ; Wall model AE
       wallFuelAmount  = scalar,  U16,     72,     "ms",{1/@@PACK_MULT_MS@@},         0
@@ -434,22 +434,22 @@ enable2ndByteCanID = false
 
 ; wall of debug mode :)
 ; https://rusefi.com/wiki/index.php?title=Manual:Debug_fields
-;                                            0                     1                     2            3                           4                      5                            6             7              8                    9                         10                   11       12           13          14             15            16              17                       18                   19            20              21               22                23         24            25                26           27              28        29      30       31                32                      33     34       35       36                       37                38            39                40               41           42             43                               44            45                 46                    47       48
-;											 Alternator            TPS Acceleration      GPPWM        Idle                        Engine Load Acc        Trigger Counters                                          VVT                  Cranking                  Ignition Timing      Fu Corr  VSS          SD Card     Knock                                        ETB PID                  Executor                                                            InstantRpm        FSIO_1_7                 CJ125             CAN          MAP                                        TLE8888           Analog inputs 2                                  Boost                    Start             Launcher      ETB Autotune                       FSIO_8_14    FSIO_SPECIAL   Injector flow compensation       DYNO_VIEW     LOGIC_ANALYZER     Wideband              TCU   DBG_48
+;                                            0                     1                     2            3                           4                      5                            6             7              8                    9                         10                   11       12           13          14             15            16              17                       18                   19            20              21               22                23         24            25                26           27              28        29      30       31                32                      33     34       35       36                       37                38            39                40               41           42             43                               44            45                 46                    47                  48
+;											 Alternator            TPS Acceleration      GPPWM        Idle                        Engine Load Acc        Trigger Counters                                          VVT                  Cranking                  Ignition Timing      Fu Corr  VSS          SD Card     Knock                                        ETB PID                  Executor                                                            InstantRpm        FSIO_1_7                 CJ125             CAN          MAP                                        TLE8888           Analog inputs 2                                  Boost                    Start             Launcher      ETB Autotune                       FSIO_8_14    FSIO_SPECIAL   Injector flow compensation       DYNO_VIEW     LOGIC_ANALYZER     Wideband              TCU                 Lua
 ;                                            DBG_ALTERNATOR_PID    DBG_TPS_ACCEL         DBG_GPPWM    DBG_IDLE_CONTROL
-    debugFieldF1List = bits,   U08,   [0:7], "Controller Output",  "From TPS",           "GPPWM 1",   "Controller Output",        "Idle output",         "Channel 1 Rise Counter",    "",           "",            "VVT Event Position","",                       "Ign IAT Corr",      "",      "",          "Total SD", "",            "",           "",             "ETB Controller Output", "",                  "",           "df1",          "df1",           "InstantRpm",     "fsio 1",  "24:df1",     "CJ125: output",  "",          "",             "",       "",     "",     "",               "TPS1 Pri/Sec Diff",    "",    "",      "",      "Boost Open Loop Duty",  "S unused"        "",           "Osc Amplitude",  "",              "fsio 8",    "idle offset", "Pressure across injector(kpa)", "VSS",        "",                "WB: Pump DAC duty",  "",      ""
-    debugFieldF2List = bits,   U08,   [0:7], "I-Term",             "To TPS",             "GPPWM 2",   "I-Term",                   "Idle df2",            "Channel 2 Rise Counter",    "",           "",            "VVT Ratio",         "",                       "Ign CLT Corr",      "",      "",          "Write Cnt","",            "",           "",             "ETB I-Term",            "",                  "",           "df2",          "df2",          "InstantRPM Ratio","fsio 2",  "24:df2",     "CJ125: i-term",  "",          "",             "",       "",     "",     "",               "TPS2 Pri/Sec Diff",    "",    "",      "",      "Boost Closed Loop Duty","S unused"        "",           "Duty Amplitude", "",              "fsio 9",    "idle min",    "Pressure ratio vs. nominal",    "Speed",      "",                "WB: ESR",            "",      ""
-    debugFieldF3List = bits,   U08,   [0:7], "Previous Error",     "Current TPS<>TPS",   "GPPWM 3",   "prev error",               "Idle df3",            "ICU sum",                   "",           "",            "",                  "",                       "Ign FSIO Adj",      "",      "",          "Sync Cnt", "",            "",           "",             "ETB err",               "",                  "",           "df3",          "df3",           "22df3",          "fsio 3",  "24:df3",     "CJ125: err",     "",          "",             "",       "",     "",     "",               "TPS1/2 Diff",          "",    "",      "",      "",                      "S unused"        "",           "Tu",             "",              "fsio 10",   "",            "Flow ratio vs. configured",     "DeltaSpeed", "",                "WB: Nernst Voltage", "",      ""
-    debugFieldF4List = bits,   U08,   [0:7], "I Gain",             "Extra Fuel",         "GPPWM 4",   "I Gain",                   "Idle df4",            "VVT rise",                  "",           "",            "",                  "",                       "Ign PID Adj",       "",      "",          "File Cnt", "",            "",           "",             "ETB I setting",         "",                  "",           "df4",          "df4",           "22df4",          "fsio 4",  "24:df4",     "CJ125: UA",      "",          "MAP Estimate", "",       "",     "",     "",               "Acc Pedal Pri/Sec Diff","",   "",      "",      "",                      "S unused"        "",           "Ku",             "",              "fsio 11",   "",            "",                              "accel",      "",                "WB: Lambda",         "",      ""
-    debugFieldF5List = bits,   U08,   [0:7], "D Gain",             "df5",                "df5",       "D Gain",                   "Idle df5",            "VVT fall",                  "df5",        "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB D setting",         "df5",               "df5",        "df5",          "df5",           "22df5",          "fsio 5",  "24:df5",     "CJ125: UR",      "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Kp",             "",              "fsio 12",   "",            "",                              "",           "",                "",                   "",      ""
-    debugFieldF6List = bits,   U08,   [0:7], "D Term",             "",                   "",          "D Term",                   "Idle df6",            "Current Gap",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB df6",               "",                  "",           "df6",          "df6",           "22df6",          "fsio 6",  "24:df6",     "cj: f7",         "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Ki",             "",              "fsio 13",   "",            "",                              "",           "",                "",                   "",      ""
-    debugFieldF7List = bits,   U08,   [0:7], "Max-Value",          "",                   "",          "Max-Value",                "Idle df7",            "",                          "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB df7",               "",                  "",           "df7",          "df7",           "22df7",          "fsio 7",  "24:df7",     "cj: f7",         "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Kd",             "",              "fsio 14",   "",            "",                              "",           "",                "",                   "",      ""
+    debugFieldF1List = bits,   U08,   [0:7], "Controller Output",  "From TPS",           "GPPWM 1",   "Controller Output",        "Idle output",         "Channel 1 Rise Counter",    "",           "",            "VVT Event Position","",                       "Ign IAT Corr",      "",      "",          "Total SD", "",            "",           "",             "ETB Controller Output", "",                  "",           "df1",          "df1",           "InstantRpm",     "fsio 1",  "24:df1",     "CJ125: output",  "",          "",             "",       "",     "",     "",               "TPS1 Pri/Sec Diff",    "",    "",      "",      "Boost Open Loop Duty",  "S unused"        "",           "Osc Amplitude",  "",              "fsio 8",    "idle offset", "Pressure across injector(kpa)", "VSS",        "",                "WB: Pump DAC duty",  "",                  "Lua Debug 1"
+    debugFieldF2List = bits,   U08,   [0:7], "I-Term",             "To TPS",             "GPPWM 2",   "I-Term",                   "Idle df2",            "Channel 2 Rise Counter",    "",           "",            "VVT Ratio",         "",                       "Ign CLT Corr",      "",      "",          "Write Cnt","",            "",           "",             "ETB I-Term",            "",                  "",           "df2",          "df2",          "InstantRPM Ratio","fsio 2",  "24:df2",     "CJ125: i-term",  "",          "",             "",       "",     "",     "",               "TPS2 Pri/Sec Diff",    "",    "",      "",      "Boost Closed Loop Duty","S unused"        "",           "Duty Amplitude", "",              "fsio 9",    "idle min",    "Pressure ratio vs. nominal",    "Speed",      "",                "WB: ESR",            "",                  "Lua Debug 2"
+    debugFieldF3List = bits,   U08,   [0:7], "Previous Error",     "Current TPS<>TPS",   "GPPWM 3",   "prev error",               "Idle df3",            "ICU sum",                   "",           "",            "",                  "",                       "Ign FSIO Adj",      "",      "",          "Sync Cnt", "",            "",           "",             "ETB err",               "",                  "",           "df3",          "df3",           "22df3",          "fsio 3",  "24:df3",     "CJ125: err",     "",          "",             "",       "",     "",     "",               "TPS1/2 Diff",          "",    "",      "",      "",                      "S unused"        "",           "Tu",             "",              "fsio 10",   "",            "Flow ratio vs. configured",     "DeltaSpeed", "",                "WB: Nernst Voltage", "",                  "Lua Debug 3"
+    debugFieldF4List = bits,   U08,   [0:7], "I Gain",             "Extra Fuel",         "GPPWM 4",   "I Gain",                   "Idle df4",            "VVT rise",                  "",           "",            "",                  "",                       "Ign PID Adj",       "",      "",          "File Cnt", "",            "",           "",             "ETB I setting",         "",                  "",           "df4",          "df4",           "22df4",          "fsio 4",  "24:df4",     "CJ125: UA",      "",          "MAP Estimate", "",       "",     "",     "",               "Acc Pedal Pri/Sec Diff","",   "",      "",      "",                      "S unused"        "",           "Ku",             "",              "fsio 11",   "",            "",                              "accel",      "",                "WB: Lambda",         "",                  "Lua Debug 4"
+    debugFieldF5List = bits,   U08,   [0:7], "D Gain",             "df5",                "df5",       "D Gain",                   "Idle df5",            "VVT fall",                  "df5",        "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB D setting",         "df5",               "df5",        "df5",          "df5",           "22df5",          "fsio 5",  "24:df5",     "CJ125: UR",      "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Kp",             "",              "fsio 12",   "",            "",                              "",           "",                "",                   "",                  "Lua Debug 5"
+    debugFieldF6List = bits,   U08,   [0:7], "D Term",             "",                   "",          "D Term",                   "Idle df6",            "Current Gap",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB df6",               "",                  "",           "df6",          "df6",           "22df6",          "fsio 6",  "24:df6",     "cj: f7",         "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Ki",             "",              "fsio 13",   "",            "",                              "",           "",                "",                   "",                  "Lua Debug 6"
+    debugFieldF7List = bits,   U08,   [0:7], "Max-Value",          "",                   "",          "Max-Value",                "Idle df7",            "",                          "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB df7",               "",                  "",           "df7",          "df7",           "22df7",          "fsio 7",  "24:df7",     "cj: f7",         "",          "",             "",       "",     "",     "",               "",                     "",    "",      "",      "",                      "S unused"        "",           "Kd",             "",              "fsio 14",   "",            "",                              "",           "",                "",                   "",                  "Lua Debug 7"
 
-    debugFieldI1List = bits,   U08,   [0:7], "P-Gain",             "",                   "",          "P-Gain",                   "Idle di1",            "Channel 1 Fall Counter",    "",           "",            "VVT Sync Counter",  "Cycle Counter",          "Multispark Count",  "",      "",          "",         "",            "",           "",             "ETB P-Gain",            "t counter",         "",           "di1",          "di1",           "22di1",          "",        "24:di1",     "CJ125: state",   "read count","",             "",       "",     "",     "SPI Counter",    "",                     "",    "",      "",      "",                      "Start Count",    "",           "",               "",              "",          "",            "",                              "deltatime",  "",                "",                   "Solenoid 1 State",      ""
-    debugFieldI2List = bits,   U08,   [0:7], "Offset",             "",                   "",          "Offset",                   "Idle di2",            "Channel 2 Fall Counter",    "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di2",               "invocationcounter", "",           "di2",          "di2",           "22di2",          "",        "24:di2",     "",               "write count","",            "",       "",     "",     "Latest Transmit","",                     "",    "",      "",      "",                      "Starter Enable", "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 2 State",      ""
-    debugFieldI3List = bits,   U08,   [0:7], "Reset Cnt",          "",                   "",          "Reset Cnt",                "Idle di3",            "Cycle Index",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di3",               "s counter",         "",           "di3",          "di3",           "22di3",          "",        "24:di3",     "",               "write err", "",             "",       "",     "",     "Latest Received","",                     "",    "",      "",      "",                      "Starter Disable","",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 3 State",      ""
-    debugFieldI4List = bits,   U08,   [0:7], "Period",             "",                   "",          "State",                    "Idle di4",            "Cycle Cnt 1",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di4",               "executor",          "",           "di4",          "di4",           "22di4",          "",        "24:di4",      "",              "",          "",             "",       "",     "",     "Init Count",     "",                     "",    "",      "",      "",                      "S unused"        "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 4 State",      ""
-    debugFieldI5List = bits,   U08,   [0:7], "",                   "",                   "",          "",                         "Idle di5",            "Cycle Cnt 2",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "di5",        "di5",          "ETB di5",               "max executor",      "di5",        "di5",          "di5",           "22di5",          "di5",     "di5",        "di5",            "di5",       "di5",          "",       "di5",  "di5",  "di5",            "",                     "di5", "di5",   "di5",   "di5",                   "S di5"           "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 5 State",      ""
+    debugFieldI1List = bits,   U08,   [0:7], "P-Gain",             "",                   "",          "P-Gain",                   "Idle di1",            "Channel 1 Fall Counter",    "",           "",            "VVT Sync Counter",  "Cycle Counter",          "Multispark Count",  "",      "",          "",         "",            "",           "",             "ETB P-Gain",            "t counter",         "",           "di1",          "di1",           "22di1",          "",        "24:di1",     "CJ125: state",   "read count","",             "",       "",     "",     "SPI Counter",    "",                     "",    "",      "",      "",                      "Start Count",    "",           "",               "",              "",          "",            "",                              "deltatime",  "",                "",                   "Solenoid 1 State",  "Lua memory used"
+    debugFieldI2List = bits,   U08,   [0:7], "Offset",             "",                   "",          "Offset",                   "Idle di2",            "Channel 2 Fall Counter",    "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di2",               "invocationcounter", "",           "di2",          "di2",           "22di2",          "",        "24:di2",     "",               "write count","",            "",       "",     "",     "Latest Transmit","",                     "",    "",      "",      "",                      "Starter Enable", "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 2 State",  ""
+    debugFieldI3List = bits,   U08,   [0:7], "Reset Cnt",          "",                   "",          "Reset Cnt",                "Idle di3",            "Cycle Index",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di3",               "s counter",         "",           "di3",          "di3",           "22di3",          "",        "24:di3",     "",               "write err", "",             "",       "",     "",     "Latest Received","",                     "",    "",      "",      "",                      "Starter Disable","",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 3 State",  ""
+    debugFieldI4List = bits,   U08,   [0:7], "Period",             "",                   "",          "State",                    "Idle di4",            "Cycle Cnt 1",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "",           "",             "ETB di4",               "executor",          "",           "di4",          "di4",           "22di4",          "",        "24:di4",      "",              "",          "",             "",       "",     "",     "Init Count",     "",                     "",    "",      "",      "",                      "S unused"        "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 4 State",  ""
+    debugFieldI5List = bits,   U08,   [0:7], "",                   "",                   "",          "",                         "Idle di5",            "Cycle Cnt 2",               "",           "",            "",                  "",                       "",                  "",      "",          "",         "",            "di5",        "di5",          "ETB di5",               "max executor",      "di5",        "di5",          "di5",           "22di5",          "di5",     "di5",        "di5",            "di5",       "di5",          "",       "di5",  "di5",  "di5",            "",                     "di5", "di5",   "di5",   "di5",                   "S di5"           "",           "",               "",              "",          "",            "",                              "",           "",                "",                   "Solenoid 5 State",  ""
 
 [ConstantsExtensions]
      ; defaultValue is used to provide TunerStudio with a value to use in the case of
@@ -1070,6 +1070,7 @@ gaugeCategory = Fueling
    fuelRunningGauge     = fuelRunning,       @@GAUGE_NAME_FUEL_RUNNING@@,      "mg",        0,   100,     0,    0,      100,    100,   3, 1
    baseFuelGauge     = baseFuel,       @@GAUGE_NAME_FUEL_BASE@@,      "mg",        0,   100, 0, 0, 100, 100,   2, 0
    fuelPidCorrectionGauge = fuelPidCorrection,       @@GAUGE_NAME_FUEL_TRIM@@,      "%",        -10,   10,     -8, -5, 5, 8,   3, 1
+   fuelPidCorrectionGauge2= fuelPidCorrection2,      @@GAUGE_NAME_FUEL_TRIM_2@@,      "%",        -10,   10,     -8, -5, 5, 8,   3, 1
    fuelingLoadGauge = fuelingLoad, @@GAUGE_NAME_FUEL_LOAD@@, "%", 0, 300, 0, 0, 300, 300, 1, 1
    totalFuelConsumptionGauge = totalFuelConsumption, @@GAUGE_NAME_FUEL_CONSUMPTION@@, "g", 0, 10000, 0, 0, 10000, 10000, 0, 0
    fuelFlowRateGauge = fuelFlowRate, @@GAUGE_NAME_FUEL_FLOW@@, "g/s", 0, 50, 0, 0, 50, 50, 2, 0
@@ -1197,7 +1198,8 @@ gaugeCategory = DynoView
     indicator = { clutchDownState }, "clutch",   "cltch Down",   white, black, yellow,   black
     indicator = { brakePedalIndicator }, "brake",   "brake down",   white, black, red,   black
     indicator = { acSwitchState }, "AC off",   "AC on",   white, black, blue,   white
-	indicator = { isIdleClosedLoop }, "idle open loop", "idle closed loop", white, black, green, black
+	indicator = { isIdleClosedLoop }, "not idling", "idling", white, black, green, black
+	indicator = { isIdleCoasting }, "not coasting", "coasting", white, black, green, black
 
     ; error codes
     indicator = { isTpsError}, "tps",   "tps error",   white, black, red,   black
@@ -1238,7 +1240,6 @@ gaugeCategory = DynoView
    entry = lambdaValue,     @@GAUGE_NAME_LAMBDA@@,     float,  "%.2f"
    entry = lambdaValue2,     @@GAUGE_NAME_LAMBDA2@@,    float,  "%.2f"
    entry = VBatt,           @@GAUGE_NAME_VBAT@@,       float,  "%.2f"
-   entry = engineLoad,	    @@GAUGE_NAME_ENGINE_LOAD@@, 	   float,  "%.1f"
    entry = fuelingLoad,     @@GAUGE_NAME_FUEL_LOAD@@,     float, "%.1f"
    entry = ignitionLoad,    @@GAUGE_NAME_IGNITION_LOAD@@, float, "%.1f"
    entry = ignitionAdvance,	@@GAUGE_NAME_TIMING_ADVANCE@@,	   float,  "%.2f"
@@ -1262,6 +1263,7 @@ gaugeCategory = DynoView
    entry = actualLastInjection,     @@GAUGE_NAME_FUEL_LAST_INJECTION@@, float,  "%.3f"
    entry = baseFuel,	    @@GAUGE_NAME_FUEL_BASE@@,  float,  "%.2f"
    entry = fuelPidCorrection,@@GAUGE_NAME_FUEL_TRIM@@,  float,  "%.2f"
+   entry = fuelPidCorrection2,@@GAUGE_NAME_FUEL_TRIM_2@@,  float,  "%.2f"
    entry = veValue,         @@GAUGE_NAME_FUEL_VE@@,    float,  "%.3f"
    entry = injectorDutyCycle,@@GAUGE_NAME_FUEL_INJ_DUTY@@,float,"%.3f"
    entry = coilDutyCycle,	@@GAUGE_NAME_DWELL_DUTY@@,	float,"%.3f"
@@ -1374,6 +1376,7 @@ menuDialog = main
 		subMenu = limitsAndFallback,		"Limits and fallbacks"
 		subMenu = triggerConfiguration,		"Trigger"
 		subMenu = triggerConfiguration_IO, "Advanced Trigger"
+		subMenu = triggerConfiguration_gap, "Trigger Gap Override"
 		subMenu = std_separator
 		subMenu = energySystems,			"Battery and alternator"
 		subMenu = std_separator
@@ -1441,6 +1444,8 @@ menuDialog = main
 		
 	menu = "&Cranking"
 		subMenu = crankingDialog,			"Cranking settings"
+		subMenu = postCrankingEnrichment,	"After-start enrichment"
+		subMenu = primingFuelPulsePanel,	"Priming pulse"
 		subMenu = std_separator
 
 		subMenu = crankingCltCurve,			"Fuel CLT multiplier"
@@ -1448,10 +1453,10 @@ menuDialog = main
 		subMenu = crankingTpsCurve,			"Fuel TPS multiplier"
 		subMenu = std_separator
 
-		subMenu = crankingAdvanceCurve,		"Ignition advance", 0, {useSeparateAdvanceForCranking == 1}
+		subMenu = crankingAdvanceCurve,		"Cranking ignition advance", 0, {useSeparateAdvanceForCranking == 1}
 		subMenu = std_separator
 
-		subMenu = cltCrankingCurve,			"IAC multiplier", 0, {overrideCrankingIacSetting == 1}	
+		subMenu = cltCrankingCurve,			"Cranking IAC CLT multiplier", 0, {overrideCrankingIacSetting == 1}	
 		
 	menu = "&Idle"
 		subMenu = idleSettings,				"Idle settings"
@@ -1502,6 +1507,9 @@ menuDialog = main
 		subMenu = fsioCurve2,			    "FSIO Curve #2"
 		subMenu = fsioCurve3,			    "FSIO Curve #3"
 		subMenu = fsioCurve4,			    "FSIO Curve #4"
+
+		subMenu = std_separator
+		subMenu = luaOutputs,			"Lua PWM Outputs"
 
 		subMenu = std_separator
 		subMenu = tcuControls,			"Transmission Settings"
@@ -1726,6 +1734,10 @@ cmd_set_engine_type_ET_MRE_SUBARU_EJ18				= "@@TS_IO_TEST_COMMAND_char@@\x00\x30
 cmd_set_engine_type_microRusEFI_Defaults			= "@@TS_IO_TEST_COMMAND_char@@\x00\x30@@ET_MRE_DEFAULTS_16_hex@@"
 cmd_set_engine_type_ET_MRE_M111						= "@@TS_IO_TEST_COMMAND_char@@\x00\x30@@ET_MRE_M111_16_hex@@"
 
+cmd_set_engine_type_hellen_NA6						= "@@TS_IO_TEST_COMMAND_char@@\x00\x30@@ET_HELLEN_NA6_16_hex@@"
+cmd_set_engine_type_hellen_NA94						= "@@TS_IO_TEST_COMMAND_char@@\x00\x30@@ET_HELLEN_NA94_16_hex@@"
+
+
 ; MIATA_NA6_MAP = 41
 cmd_set_engine_type_Frankenso_Miata_NA6_MAP			= "@@TS_IO_TEST_COMMAND_char@@\x00\x30@@ET_FRANKENSO_MIATA_NA6_16_hex@@"
 ; MIATA_NA6_VAF = 57
@@ -1816,8 +1828,8 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	dialog = triggerConfiguration_settings,	"Trigger Pattern"
 		field = "!https://rusefi.com/s/trigger"
 		field = "Trigger type",							trigger_type
-		field = "Total tooth count",					trigger_customTotalToothCount, {trigger_type == 0}, {trigger_type == 0}
-		field = "Missing/skipped tooth count",					trigger_customSkippedToothCount, {trigger_type == 0}, {trigger_type == 0}
+		field = "Total tooth count",					trigger_customTotalToothCount, {trigger_type == @@TT_TT_TOOTHED_WHEEL@@}, {trigger_type == @@TT_TT_TOOTHED_WHEEL@@}
+		field = "Missing/skipped tooth count",					trigger_customSkippedToothCount, {trigger_type == @@TT_TT_TOOTHED_WHEEL@@}, {trigger_type == @@TT_TT_TOOTHED_WHEEL@@}
 
 		; see also in firmware '[doesTriggerImplyOperationMode]' tag
 		field = "Operation mode / speed",				ambiguousOperationMode
@@ -1829,6 +1841,15 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	    field = "!For well-known trigger types use '0' trigger angle offset"
 	    field = "Trigger Angle Advance",         		globalTriggerAngleOffset
 	    field = "Display logic signals",				displayLogicLevelsInEngineSniffer
+
+	dialog = triggerConfiguration_gap, "Trigger Gap Override"
+		field = "!This is a pretty advanced feature for when you are debugging trigger syncronizaion"
+		field = "Override well known trigger gaps",    overrideTriggerGaps
+		field = gapTrackingLengthOverride,				gapTrackingLengthOverride, { overrideTriggerGaps == 1 }
+		field = "First gap",							triggerGapOverride1, { overrideTriggerGaps == 1 }
+		field = "Second gap",							triggerGapOverride2, { overrideTriggerGaps == 1 }
+		field = "Third gap",							triggerGapOverride3, { overrideTriggerGaps == 1 }
+		
 
 	dialog = triggerConfiguration_IO,	"Advanced Trigger"
 	    field = "!https://rusefi.com/s/vvt"
@@ -1994,7 +2015,8 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	dialog = multisparkSettings, "Multispark"
 		field = "#WARNING! These settings have the potential to overheat ignition components"
 		field = "#and cause other nasty misbehavior.  Use with care, at your own risk!"
-		field = "Enable Multiple Sparks",				multisparkEnable
+		field = "#Not recommended for use on distributor or wasted spark ignition systems."
+		field = "Enable multiple sparks",				multisparkEnable
 		panel = multisparkMain
 		panel = multisparkDwellParams
 
@@ -2215,11 +2237,11 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Fuel Pump Pin",						fuelPumpPin
 		field = "ETB#1 Dir #1",							etbIo1_directionPin1  @@if_ts_show_etb_pins
 		field = "ETB#1 Dir #2",							etbIo1_directionPin2  @@if_ts_show_etb_pins
-		field = "ETB#1 Control #1",						etbIo1_controlPin1    @@if_ts_show_etb_pins
+		field = "ETB#1 Control",						etbIo1_controlPin     @@if_ts_show_etb_pins
 		field = "ETB#1 Disable",						etbIo1_disablePin     @@if_ts_show_etb_pins
 		field = "ETB#2 Dir #1",							etbIo2_directionPin1  @@if_ts_show_etb_pins
 		field = "ETB#2 Dir #2",							etbIo2_directionPin2  @@if_ts_show_etb_pins
-		field = "ETB#2 Control #1",						etbIo2_controlPin1    @@if_ts_show_etb_pins
+		field = "ETB#2 Control",						etbIo2_controlPin     @@if_ts_show_etb_pins
 		field = "ETB#2 Disable",						etbIo2_disablePin     @@if_ts_show_etb_pins
 		field = "SD CS Pin",							sdCardCsPin @@if_ts_show_sd_card
 		field = "MIL / Check Engine Pin",				malfunctionIndicatorPin
@@ -2525,10 +2547,10 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Heater pin",						o2heaterPin
 
 	dialog = egoSettings, "", yAxis
+		field = "Enable CAN Wideband",			enableAemXSeries, { canReadEnabled }
+		field = "Enable Innovate LC-2 Serial",			enableInnovateLC2, { auxSerialRxPin && auxSerialTxPin }
 		panel = egoSettings_IO
 		panel = egoSettings_sensor,	{afr_hwChannel != @@ADC_CHANNEL_NONE@@ && enableAemXSeries == 0 && !auxSerialRxPin && !auxSerialTxPin}
-		field = "Enable AEM X-Series CANbus",			enableAemXSeries, { canReadEnabled }
-		field = "Enable Innovate LC-2 Serial",			enableInnovateLC2, { auxSerialRxPin && auxSerialTxPin }
 
 ;			Engine->EGT inputs
 	dialog = egtInputs, "EGT inputs"
@@ -2554,11 +2576,11 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Two-wire mode",						etb_use_two_wires
 		field = "No1 Direction #1",						etbIo1_directionPin1
 		field = "No1 Direction #2",						etbIo1_directionPin2
-		field = "No1 Control #1",						etbIo1_controlPin1, { etb_use_two_wires == 0 }
+		field = "No1 Control",							etbIo1_controlPin
 		field = "No1 Disable",							etbIo1_disablePin
 		field = "No2 Direction #1",						etbIo2_directionPin1
 		field = "No2 Direction #2",						etbIo2_directionPin2
-		field = "No2 Control #1",						etbIo2_controlPin1, { etb_use_two_wires == 0}
+		field = "No2 Control",							etbIo2_controlPin
 		field = "No2 Disable",							etbIo2_disablePin
 
 	dialog = idleStepperHw, "Stepper Hardware"
@@ -2606,13 +2628,20 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "use Cic Pid",							useCicPidForIdle
 		field = "Use IAC PID Multiplier Table",			useIacPidMultTable
 
+	dialog = idleOpenLoop, "Open Loop Idle"
+		slider = "Open loop base position",				manIdlePosition, horizontal
+		field = "A/C adder",							acIdleExtraOffset
+		field = "A/C target adder",						acIdleRpmBump
+		field = "Fan #1 adder",							fan1ExtraIdle
+		field = "Fan #2 adder",							fan2ExtraIdle
+		field = "Extra idle air if throttle pressed",	iacByTpsTaper
+
 	dialog = idleGating, "Idle Detection Thresholds"
 		field = "TPS threshold",	idlePidDeactivationTpsThreshold
 		field = "RPM upper limit",	idlePidRpmUpperLimit
-		field = "RPM dead zone",	idlePidRpmDeadZone
+		field = "RPM deadzone",	idlePidRpmDeadZone
 
 	dialog = idleExtra, "Extra Idle Features"
-		field = "Extra idle air if throttle pressed",						iacByTpsTaper
 		field = "Use idle ignition table",	useSeparateAdvanceForIdle
 		field = "Use idle VE table",		useSeparateVeForIdle
 		field = "Use coasting idle table",	useIacTableForCoasting, {idleMode == 0}
@@ -2622,11 +2651,10 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	dialog = idleSettings, "", yAxis
 		field = "Idle control mode",					idleMode
 
-		field = "! Solenoid idle control requires above zero RPM"
-		slider = "Open loop idle position",				manIdlePosition, horizontal
-		field = ""
+		field = "! Solenoid idle control is disabled at zero RPM"
 
 		panel = idleGating
+		panel = idleOpenLoop
 		panel = idlePidSettings, { idleMode == 0}
 		panel = idleExtra
 
@@ -2646,14 +2674,28 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "#Use debug mode 'Timing' to view idle timing adjustment"
 
 ;			Engine->Fan Settings
-	dialog = fanSetting, "Fan Settings"
+	dialog = fan1Settings, "Fan 1"
 		field = "Pin",								fanPin
 		field = "Pin mode",							fanPinMode
 		field = "On temperature",					fanOnTemperature
 		field = "Off temperature",					fanOffTemperature
-; this one has build-in FSIO logic
+		field = "Enable with AC",					enableFan1WithAc
+
+	dialog = fan2Settings, "Fan 2"
+		field = "Pin",								fan2Pin
+		field = "Pin mode",							fan2PinMode
+		field = "On temperature",					fan2OnTemperature
+		field = "Off temperature",					fan2OffTemperature
+		field = "Enable with AC",					enableFan2WithAc
+
+	dialog = acSettings, "A/C Settings"
 		field = "A/C Relay",						acRelayPin
 		field = "A/C Relay Mode",					acRelayPinMode
+
+	dialog = fanSetting, "Fan Settings"
+		panel = fan1Settings
+		panel = fan2Settings
+		panel = acSettings
 
 	dialog = fuelPump, "Fuel Pump"
 		field = "Pin",						fuelPumpPin
@@ -2773,26 +2815,26 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Power region load",					stft_minPowerLoad
 
 	dialog = stftPartitionSettingsMain, "Main Region", xAxis
-		field = "Time Const",							stft_cellCfgs4_timeConstant
+		field = "Time const",							stft_cellCfgs4_timeConstant
 		field = "Max add",								stft_cellCfgs4_maxAdd
 		field = "Max remove",							stft_cellCfgs4_maxRemove
 
 	dialog = stftPartitionSettingsIdle, "Idle Region", xAxis
-		field = "Time Const",							stft_cellCfgs1_timeConstant
+		field = "Time const",							stft_cellCfgs1_timeConstant
 		field = "Max add",								stft_cellCfgs1_maxAdd
 		field = "Max remove",							stft_cellCfgs1_maxRemove
 
 	dialog = stftPartitionSettingsPower, "Power Region", xAxis
-		field = "Time Const",							stft_cellCfgs3_timeConstant
+		field = "Time const",							stft_cellCfgs3_timeConstant
 		field = "Max add",								stft_cellCfgs3_maxAdd
 		field = "Max remove",							stft_cellCfgs3_maxRemove
 
 	dialog = stftPartitionSettingsOverrun, "Overrun Region", xAxis
-		field = "Time Const",							stft_cellCfgs2_timeConstant
+		field = "Time const",							stft_cellCfgs2_timeConstant
 		field = "Max add",								stft_cellCfgs2_maxAdd
 		field = "Max remove",							stft_cellCfgs2_maxRemove
 
-	dialog = fuelClosedLoopDialog, "Short-term fuel trim"
+	dialog = fuelClosedLoopDialog, "Closed loop fuel correction"
 		field = "Enabled",								fuelClosedLoopCorrectionEnabled
 
 		field = "Startup delay"							stft_startupDelay, {fuelClosedLoopCorrectionEnabled == 1}
@@ -2901,7 +2943,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	dialog = tachSettings, "Tachometer output"
 		field = "Pin",									tachOutputPin
 		field = "Pin mode",								tachOutputPinMode
-		field = "Pulse duration is duty cycle",			tachPulseDurationAsDutyCycle
+		field = "Pulse Mode",			                tachPulseDurationAsDutyCycle
 		field = "Pulse duration",						tachPulseDuractionMs
 		field = "Pulse per Rev",                        tachPulsePerRev
 
@@ -3000,17 +3042,24 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Debug mode",							debugMode
 
 	dialog = limits, "Limits"
-		field = "RPM hard limit",         	    		rpmHardLimit
 		field = "Cut fuel on RPM limit",				cutFuelOnHardLimit
 		field = "Cut spark on RPM limit",				cutSparkOnHardLimit
+        field = "RPM hard limit",                       rpmHardLimit, { cutFuelOnHardLimit || cutSparkOnHardLimit }
 		field = "Boost cut pressure",					boostCutPressure
-	
+		field = "Minimum oil pressure after start",		minOilPressureAfterStart
+
+	dialog = etbLimits, "Electronic Throttle Limiting"
+		field = "Smoothly close the throttle to limit RPM."
+		field = "Soft limiter start",				etbRevLimitStart
+		field = "Soft limiter range",				etbRevLimitRange
+
 	dialog = fallbacks, "Fallbacks"
 		field = "Use MAP estimation table as fallback",	enableMapEstimationTableFallback
 		field = "Failed MAP sensor fallback",			failedMapFallback, { !enableMapEstimationTableFallback }
 
 	dialog = limitsAndFallback, "Limits and fallbacks"
 		panel = limits
+		panel = etbLimits
 		panel = fallbacks
 	
 ;			Engine->Base Engine Settings
@@ -3026,19 +3075,16 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Fuel Source For Cranking",             useRunningMathForCranking
 		field = "Base fuel mass", 				cranking_baseFuel, {useRunningMathForCranking == 0}
 
-	dialog = crankingIAC, "IAC"
-		field = "Cranking IAC position",					crankingIACposition
-		field = "After cranking IAC taper duration",	afterCrankingIACtaperDuration
-		field = "Override IAC multiplier for cranking",	overrideCrankingIacSetting
-		
+	dialog = crankingIAC, "Idle air valve"
+		field = "Cranking base IAC position",			crankingIACposition
+		field = "After cranking IAC taper duration",afterCrankingIACtaperDuration
+		field = "Override cranking IAC CLT multiplier",		overrideCrankingIacSetting
+
 	dialog = crankingIgnition, "Ignition"
-		field = "Advance", 								crankingTimingAngle, {useSeparateAdvanceForCranking == 0}
-		field = "Use separate Advance Table for cranking",	useSeparateAdvanceForCranking
-		field = "Use Advance Corrections for cranking",	useAdvanceCorrectionsForCranking
-        field = "Use fixed cranking dwell",         			useConstantDwellDuringCranking
-        field = "Fixed Cranking Dwell",           			ignitionDwellForCrankingMs, {useConstantDwellDuringCranking == 1}
-		field = "Cranking Dwell Angle", 						crankingChargeAngle, {useConstantDwellDuringCranking == 0}
-	
+		field = "Timing Advance mode",	useSeparateAdvanceForCranking
+		field = "Fixed cranking advance",	crankingTimingAngle, {useSeparateAdvanceForCranking == 0}
+        field = "Fixed Cranking Dwell",           			ignitionDwellForCrankingMs
+
 	dialog = postCrankingEnrichment, "After start enrichment"
 		field = "Post-Cranking factor", 				postCrankingFactor
 		field = "Duration", 				postCrankingDurationSec
@@ -3046,19 +3092,19 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 	dialog = primingFuelPulsePanel, "Priming fuel pulse"
 		field = "Duration at -40C degrees",	startOfCrankingPrimingPulse
 		field = "Falloff temperature", primeInjFalloffTemperature
-		
-		
+
+	dialog = crankingAdv, "Advanced"
+		field = "Enable flood clear",				isCylinderCleanupEnabled
+		field = "Enable faster engine spin-up",			isFasterEngineSpinUpEnabled
+		field = "Use Advance Corrections for cranking",	useAdvanceCorrectionsForCranking
+
 ;			Cranking->Cranking Settings
 	dialog = crankingDialog, "Cranking Settings"
 		field = "Cranking RPM limit",                	cranking_rpm
-		field = "Enable cylinder cleanup",				isCylinderCleanupEnabled
-		field = ""
-		field = "Enable faster engine spin-up",			isFasterEngineSpinUpEnabled
-		panel = primingFuelPulsePanel
 		panel = crankingFuel
 		panel = crankingIgnition
 		panel = crankingIAC
-		panel = postCrankingEnrichment
+		panel = crankingAdv
 
 	dialog = EngineLoadAccelPanel, "Engine Load (alpha version)"
 		field = "Length",						engineLoadAccelLength
@@ -3199,6 +3245,19 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "ADC #3",								fsioAdc3
 		field = "ADC #4",								fsioAdc4
 
+	dialog = luaOutputs, "Lua Outputs"
+		field = "#Call startPwm to initialize, then call"
+		field = "#setPwmDuty and setPwmFreq to vary duty/freq"
+		field = "#See rusefi.com/s/lua for more info"
+		field = "output #0", 							luaOutputPins1
+		field = "output #1", 							luaOutputPins2
+		field = "output #2", 							luaOutputPins3
+		field = "output #3", 							luaOutputPins4
+		field = "output #4", 							luaOutputPins5
+		field = "output #5", 							luaOutputPins6
+		field = "output #6", 							luaOutputPins7
+		field = "output #7", 							luaOutputPins8
+
 	dialog = transmissionPanel
 		field = "TCU Enabled"		tcuEnabled
 
@@ -3236,6 +3295,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		field = "Output Mode",                      boostControlPinMode, { isBoostControlEnabled }
 		field = "Frequency",						boostPwmFrequency, { isBoostControlEnabled }
 
+		field = "Safe duty cycle",					boostControlSafeDutyCycle, { isBoostControlEnabled }
          dialog = boostDialog, "", border
                 panel = boost_left, West
                 panel = boostTableTbl, Center
@@ -3409,6 +3469,9 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 		commandButton = "Proteus M73 v12",     		cmd_set_engine_type_Proteus_M73@@if_show_Proteus_presets
 		commandButton = "Proteus Miata TCU",		cmd_set_engine_type_Proteus_Miata_TCU@@if_show_Proteus_presets
 		commandButton = "Proteus Miata NB2",		cmd_set_engine_type_ET_PROTEUS_MIATA_NB2@@if_show_Proteus_presets
+		
+		commandButton = "Hellen NA6",				cmd_set_engine_type_hellen_NA6@@if_show_Hellen_presets
+		commandButton = "Hellen NA8 94-95",			cmd_set_engine_type_hellen_NA94@@if_show_Hellen_presets
 
 
 		commandButton = "ETB test bench", cmd_set_engine_type_etb_test@@if_show_test_presets
@@ -3597,3 +3660,5 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@\x00\x31\x00\x00"
 #else
  addTool = afrTableGenerator, "AFR Table Generator", afrTableTbl
 #endif
+
+; poke

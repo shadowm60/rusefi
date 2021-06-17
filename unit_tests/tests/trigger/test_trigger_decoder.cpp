@@ -188,10 +188,10 @@ TEST(misc, test1995FordInline6TriggerDecoder) {
 	IgnitionEventList *ecl = &engine->ignitionEvents;
 	ASSERT_EQ( 1,  ecl->isReady) << "ford inline ignition events size";
 	ASSERT_EQ( 0,  ecl->elements[0].dwellPosition.triggerEventIndex) << "event index";
-	ASSERT_NEAR(7.8621, ecl->elements[0].dwellPosition.angleOffsetFromTriggerEvent, EPS4D) << "angle offset#1";
+	ASSERT_NEAR(7.9579, ecl->elements[0].dwellPosition.angleOffsetFromTriggerEvent, EPS4D) << "angle offset#1";
 
 	ASSERT_EQ( 10,  ecl->elements[5].dwellPosition.triggerEventIndex) << "event index";
-	ASSERT_NEAR(7.8621, ecl->elements[5].dwellPosition.angleOffsetFromTriggerEvent, EPS4D) << "angle offset#2";
+	ASSERT_NEAR(7.9579, ecl->elements[5].dwellPosition.angleOffsetFromTriggerEvent, EPS4D) << "angle offset#2";
 
 
 	ASSERT_FLOAT_EQ(0.5, getSparkDwell(2000 PASS_ENGINE_PARAMETER_SUFFIX)) << "running dwell";
@@ -216,12 +216,8 @@ TEST(misc, testFordAspire) {
 
 	ASSERT_EQ( 4,  TRIGGER_WAVEFORM(getTriggerWaveformSynchPointIndex())) << "getTriggerWaveformSynchPointIndex";
 
-	engineConfiguration->crankingChargeAngle = 65;
 	engineConfiguration->crankingTimingAngle = 31;
-	engineConfiguration->useConstantDwellDuringCranking = false;
 
-	engine->rpmCalculator.setRpmValue(200);
-	assertEqualsM("cranking dwell", 54.166670, getSparkDwell(200 PASS_ENGINE_PARAMETER_SUFFIX));
 	int rpm = 2000;
 	engine->rpmCalculator.setRpmValue(rpm);
 	ASSERT_EQ( 4,  getSparkDwell(rpm PASS_ENGINE_PARAMETER_SUFFIX)) << "running dwell";
@@ -672,18 +668,10 @@ static void setTestBug299(EngineTestHelper *eth) {
 	ASSERT_EQ( 1,  engine->engineState.running.coolantTemperatureCoefficient) << "cltC";
 	ASSERT_EQ( 0,  engine->engineState.running.injectorLag) << "lag";
 
-	engineConfiguration->mafAdcChannel = EFI_ADC_10;
-	engine->engineState.mockAdcState.setMockVoltage(EFI_ADC_10, 0 PASS_ENGINE_PARAMETER_SUFFIX);
-
-	ASSERT_EQ( 0,  getMafVoltage(PASS_ENGINE_PARAMETER_SIGNATURE)) << "maf";
-
 	ASSERT_EQ( 3000,  GET_RPM()) << "setTestBug299: RPM";
 
 	assertEqualsM("fuel#1", 1.5, engine->injectionDuration);
 	assertEqualsM("duty for maf=0", 7.5, getInjectorDutyCycle(GET_RPM() PASS_ENGINE_PARAMETER_SUFFIX));
-
-	engine->engineState.mockAdcState.setMockVoltage(EFI_ADC_10, 3 PASS_ENGINE_PARAMETER_SUFFIX);
-	ASSERT_EQ( 3,  getMafVoltage(PASS_ENGINE_PARAMETER_SIGNATURE)) << "maf";
 }
 
 static void assertInjectors(const char *msg, int value0, int value1) {

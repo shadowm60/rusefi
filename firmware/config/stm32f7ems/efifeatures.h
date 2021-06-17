@@ -52,3 +52,9 @@
 #define EFI_CONSOLE_RX_BRAIN_PIN GPIOD_9
 
 #define EFI_USE_COMPRESSED_INI_MSD
+
+#undef ENABLE_PERF_TRACE
+#define ENABLE_PERF_TRACE TRUE
+
+// F7 may have dual bank, so flash on its own (low priority) thread so as to not block any other operations
+#define EFI_FLASH_WRITE_THREAD TRUE
