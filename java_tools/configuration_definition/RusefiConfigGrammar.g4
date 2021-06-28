@@ -72,7 +72,9 @@ restOfLine
     | 'false';
 
 definition
-    : Definition identifier numexpr
+    : Definition identifier integer
+    | Definition identifier floatNum
+    | Definition identifier numexpr
     | Definition identifier restOfLine;
 struct: (Struct | StructNoPrefix) identifier ('@brief' restOfLine)? ENDL+ statements EndStruct;
 
@@ -95,10 +97,17 @@ scalarField: identifier FsioVisible? identifier (fieldOptionsList)?;
 arrayField: identifier '[' arrayLengthSpec Iterate? ']' identifier SemicolonedString? (fieldOptionsList)?;
 bitField: Bit identifier (',' QuotedString ',' QuotedString)? ('(' 'comment' ':' QuotedString ')')? SemicolonedSuffix?;
 
+unionField: 'union' ENDL+ fields 'end_union';
+
 field
     : scalarField
     | arrayField
     | bitField
+    | unionField
+    ;
+
+fields
+    : (field ENDL+)+
     ;
 
 // Indicates X bytes of free space
