@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_config.sh integration/rusefi_config.txt Mon Jun 28 12:54:22 UTC 2021
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_config.sh integration/rusefi_config.txt Fri Jul 09 14:08:45 UTC 2021
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -137,6 +137,7 @@ struct cranking_parameters_s {
 	int16_t rpm;
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 6
 	 */
 	uint8_t alignmentFill_at_6[2];
@@ -159,6 +160,7 @@ struct spi_pins {
 	brain_pin_e sckPin;
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 3
 	 */
 	uint8_t alignmentFill_at_3[1];
@@ -388,6 +390,7 @@ struct ThermistorConf {
 	adc_channel_e adcChannel;
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 29
 	 */
 	uint8_t alignmentFill_at_29[3];
@@ -433,7 +436,7 @@ struct specs_s {
 	/**
 	 * offset 4
 	 */
-	cylinders_count_t cylindersCount;
+	uint32_t cylindersCount;
 	/**
 	 * offset 8
 	 */
@@ -694,8 +697,9 @@ struct engine_configuration_s {
 	offset 76 bit 7 */
 	bool disableFan2WhenStopped : 1;
 	/**
+	 * Enable secondary spark outputs that fire after the primary (rotaries, twin plug engines).
 	offset 76 bit 8 */
-	bool unused_294_8 : 1;
+	bool enableTrailingSparks : 1;
 	/**
 	 * enable cj125verbose/disable cj125verbose
 	offset 76 bit 9 */
@@ -958,10 +962,11 @@ struct engine_configuration_s {
 	 */
 	int8_t gapTrackingLengthOverride;
 	/**
-	unused
+	 * Above this speed, disable closed loop idle control. Set to 0 to disable (allow closed loop idle at any speed).
+	kph
 	 * offset 445
 	 */
-	int8_t unusedOldIgnitionOffset[1];
+	uint8_t maxIdleVss;
 	/**
 	 * Expected oil pressure after starting the engine. If oil pressure does not reach this level within 5 seconds of engine start, fuel will be cut. Set to 0 to disable and always allow starting.
 	kPa
@@ -1088,10 +1093,11 @@ struct engine_configuration_s {
 	 */
 	float idle_derivativeFilterLoss;
 	/**
-	index
+	 * just a temporary solution
+	angle
 	 * offset 520
 	 */
-	int unused520;
+	int trailingSparkAngle;
 	/**
 	 * offset 524
 	 */
@@ -1206,11 +1212,11 @@ struct engine_configuration_s {
 	/**
 	 * offset 624
 	 */
-	output_pin_e injectionPins[INJECTION_PIN_COUNT];
+	output_pin_e injectionPins[MAX_CYLINDER_COUNT];
 	/**
 	 * offset 636
 	 */
-	output_pin_e ignitionPins[IGNITION_PIN_COUNT];
+	output_pin_e ignitionPins[MAX_CYLINDER_COUNT];
 	/**
 	 * offset 648
 	 */
@@ -2129,10 +2135,21 @@ struct engine_configuration_s {
 	 */
 	output_pin_e luaOutputPins[LUA_PWM_COUNT];
 	/**
-	units
+	 * Angle between cam sensor and VVT zero position
+	 * set vvt_offset X
+	value
 	 * offset 1228
 	 */
-	int unusedAtOldBoardConfigurationEnd[57];
+	float vvtOffsets[CAM_INPUTS_COUNT];
+	/**
+	 * offset 1244
+	 */
+	float vvtOffsetsPadding[CAM_INPUTS_COUNT_padding];
+	/**
+	units
+	 * offset 1244
+	 */
+	int unusedAtOldBoardConfigurationEnd[53];
 	/**
 	kg
 	 * offset 1456
@@ -2435,15 +2452,13 @@ struct engine_configuration_s {
 	 */
 	int ignMathCalculateAtIndex;
 	/**
-	RPM
 	 * offset 1492
 	 */
-	int16_t acCutoffLowRpm;
+	int16_t unused1492;
 	/**
-	RPM
 	 * offset 1494
 	 */
-	int16_t acCutoffHighRpm;
+	int16_t unused1494;
 	/**
 	 * Extra idle target speed when A/C is enabled. Some cars need the extra speed to keep the AC efficient while idling.
 	RPM
@@ -2785,12 +2800,10 @@ struct engine_configuration_s {
 	 */
 	float tpsAccelEnrichmentThreshold;
 	/**
-	 * Angle between cam sensor and VVT zero position
-	 * set vvt_offset X
-	value
+	v
 	 * offset 2052
 	 */
-	float vvtOffset;
+	float unusedVvtOffsetWasHere;
 	/**
 	cycles
 	 * offset 2056
@@ -2916,76 +2929,76 @@ struct engine_configuration_s {
 	bool unused1130 : 1;
 	/**
 	offset 2116 bit 8 */
-	bool unusedBit_496_8 : 1;
+	bool unusedBit_498_8 : 1;
 	/**
 	offset 2116 bit 9 */
-	bool unusedBit_496_9 : 1;
+	bool unusedBit_498_9 : 1;
 	/**
 	offset 2116 bit 10 */
-	bool unusedBit_496_10 : 1;
+	bool unusedBit_498_10 : 1;
 	/**
 	offset 2116 bit 11 */
-	bool unusedBit_496_11 : 1;
+	bool unusedBit_498_11 : 1;
 	/**
 	offset 2116 bit 12 */
-	bool unusedBit_496_12 : 1;
+	bool unusedBit_498_12 : 1;
 	/**
 	offset 2116 bit 13 */
-	bool unusedBit_496_13 : 1;
+	bool unusedBit_498_13 : 1;
 	/**
 	offset 2116 bit 14 */
-	bool unusedBit_496_14 : 1;
+	bool unusedBit_498_14 : 1;
 	/**
 	offset 2116 bit 15 */
-	bool unusedBit_496_15 : 1;
+	bool unusedBit_498_15 : 1;
 	/**
 	offset 2116 bit 16 */
-	bool unusedBit_496_16 : 1;
+	bool unusedBit_498_16 : 1;
 	/**
 	offset 2116 bit 17 */
-	bool unusedBit_496_17 : 1;
+	bool unusedBit_498_17 : 1;
 	/**
 	offset 2116 bit 18 */
-	bool unusedBit_496_18 : 1;
+	bool unusedBit_498_18 : 1;
 	/**
 	offset 2116 bit 19 */
-	bool unusedBit_496_19 : 1;
+	bool unusedBit_498_19 : 1;
 	/**
 	offset 2116 bit 20 */
-	bool unusedBit_496_20 : 1;
+	bool unusedBit_498_20 : 1;
 	/**
 	offset 2116 bit 21 */
-	bool unusedBit_496_21 : 1;
+	bool unusedBit_498_21 : 1;
 	/**
 	offset 2116 bit 22 */
-	bool unusedBit_496_22 : 1;
+	bool unusedBit_498_22 : 1;
 	/**
 	offset 2116 bit 23 */
-	bool unusedBit_496_23 : 1;
+	bool unusedBit_498_23 : 1;
 	/**
 	offset 2116 bit 24 */
-	bool unusedBit_496_24 : 1;
+	bool unusedBit_498_24 : 1;
 	/**
 	offset 2116 bit 25 */
-	bool unusedBit_496_25 : 1;
+	bool unusedBit_498_25 : 1;
 	/**
 	offset 2116 bit 26 */
-	bool unusedBit_496_26 : 1;
+	bool unusedBit_498_26 : 1;
 	/**
 	offset 2116 bit 27 */
-	bool unusedBit_496_27 : 1;
+	bool unusedBit_498_27 : 1;
 	/**
 	offset 2116 bit 28 */
-	bool unusedBit_496_28 : 1;
+	bool unusedBit_498_28 : 1;
 	/**
 	offset 2116 bit 29 */
-	bool unusedBit_496_29 : 1;
+	bool unusedBit_498_29 : 1;
 	/**
 	offset 2116 bit 30 */
-	bool unusedBit_496_30 : 1;
+	bool unusedBit_498_30 : 1;
 	/**
 	offset 2116 bit 31 */
-	bool unusedBit_496_31 : 1;
+	bool unusedBit_498_31 : 1;
 	/**
 	 * set can_mode X
 	 * offset 2120
@@ -3092,6 +3105,7 @@ struct engine_configuration_s {
 	pin_output_mode_e sdCardCsPinMode;
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 2227
 	 */
 	uint8_t alignmentFill_at_2227[1];
@@ -3133,6 +3147,7 @@ struct engine_configuration_s {
 	uint8_t fan1ExtraIdle;
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 2253
 	 */
 	uint8_t alignmentFill_at_2253[3];
@@ -3176,7 +3191,11 @@ struct engine_configuration_s {
 	units
 	 * offset 2331
 	 */
-	uint8_t unusedOldBiquad[21];
+	uint8_t unusedOldBiquad[9];
+	/**
+	 * offset 2340
+	 */
+	output_pin_e trailingCoilPins[MAX_CYLINDER_COUNT];
 	/**
 	 * CLT-based timing correction
 	C
@@ -3242,20 +3261,28 @@ struct engine_configuration_s {
 	 */
 	float postCrankingDurationSec;
 	/**
-	 * todo: finish implementation #332
 	 * offset 2444
 	 */
 	ThermistorConf auxTempSensor1;
 	/**
-	 * todo: finish implementation #332
 	 * offset 2476
 	 */
 	ThermistorConf auxTempSensor2;
 	/**
-	units
+	 * Apply nonlinearity correction below a pulse of this duration. Pulses longer than this duration will receive no adjustment.
+	ms
 	 * offset 2508
 	 */
-	uint8_t unused2508[6];
+	uint16_t applyNonlinearBelowPulse;
+	/**
+	 * offset 2510
+	 */
+	InjectorNonlinearMode injectorNonlinearMode;
+	/**
+	units
+	 * offset 2511
+	 */
+	uint8_t unused2508[3];
 	/**
 	Hz
 	 * offset 2514
@@ -3275,7 +3302,7 @@ struct engine_configuration_s {
 	deg
 	 * offset 2540
 	 */
-	angle_t timing_offset_cylinder[IGNITION_PIN_COUNT];
+	angle_t timing_offset_cylinder[MAX_CYLINDER_COUNT];
 	/**
 	seconds
 	 * offset 2588
@@ -3364,10 +3391,14 @@ struct engine_configuration_s {
 	 */
 	pid_s auxPid[CAMS_PER_BANK];
 	/**
-	units
 	 * offset 2652
 	 */
-	uint8_t unused1366[40];
+	float injectorCorrectionPolynomial[8];
+	/**
+	units
+	 * offset 2684
+	 */
+	uint8_t unused1366[8];
 	/**
 	 * offset 2692
 	 */
@@ -3709,7 +3740,7 @@ struct engine_configuration_s {
 	 * Select which fuel correction bank this cylinder belongs to. Group cylinders that share the same O2 sensor
 	 * offset 4016
 	 */
-	uint8_t cylinderBankSelect[INJECTION_PIN_COUNT];
+	uint8_t cylinderBankSelect[MAX_CYLINDER_COUNT];
 	/**
 	units
 	 * offset 4028
@@ -3834,6 +3865,7 @@ struct engine_configuration_s {
 	int8_t knockBaseNoise[IGN_RPM_COUNT];
 	/**
 	 * need 4 byte alignment
+	units
 	 * offset 4539
 	 */
 	uint8_t alignmentFill_at_4539[1];
@@ -4236,4 +4268,4 @@ struct persistent_config_s {
 };
 
 // end
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_config.sh integration/rusefi_config.txt Mon Jun 28 12:54:22 UTC 2021
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_config.sh integration/rusefi_config.txt Fri Jul 09 14:08:45 UTC 2021

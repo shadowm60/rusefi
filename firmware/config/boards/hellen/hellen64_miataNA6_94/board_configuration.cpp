@@ -31,7 +31,7 @@ static void setInjectorPins() {
 	//engineConfiguration->injectionPins[7] = GPIOF_14;
 
 	// Disable remainder
-	for (int i = 4; i < INJECTION_PIN_COUNT;i++) {
+	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
 		engineConfiguration->injectionPins[i] = GPIO_UNASSIGNED;
 	}
 
@@ -55,7 +55,7 @@ static void setIgnitionPins() {
 	//engineConfiguration->ignitionPins[7] = GPIOI_7;
 	
 	// disable remainder
-	for (int i = 4; i < IGNITION_PIN_COUNT; i++) {
+	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
 		engineConfiguration->ignitionPins[i] = GPIO_UNASSIGNED;
 	}
 
@@ -87,12 +87,11 @@ static void setupVbatt() {
 }
 
 static void setupDefaultSensorInputs() {
-	// trigger inputs
-	engineConfiguration->triggerInputPins[0] = GPIOB_1;
-	engineConfiguration->triggerInputPins[1] = GPIO_UNASSIGNED;
+	// trigger inputs, hall
+	engineConfiguration->triggerInputPins[0] = GPIOA_6;
+	engineConfiguration->triggerInputPins[1] = GPIOB_1;
 	engineConfiguration->triggerInputPins[2] = GPIO_UNASSIGNED;
-	// Direct hall-only cam input
-	engineConfiguration->camInputs[0] = GPIOA_6;
+	engineConfiguration->camInputs[0] = GPIO_UNASSIGNED;
 
 	engineConfiguration->tps1_1AdcChannel = EFI_ADC_4;
 	engineConfiguration->tps2_1AdcChannel = EFI_ADC_NONE;
@@ -149,9 +148,7 @@ void setBoardDefaultConfiguration(void) {
 
 	CONFIG(enableSoftwareKnock) = true;
 
-	engineConfiguration->canTxPin = GPIOD_1;
-	engineConfiguration->canRxPin = GPIOD_0;
-
+	engineConfiguration->acRelayPin = GPIOH_15; // 1J - AC Relay
 	engineConfiguration->fuelPumpPin = GPIOG_2;	// OUT_IO9
 	engineConfiguration->idle.solenoidPin = GPIOD_14;	// OUT_PWM5
 	engineConfiguration->fanPin = GPIOD_12;	// OUT_PWM8

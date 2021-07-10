@@ -1,6 +1,6 @@
 ##############################################################################
-# Build global options
-# NOTE: Can be overridden externally.
+# see readme.md
+# see setup_linux_environment.sh but Windows is also totally fine
 #
 
 CHIBIOS = ChibiOS
@@ -151,7 +151,7 @@ include $(CHIBIOS)/os/license/license.mk
 include $(CPU_STARTUP_DIR)
 # HAL-OSAL files (optional).
 include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
-include $(CPU_PLATFORM_DIR)
+include $(CPU_PLATFORM)
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # RTOS files (optional).
 include $(CHIBIOS)/os/rt/rt.mk
