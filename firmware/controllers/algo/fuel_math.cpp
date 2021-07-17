@@ -38,8 +38,7 @@
 #include "perf_trace.h"
 #include "sensor.h"
 #include "speed_density_base.h"
-
-EXTERN_ENGINE;
+#include "lua_hooks.h"
 
 static fuel_Map3D_t fuelPhaseMap;
 extern fuel_Map3D_t veMap;
@@ -170,6 +169,9 @@ AirmassModelBase* getAirmassModel(engine_load_mode_e mode DECLARE_ENGINE_PARAMET
 		case LM_SPEED_DENSITY: return &sdAirmass;
 		case LM_REAL_MAF: return &mafAirmass;
 		case LM_ALPHA_N: return &alphaNAirmass;
+#if EFI_LUA
+		case LM_LUA: return &(getLuaAirmassModel());
+#endif
 #if EFI_UNIT_TEST
 		case LM_MOCK: return engine->mockAirmassModel;
 #endif

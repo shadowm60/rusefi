@@ -46,7 +46,7 @@
 #include "microsecond_timer.h"
 
 #if EFI_WIDEBAND_FIRMWARE_UPDATE
-#include "can.h"
+#include "rusefi_wideband.h"
 #endif // EFI_WIDEBAND_FIRMWARE_UPDATE
 
 #if EFI_PROD_CODE
@@ -57,8 +57,6 @@
 #if (BOARD_TLE8888_COUNT > 0)
 #include "gpio/tle8888.h"
 #endif // BOARD_TLE8888_COUNT
-
-EXTERN_ENGINE;
 
 static bool isRunningBench = false;
 
@@ -102,8 +100,8 @@ static void runBench(brain_pin_e brainPin, OutputPin *output, float delayMs, flo
 		efitick_t endTime = startTime + US2NT(onTimeUs);
 
 		// Schedule both events
-		engine->executor.scheduleByTimestampNt(&benchSchedStart, startTime, {benchOn, output});
-		engine->executor.scheduleByTimestampNt(&benchSchedEnd, endTime, {benchOff, output});
+		engine->executor.scheduleByTimestampNt("bstart", &benchSchedStart, startTime, {benchOn, output});
+		engine->executor.scheduleByTimestampNt("bend", &benchSchedEnd, endTime, {benchOff, output});
 
 		// Wait one full cycle time for the event + delay to happen
 		chThdSleepMicroseconds(onTimeUs + offTimeUs);

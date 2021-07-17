@@ -101,8 +101,6 @@
 #include "cj125.h"
 #endif /* EFI_CJ125 */
 
-EXTERN_ENGINE;
-
 #if !EFI_UNIT_TEST
 
 /**
@@ -698,7 +696,7 @@ void initEngineContoller(DECLARE_ENGINE_PARAMETER_SUFFIX) {
  * UNUSED_SIZE constants.
  */
 #ifndef RAM_UNUSED_SIZE
-#define RAM_UNUSED_SIZE 1350
+#define RAM_UNUSED_SIZE 1300
 #endif
 #ifndef CCM_UNUSED_SIZE
 #define CCM_UNUSED_SIZE 300

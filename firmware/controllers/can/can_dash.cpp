@@ -19,8 +19,6 @@
 #include "vehicle_speed.h"
 #include "rtc_helper.h"
 #include "fuel_math.h"
-EXTERN_ENGINE;
-
 // CAN Bus ID for broadcast
 /**
  * e46 data is from http://forums.bimmerforums.com/forum/showthread.php?1887229
@@ -28,6 +26,8 @@ EXTERN_ENGINE;
  * Same for Mini Cooper? http://vehicle-reverse-engineering.wikia.com/wiki/MINI
  *
  * All the below packets are using 500kb/s
+ *
+ * for verbose use "set debug_mode 26" command in console
  *
  */
 #define CAN_BMW_E46_SPEED             0x153

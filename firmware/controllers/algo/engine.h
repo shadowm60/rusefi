@@ -19,6 +19,7 @@
 #include "buttonshift.h"
 #include "gear_controller.h"
 #include "limp_manager.h"
+#include "pin_repository.h"
 
 #if EFI_SIGNAL_EXECUTOR_ONE_TIMER
 // PROD real firmware uses this implementation
@@ -88,6 +89,8 @@ public:
 	int triggerActivitySecond = 0;
 
 	const char *prevOutputName = nullptr;
+
+	PinRepository pinRepository;
 
 	InjectionEvent primeInjEvent;
 
@@ -401,4 +404,8 @@ void doScheduleStopEngine(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
 #define HW_CHECK_RPM 200
 
-
+// These externs aren't needed for unit tests - everything is injected instead
+#if !EFI_UNIT_TEST
+extern Engine ___engine;
+extern Engine *engine;
+#endif // EFI_UNIT_TEST

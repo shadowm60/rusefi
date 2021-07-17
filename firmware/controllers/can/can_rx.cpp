@@ -11,9 +11,6 @@
 #include "global.h"
 #include "engine.h"
 
-EXTERN_ENGINE
-;
-
 typedef float fsio_table_8x8_f32t_linear[FSIO_TABLE_8 * FSIO_TABLE_8];
 
 bool acceptCanRx(int sid DECLARE_ENGINE_PARAMETER_SUFFIX) {
@@ -59,6 +56,7 @@ bool acceptCanRx(int sid DECLARE_ENGINE_PARAMETER_SUFFIX) {
 #include "engine.h"
 #include "can_sensor.h"
 #include "can_vss.h"
+#include "rusefi_wideband.h"
 
 /**
  * this build-in CAN sniffer is very basic but that's our CAN sniffer

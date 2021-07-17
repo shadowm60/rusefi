@@ -17,8 +17,6 @@
 #include "fsio_impl.h"
 #include "engine_configuration.h"
 
-EXTERN_ENGINE;
-
 static void hellenWbo() {
 	engineConfiguration->enableAemXSeries = true;
 }
@@ -117,7 +115,6 @@ void setBoardConfigOverrides(void) {
 
 	engineConfiguration->canTxPin = GPIOD_1;
 	engineConfiguration->canRxPin = GPIOD_0;
-	hellenWbo();
 }
 
 void setPinConfigurationOverrides(void) {
@@ -171,6 +168,8 @@ void setBoardDefaultConfiguration(void) {
 
 	strcpy(CONFIG(engineMake), ENGINE_MAKE_MERCEDES);
 	strcpy(CONFIG(engineCode), "");
+
+	hellenWbo();
 }
 
 /**

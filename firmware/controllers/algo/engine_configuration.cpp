@@ -92,9 +92,10 @@
 #include "hip9011.h"
 #endif
 
+#include "hardware.h"
+
 #if EFI_PROD_CODE
 #include "init.h"
-#include "hardware.h"
 #include "board.h"
 #endif /* EFI_PROD_CODE */
 
@@ -105,8 +106,6 @@
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
 #endif
-
-EXTERN_ENGINE;
 
 //#define TS_DEFAULT_SPEED 115200
 #define TS_DEFAULT_SPEED 38400
@@ -173,11 +172,13 @@ void incrementGlobalConfigurationVersion(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 #if EFI_DEFAILED_LOGGING
 	efiPrintf("set globalConfigurationVersion=%d", globalConfigurationVersion);
 #endif /* EFI_DEFAILED_LOGGING */
+
+	applyNewHardwareSettings(PASS_ENGINE_PARAMETER_SIGNATURE);
+
 /**
  * All these callbacks could be implemented as listeners, but these days I am saving RAM
  */
 #if EFI_PROD_CODE
-	applyNewHardwareSettings();
 	reconfigureSensors();
 #endif /* EFI_PROD_CODE */
 	engine->preCalculate(PASS_ENGINE_PARAMETER_SIGNATURE);

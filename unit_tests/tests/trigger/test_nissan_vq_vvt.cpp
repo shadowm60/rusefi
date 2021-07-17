@@ -58,7 +58,7 @@ static void scheduleTriggerEvents(TriggerWaveform *shape,
 			param->vvtBankIndex = vvtBankIndex;
 
 			scheduling_s *sch = new scheduling_s();
-			engine->executor.scheduleByTimestamp(sch, timeScale * 1000 * angle, { func, param });
+			engine->executor.scheduleByTimestamp("test", sch, timeScale * 1000 * angle, { func, param });
 			totalIndex++;
 		}
 	}
@@ -74,7 +74,7 @@ TEST(nissan, vq_vvt) {
 
 	{
 		static TriggerWaveform crank;
-		initializeNissanVQcrank(&crank);
+		initializeNissanVQ35crank(&crank);
 
 		scheduleTriggerEvents(&crank,
 				/* timeScale */ 1,
@@ -132,6 +132,5 @@ TEST(nissan, vq_vvt) {
 	ASSERT_NEAR(-testVvtOffset, tc->vvtPosition[0][0], EPS2D);
 	ASSERT_NEAR(-testVvtOffset, tc->vvtPosition[1][0], EPS2D);
 
-// todo: reducing warning here is a separate story
-	EXPECT_EQ(1, eth.recentWarnings()->getCount());
+	EXPECT_EQ(0, eth.recentWarnings()->getCount());
 }

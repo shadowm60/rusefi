@@ -395,9 +395,12 @@ typedef enum {
 
 	TT_KAWA_KX450F = TT_TT_KAWA_KX450F,
 
-	TT_NISSAN_VQ = TT_TT_NISSAN_VQ,
+	TT_NISSAN_VQ35 = TT_TT_NISSAN_VQ35,
 
-	TT_VVT_NISSAN_VQ = TT_TT_VVT_NISSAN_VQ,
+	TT_VVT_NISSAN_VQ35 = TT_TT_VVT_NISSAN_VQ35,
+
+	TT_NISSAN_VQ30 = TT_TT_NISSAN_VQ30,
+
 
 	// do not forget to edit "#define trigger_type_e_enum" line in integration/rusefi_config.txt file to propogate new value to rusefi.ini TS project
 	// do not forget to invoke "gen_config.bat" once you make changes to integration/rusefi_config.txt
@@ -405,7 +408,7 @@ typedef enum {
 	//
 	// Another point: once you add a new trigger, run get_trigger_images.bat which would run rusefi_test.exe from unit_tests
 	//
-	TT_UNUSED = 60, // this is used if we want to iterate over all trigger types
+	TT_UNUSED = 61, // this is used if we want to iterate over all trigger types
 
 	Force_4_bytes_size_trigger_type = ENUM_32_BITS,
 } trigger_type_e; // TriggerProcessor.java has this "trigger_type_e" name hard-coded!
@@ -447,7 +450,7 @@ typedef enum  __attribute__ ((__packed__)) {
 	/**
 	 * This mode is useful for troubleshooting and research - events are logged but no effects on phase synchronization
 	 */
-	VVT_INACTIVE = 0,
+	VVT_INACTIVE = VM_VVT_INACTIVE,
 
 	/**
 	 * Single-tooth cam sensor mode where TDC and cam signal happen in opposite 360 degree of 720 degree engine cycle
@@ -500,6 +503,8 @@ typedef enum {
 	LM_REAL_MAF = 4,
 
 	LM_ALPHA_N = 5,
+
+	LM_LUA = 6,
 
 	// This mode is for unit testing only, so that tests don't have to rely on a particular real airmass mode
 	LM_MOCK = 100,

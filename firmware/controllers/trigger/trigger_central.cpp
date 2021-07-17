@@ -45,6 +45,9 @@
 WaveChart waveChart;
 #endif /* EFI_ENGINE_SNIFFER */
 
+static scheduling_s debugToggleScheduling;
+#define DEBUG_PIN_DELAY US2NT(60)
+
 trigger_central_s::trigger_central_s() : hwEventCounters() {
 }
 
@@ -75,8 +78,6 @@ int TriggerCentral::getHwEventCounter(int index) const {
 }
 
 #if EFI_SHAFT_POSITION_INPUT
-
-EXTERN_ENGINE;
 
 angle_t TriggerCentral::getVVTPosition(uint8_t bankIndex, uint8_t camIndex) {
 	if (bankIndex >= BANKS_COUNT || camIndex >= CAMS_PER_BANK) {
@@ -121,6 +122,22 @@ static void syncAndReport(TriggerCentral *tc, int mod, int remainder DECLARE_ENG
 		tsOutputChannels.debugIntField1++;
 #endif /* EFI_TUNER_STUDIO */
 	}
+}
+
+static void turnOffAllDebugFields(void *arg) {
+	(void)arg;
+#if EFI_PROD_CODE
+	for (int index = 0;index<TRIGGER_INPUT_PIN_COUNT;index++) {
+		if (CONFIG(triggerInputDebugPins[index]) != GPIO_UNASSIGNED) {
+			writePad("trigger debug", CONFIG(triggerInputDebugPins[index]), 0);
+		}
+	}
+	for (int index = 0;index<CAM_INPUTS_COUNT;index++) {
+		if (CONFIG(camInputsDebug[index]) != GPIO_UNASSIGNED) {
+			writePad("cam debug", CONFIG(camInputsDebug[index]), 0);
+		}
+	}
+#endif /* EFI_PROD_CODE */
 }
 
 void hwHandleVvtCamSignal(trigger_value_e front, efitick_t nowNt, int index DECLARE_ENGINE_PARAMETER_SUFFIX) {
@@ -175,6 +192,13 @@ void hwHandleVvtCamSignal(trigger_value_e front, efitick_t nowNt, int index DECL
 	if (!vvtWithRealDecoder(engineConfiguration->vvtMode[camIndex]) && !isImportantFront) {
 		// todo: there should be a way to always use real trigger code for this logic?
 		return;
+	}
+
+	if (isImportantFront && CONFIG(camInputsDebug[index]) != GPIO_UNASSIGNED) {
+#if EFI_PROD_CODE
+		writePad("cam debug", CONFIG(camInputsDebug[index]), 1);
+#endif /* EFI_PROD_CODE */
+		engine->executor.scheduleByTimestampNt("dbg_on", &debugToggleScheduling, nowNt + DEBUG_PIN_DELAY, &turnOffAllDebugFields);
 	}
 
 	if (CONFIG(displayLogicLevelsInEngineSniffer) && isImportantFront) {
@@ -265,12 +289,17 @@ void hwHandleVvtCamSignal(trigger_value_e front, efitick_t nowNt, int index DECL
 
 	tc->vvtSyncTimeNt[bankIndex][camIndex] = nowNt;
 
-    // we do NOT clamp VVT position into the [0, engineCycle) range - we expect vvtOffset to be configured so that
-    // it's not necessary
-	tc->vvtPosition[bankIndex][camIndex] = engineConfiguration->vvtOffsets[bankIndex * CAMS_PER_BANK + camIndex] - currentPosition;
-	if (tc->vvtPosition[bankIndex][camIndex] < -ENGINE(engineCycle) / 2 || tc->vvtPosition[bankIndex][camIndex] > ENGINE(engineCycle) / 2) {
-		warning(CUSTOM_ERR_VVT_OUT_OF_RANGE, "Please adjust vvtOffset since position %f", tc->vvtPosition);
+	auto vvtPosition = engineConfiguration->vvtOffsets[bankIndex * CAMS_PER_BANK + camIndex] - currentPosition;
+
+	// Wrap VVT position in to the range [-360, 360)
+	while (vvtPosition < -360) {
+		vvtPosition += 720;
 	}
+	while (vvtPosition >= 360) {
+		vvtPosition -= 720;
+	}
+
+	tc->vvtPosition[bankIndex][camIndex] = vvtPosition;
 
 	if (index != 0) {
 		// at the moment we use only primary VVT to sync crank phase
@@ -384,6 +413,13 @@ void handleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp DECLA
 			 */
 			return;
 		}
+	}
+
+	if (CONFIG(triggerInputDebugPins[signalIndex]) != GPIO_UNASSIGNED) {
+#if EFI_PROD_CODE
+		writePad("trigger debug", CONFIG(triggerInputDebugPins[signalIndex]), 1);
+#endif /* EFI_PROD_CODE */
+		engine->executor.scheduleByTimestampNt("dbg_off", &debugToggleScheduling, timestamp + DEBUG_PIN_DELAY, &turnOffAllDebugFields);
 	}
 
 #if EFI_TOOTH_LOGGER
@@ -582,8 +618,6 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		mainTriggerCallback(triggerIndexForListeners, timestamp PASS_ENGINE_PARAMETER_SUFFIX);
 	}
 }
-
-EXTERN_ENGINE;
 
 static void triggerShapeInfo(void) {
 #if EFI_PROD_CODE || EFI_SIMULATOR

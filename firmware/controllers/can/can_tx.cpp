@@ -17,8 +17,7 @@
 #include "obd2.h"
 #include "can_sensor.h"
 #include "thread_priority.h"
-
-EXTERN_ENGINE;
+#include "rusefi_wideband.h"
 
 extern CanListener* canListeners_head;
 
@@ -56,6 +55,10 @@ void CanWrite::PeriodicTask(efitime_t nowNt) {
 	}
 
 	updateDash(cycle);
+
+	if (CONFIG(enableAemXSeries) && cycle.isInterval(CI::_50ms)) {
+		sendWidebandInfo();
+	}
 
 	cycleCount++;
 }

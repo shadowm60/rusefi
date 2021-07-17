@@ -44,8 +44,6 @@
 #include "engine_configuration.h"
 		extern persistent_config_container_s persistentState;
 
-EXTERN_ENGINE;
-
 void event_trigger_position_s::setAngle(angle_t angle DECLARE_ENGINE_PARAMETER_SUFFIX) {
 	findTriggerPosition(&ENGINE(triggerCentral.triggerShape),
 			&ENGINE(triggerCentral.triggerFormDetails),
@@ -181,7 +179,7 @@ operation_mode_e TriggerWaveform::getOperationMode() const {
 extern bool printTriggerDebug;
 #endif
 
-int TriggerWaveform::getExpectedEventCount(int channelIndex) const {
+size_t TriggerWaveform::getExpectedEventCount(int channelIndex) const {
 	return expectedEventCount[channelIndex];
 }
 
@@ -212,6 +210,10 @@ void TriggerWaveform::calculateExpectedEventCounts(bool useOnlyRisingEdgeForTrig
 
 void TriggerWaveform::addEvent720(angle_t angle, trigger_wheel_e const channelIndex, trigger_value_e const state) {
 	addEvent(angle / 720, channelIndex, state);
+}
+
+void TriggerWaveform::addEvent360(angle_t angle, trigger_wheel_e const channelIndex, trigger_value_e const state) {
+	addEvent(CRANK_MODE_MULTIPLIER * angle / 720, channelIndex, state);
 }
 
 void TriggerWaveform::addEventAngle(angle_t angle, trigger_wheel_e const channelIndex, trigger_value_e const state) {
@@ -543,12 +545,16 @@ void TriggerWaveform::initializeTriggerWaveform(operation_mode_e ambiguousOperat
 		configureFordAspireTriggerWaveform(this);
 		break;
 
-	case TT_VVT_NISSAN_VQ:
+	case TT_VVT_NISSAN_VQ35:
 		initializeNissanVQvvt(this);
 		break;
 
-	case TT_TT_NISSAN_VQ:
-		initializeNissanVQcrank(this);
+	case TT_NISSAN_VQ30:
+		initializeNissanVQ30cam(this);
+		break;
+
+	case TT_NISSAN_VQ35:
+		initializeNissanVQ35crank(this);
 		break;
 
 	case TT_KAWA_KX450F:
