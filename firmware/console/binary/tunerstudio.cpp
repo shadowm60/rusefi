@@ -59,10 +59,9 @@
  *
  */
 
-#include "global.h"
+#include "pch.h"
 #include "os_access.h"
 
-#include "allsensors.h"
 #include "tunerstudio.h"
 #include "tunerstudio_impl.h"
 
@@ -70,7 +69,6 @@
 #include "flash_main.h"
 
 #include "tunerstudio_io.h"
-#include "tunerstudio_outputs.h"
 #include "malfunction_central.h"
 #include "console_io.h"
 #include "crc.h"
@@ -80,14 +78,10 @@
 #include "electronic_throttle.h"
 
 #include <string.h>
-#include "engine_configuration.h"
 #include "bench_test.h"
 #include "svnversion.h"
-#include "loggingcentral.h"
 #include "status_loop.h"
 #include "mmc_card.h"
-#include "perf_trace.h"
-#include "thread_priority.h"
 
 #include "signature.h"
 
@@ -431,8 +425,6 @@ static bool isKnownCommand(char command) {
 			|| command == TS_GET_FIRMWARE_VERSION
 			|| command == TS_PERF_TRACE_BEGIN
 			|| command == TS_PERF_TRACE_GET_BUFFER
-			|| command == TS_SD_R_COMMAND
-			|| command == TS_SD_W_COMMAND
 			|| command == TS_GET_CONFIG_ERROR;
 }
 
@@ -713,15 +705,6 @@ int TunerStudioBase::handleCrcCommand(TsChannelBase* tsChannel, char *data, int 
 	case TS_GET_FIRMWARE_VERSION:
 		handleGetVersion(tsChannel);
 		break;
-#if (EFI_FILE_LOGGING && !HAL_USE_USB_MSD) || EFI_SIMULATOR
-	// This is only enabled on ECUs without USB mass storage
-	case TS_SD_R_COMMAND:
-		handleTsR(tsChannel, data);
-		break;
-	case TS_SD_W_COMMAND:
-		handleTsW(tsChannel, data);
-		break;
-#endif // (EFI_FILE_LOGGING && !HAL_USE_USB_MSD)
 #if EFI_TEXT_LOGGING
 	case TS_GET_TEXT:
 		handleGetText(tsChannel);

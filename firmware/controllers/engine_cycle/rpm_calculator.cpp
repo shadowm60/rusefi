@@ -13,15 +13,10 @@
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
 
-#include "globalaccess.h"
+#include "pch.h"
 #include "os_access.h"
-#include "engine.h"
-#include "rpm_calculator.h"
 
 #include "trigger_central.h"
-#include "engine_configuration.h"
-#include "engine_math.h"
-#include "perf_trace.h"
 #include "tooth_logger.h"
 
 #if EFI_PROD_CODE
@@ -296,13 +291,11 @@ void rpmShaftPositionCallback(trigger_event_e ckpSignalType,
 #endif /* EFI_SENSOR_CHART */
 
 	// Always update instant RPM even when not spinning up
-	engine->triggerCentral.triggerState.updateInstantRpm(&engine->triggerCentral.triggerFormDetails, nowNt PASS_ENGINE_PARAMETER_SUFFIX);
+	engine->triggerCentral.triggerState.updateInstantRpm(&engine->triggerCentral.triggerFormDetails, index, nowNt PASS_ENGINE_PARAMETER_SUFFIX);
 
 	if (rpmState->isSpinningUp()) {
 		float instantRpm = engine->triggerCentral.triggerState.getInstantRpm();
 
-		// validate instant RPM - we shouldn't skip the cranking state
-		instantRpm = minF(instantRpm, CONFIG(cranking.rpm) - 1);
 		rpmState->assignRpmValue(instantRpm);
 #if 0
 		efiPrintf("** RPM: idx=%d sig=%d iRPM=%d", index, ckpSignalType, instantRpm);

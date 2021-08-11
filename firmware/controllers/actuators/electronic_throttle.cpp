@@ -72,18 +72,14 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "global.h"
+#include "pch.h"
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 
 #include "electronic_throttle_impl.h"
-#include "engine.h"
-#include "tps.h"
-#include "sensor.h"
 #include "dc_motor.h"
 #include "dc_motors.h"
 #include "pid_auto_tune.h"
-#include "thread_priority.h"
 
 #if defined(HAS_OS_ACCESS)
 #error "Unexpected OS ACCESS HERE"
@@ -870,6 +866,8 @@ void setDefaultEtbParameters(DECLARE_CONFIG_PARAMETER_SIGNATURE) {
 	// voltage, not ADC like with TPS
 	engineConfiguration->throttlePedalUpVoltage = 0;
 	engineConfiguration->throttlePedalWOTVoltage = 5;
+
+	engineConfiguration->throttlePedalSecondaryWOTVoltage = 5.0;
 
 	engineConfiguration->etb = {
 		1,		// Kp

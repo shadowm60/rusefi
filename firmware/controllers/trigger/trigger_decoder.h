@@ -90,7 +90,7 @@ public:
 	 * this is important for crank-based virtual trigger and VVT magic
 	 */
 	void incrementTotalEventCounter();
-	bool syncSymmetricalCrank(int mod, int remainder);
+	angle_t syncSymmetricalCrank(int divider, int remainder, angle_t engineCycle);
 
 	efitime_t getTotalEventCounter() const;
 
@@ -202,7 +202,7 @@ public:
 	void movePreSynchTimestamps(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
-	void updateInstantRpm(TriggerFormDetails *triggerFormDetails, efitick_t nowNt DECLARE_ENGINE_PARAMETER_SUFFIX);
+	void updateInstantRpm(TriggerFormDetails *triggerFormDetails, uint32_t index, efitick_t nowNt DECLARE_ENGINE_PARAMETER_SUFFIX);
 #endif
 	/**
 	 * Update timeOfLastEvent[] on every trigger event - even without synchronization
@@ -211,7 +211,7 @@ public:
 	void setLastEventTimeForInstantRpm(efitick_t nowNt DECLARE_ENGINE_PARAMETER_SUFFIX);
 
 private:
-	float calculateInstantRpm(TriggerFormDetails *triggerFormDetails, efitick_t nowNt DECLARE_ENGINE_PARAMETER_SUFFIX);
+	float calculateInstantRpm(TriggerFormDetails *triggerFormDetails, uint32_t index, efitick_t nowNt DECLARE_ENGINE_PARAMETER_SUFFIX);
 
 	float m_instantRpm = 0;
 	float m_instantRpmRatio = 0;

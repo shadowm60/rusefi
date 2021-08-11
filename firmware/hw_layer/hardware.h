@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include "global.h"
-
 void startHardware(DECLARE_ENGINE_PARAMETER_SIGNATURE);
+void stopHardware(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 
 #if HAL_USE_SPI
 
@@ -45,8 +44,6 @@ brain_pin_e getSckPin(spi_device_e device);
 #endif /* HAL_USE_SPI */
 
 #ifdef __cplusplus
-
-#include "engine.h"
 
 void applyNewHardwareSettings(DECLARE_ENGINE_PARAMETER_SIGNATURE);
 

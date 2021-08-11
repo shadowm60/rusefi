@@ -20,16 +20,12 @@
  *
  */
 
-#include "global.h"
+#include "pch.h"
+
 #include "os_access.h"
-#include "engine_configuration.h"
 #include "fsio_impl.h"
-#include "allsensors.h"
-#include "interpolation.h"
-#include "engine_math.h"
 #include "speed_density.h"
 #include "advance_map.h"
-#include "sensor.h"
 #include "flash_main.h"
 
 #include "hip9011_logic.h"
@@ -402,8 +398,10 @@ void setDefaultGppwmParameters(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	}
 }
 
-void setDefaultEngineNoiseTable(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
+static void setDefaultEngineNoiseTable(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 	setRpmTableBin(engineConfiguration->knockNoiseRpmBins, ENGINE_NOISE_CURVE_SIZE);
+
+	engineConfiguration->knockSamplingDuration = 45;
 
 	engineConfiguration->knockNoise[0] = 2; // 800
 	engineConfiguration->knockNoise[1] = 2; // 1700
@@ -589,7 +587,11 @@ static void setDefaultEngineConfiguration(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
 
 	engineConfiguration->idleRpmPid.minValue = 0;
 	engineConfiguration->idleRpmPid.maxValue = 99;
-	engineConfiguration->idlePidDeactivationTpsThreshold = 2;
+	/**
+	 * between variation between different sensor and weather and fabrication tolerance
+	 * five percent looks like a safer default
+	 */
+	engineConfiguration->idlePidDeactivationTpsThreshold = 5;
 
 	engineConfiguration->idle.solenoidFrequency = 200;
 	// set idle_position 50
@@ -942,11 +944,17 @@ void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e
 	case HELLEN_NB2:
 		setMiataNB2_Hellen72(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
+	case HELLEN_NB2_36:
+		setMiataNB2_Hellen72_36(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
 	case HELLEN72_ETB:
 		setHellen72etb(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
-	case HELLEN_121_NISSAN:
-		setHellen121nissan(PASS_CONFIG_PARAMETER_SIGNATURE);
+	case HELLEN_121_NISSAN_4_CYL:
+		setHellen121nissanQR(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
+	case HELLEN_121_NISSAN_6_CYL:
+		setHellen121nissanVQ(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 	case HELLEN_121_VAG_5_CYL:
 	    setHellen121Vag_5_cyl(PASS_CONFIG_PARAMETER_SIGNATURE);
@@ -965,6 +973,7 @@ void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e
 	case HELLEN_88_BMW:
 	case HELLEN_134_BMW:
 	case HELLEN_154_VAG:
+	case HELLEN_154_HYUNDAI:
 		break;
 	case HELLEN_NA6:
 	case HELLEN_NA94:
@@ -1103,6 +1112,9 @@ void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e
 		break;
 	case TEST_33816:
 		setTest33816EngineConfiguration(PASS_CONFIG_PARAMETER_SIGNATURE);
+		break;
+	case TEST_ROTARY:
+		setRotary(PASS_CONFIG_PARAMETER_SIGNATURE);
 		break;
 #endif // HW_FRANKENSO
 #ifdef HW_SUBARU_EG33

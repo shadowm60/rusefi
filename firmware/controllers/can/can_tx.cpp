@@ -7,16 +7,14 @@
  * @author Matthew Kennedy, (c) 2020
  */
 
-#include "globalaccess.h"
-#if EFI_CAN_SUPPORT
+#include "pch.h"
 
-#include "engine.h"
+#if EFI_CAN_SUPPORT
 #include "can.h"
 #include "can_hw.h"
 #include "can_dash.h"
 #include "obd2.h"
 #include "can_sensor.h"
-#include "thread_priority.h"
 #include "rusefi_wideband.h"
 
 extern CanListener* canListeners_head;
