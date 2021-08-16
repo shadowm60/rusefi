@@ -81,7 +81,7 @@ public:
 
 	bool Register(Sensor* sensor) {
 		// If there's somebody already here - a consumer tried to double-register a sensor
-		if (m_sensor) {
+		if (m_sensor && m_sensor != sensor) {
 			// This sensor has already been registered. Don't re-register it.
 			firmwareError(CUSTOM_OBD_26, "Duplicate registration for sensor \"%s\"", sensor->getSensorName());
 			return false;
@@ -259,6 +259,12 @@ bool Sensor::Register() {
 
 /*static*/ const char* Sensor::getSensorName(SensorType type) {
 	return s_sensorNames[static_cast<size_t>(type)];
+}
+
+/*static*/ bool Sensor::s_inhibitSensorTimeouts = false;
+
+/*static*/ void Sensor::inhibitTimeouts(bool inhibit) {
+	Sensor::s_inhibitSensorTimeouts = inhibit;
 }
 
 // Print information about all sensors
