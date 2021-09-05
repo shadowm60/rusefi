@@ -1,8 +1,8 @@
 //
-// was generated automatically by rusEfi tool ConfigDefinition.jar based on gen_config.sh integration/rusefi_config.txt
+// was generated automatically by rusEFI tool ConfigDefinition.jar based on gen_config.sh integration/rusefi_config.txt
 //
 
 #define SIGNATURE_BOARD mre_f7
-#define SIGNATURE_DATE 2021.02.21
-#define SIGNATURE_HASH 1540434999
-#define TS_SIGNATURE "rusEFI 2021.02.21.mre_f7.1540434999"
+#define SIGNATURE_DATE 2021.09.05
+#define SIGNATURE_HASH 1443311477
+#define TS_SIGNATURE "rusEFI 2021.09.05.mre_f7.1443311477"
