@@ -5,6 +5,7 @@ import com.rusefi.ConsoleUI;
 import com.rusefi.Launcher;
 import com.rusefi.Timeouts;
 import com.rusefi.autodetect.PortDetector;
+import com.rusefi.autodetect.SerialAutoChecker;
 import com.rusefi.io.DfuHelper;
 import com.rusefi.io.IoStream;
 import com.rusefi.io.serial.SerialIoStreamJSerialComm;
@@ -12,11 +13,11 @@ import com.rusefi.ui.StatusWindow;
 import com.rusefi.ui.util.URLLabel;
 
 import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.File;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static com.rusefi.StartupFrame.appendBundleName;
 
@@ -24,24 +25,8 @@ import static com.rusefi.StartupFrame.appendBundleName;
  * @see FirmwareFlasher
  */
 public class DfuFlasher {
-    public static final String DFU_BINARY = Launcher.TOOLS_PATH + File.separator + "DfuSe/DfuSeCommand.exe";
+    private static final String DFU_BINARY = Launcher.TOOLS_PATH + File.separator + "DfuSe/DfuSeCommand.exe";
     private static final String DFU_SETUP_EXE = "https://github.com/rusefi/rusefi_external_utils/raw/master/DFU_mode/DfuSe_Demo_V3.0.6_Setup.exe";
-
-    private final JButton button = new JButton("Auto Program via DFU");
-    private final JButton manualButton = new JButton("Manual Program via DFU");
-
-    public DfuFlasher(JComboBox<String> comboPorts) {
-        button.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent event) {
-                // todo: better usability would be to disable "Program" port in case of no ports found
-                Object selectedItem = comboPorts.getSelectedItem();
-                doAutoDfu(selectedItem, comboPorts);
-            }
-        });
-
-        manualButton.addActionListener(e -> runDfuProgramming());
-    }
 
     public static void doAutoDfu(Object selectedItem, JComponent parent) {
         if (selectedItem == null) {
@@ -51,18 +36,34 @@ public class DfuFlasher {
         String port = selectedItem.toString();
         StringBuilder messages = new StringBuilder();
 
+        AtomicBoolean isSignatureValidated = new AtomicBoolean(true);
         if (!PortDetector.isAutoPort(port)) {
             messages.append("Using selected " + port + "\n");
             IoStream stream = SerialIoStreamJSerialComm.openPort(port);
-            DfuHelper.sendDfuRebootCommand(stream, messages);
+            AtomicReference<String> signature = new AtomicReference<>();
+            new SerialAutoChecker(port, new CountDownLatch(1)).checkResponse(stream, new Function<SerialAutoChecker.CallbackContext, Void>() {
+                @Override
+                public Void apply(SerialAutoChecker.CallbackContext callbackContext) {
+                    signature.set(callbackContext.getSignature());
+                    return null;
+                }
+            });
+            if (signature.get() == null) {
+                JOptionPane.showMessageDialog(ConsoleUI.getFrame(), "rusEFI has not responded on selected " + port + "\n" +
+                        "Maybe try automatic serial port detection?");
+                return;
+            }
+            boolean isSignatureValidatedLocal = DfuHelper.sendDfuRebootCommand(parent, signature.get(), stream, messages);
+            isSignatureValidated.set(isSignatureValidatedLocal);
         } else {
             messages.append("Auto-detecting port...\n");
             // instead of opening the just-detected port we execute the command using the same stream we used to discover port
             // it's more reliable this way
-            port = PortDetector.autoDetectSerial(stream -> {
-                DfuHelper.sendDfuRebootCommand(stream, messages);
+            port = PortDetector.autoDetectSerial(callbackContext -> {
+                boolean isSignatureValidatedLocal = DfuHelper.sendDfuRebootCommand(parent, callbackContext.getSignature(), callbackContext.getStream(), messages);
+                isSignatureValidated.set(isSignatureValidatedLocal);
                 return null;
-            });
+            }).getSerialPort();
             if (port == null) {
                 JOptionPane.showMessageDialog(ConsoleUI.getFrame(), "rusEFI serial port not detected");
                 return;
@@ -73,7 +74,19 @@ public class DfuFlasher {
         StatusWindow wnd = new StatusWindow();
         wnd.showFrame(appendBundleName("DFU status " + Launcher.CONSOLE_VERSION));
         wnd.appendMsg(messages.toString());
-        ExecHelper.submitAction(() -> executeDFU(wnd), DfuFlasher.class + " thread");
+        if (isSignatureValidated.get()) {
+            if (!ProgramSelector.IS_WIN) {
+                wnd.appendMsg("Switched to DFU mode!");
+                wnd.appendMsg("rusEFI console can only program on Windows");
+                return;
+            }
+            ExecHelper.submitAction(() -> {
+                timeForDfuSwitch(wnd);
+                executeDFU(wnd);
+            }, DfuFlasher.class + " thread");
+        } else {
+            wnd.appendMsg("Please use manual DFU to change bundle type.");
+        }
     }
 
     public static void runDfuProgramming() {
@@ -83,12 +96,6 @@ public class DfuFlasher {
     }
 
     private static void executeDFU(StatusWindow wnd) {
-        wnd.appendMsg("Giving time for USB enumeration...");
-        try {
-            Thread.sleep(3 * Timeouts.SECOND);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException(e);
-        }
         AtomicBoolean errorReported = new AtomicBoolean();
         StringBuffer stdout = new StringBuffer();
         String errorResponse = ExecHelper.executeCommand(FirmwareFlasher.BINARY_LOCATION,
@@ -130,21 +137,18 @@ public class DfuFlasher {
         wnd.appendMsg("Please power cycle device to exit DFU mode");
     }
 
+    private static void timeForDfuSwitch(StatusWindow wnd) {
+        wnd.appendMsg("Giving time for USB enumeration...");
+        try {
+            Thread.sleep(2 * Timeouts.SECOND);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static String getDfuCommand() {
         String fileName = IniFileModel.findFile(Launcher.INPUT_FILES_PATH, "rusefi", ".dfu");
 
         return DFU_BINARY + " -c -d --v --fn " + fileName;
-    }
-
-    /**
-     * connect via serial + initiate software DFU jump + program
-     */
-    public Component getAutoButton() {
-        return button;
-    }
-
-    // todo: maybe not couple these two different buttons in same class?
-    public Component getManualButton() {
-        return manualButton;
     }
 }
