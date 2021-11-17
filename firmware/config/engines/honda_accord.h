@@ -8,8 +8,7 @@
 #pragma once
 #include "engine_configuration.h"
 
-void setHondaAccordConfigurationTwoWires(DECLARE_CONFIG_PARAMETER_SIGNATURE);
-void setHondaAccordConfigurationDip(DECLARE_CONFIG_PARAMETER_SIGNATURE);
+void setHondaAccordConfigurationTwoWires();
 
 /**
  * https://technet.ff-squad.com/wiring.obd1.htm
@@ -19,4 +18,4 @@ void setHondaAccordConfigurationDip(DECLARE_CONFIG_PARAMETER_SIGNATURE);
  * middle = 4 total, 1/cyl
  * inner CID cylinder ID  = 1 total, 1/cam
  */
-void setHondaAccordConfiguration1_24(DECLARE_CONFIG_PARAMETER_SIGNATURE);
+void setHondaAccordConfiguration1_24();

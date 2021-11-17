@@ -127,13 +127,18 @@ void setBoardDefaultConfiguration(void) {
 
 	engineConfiguration->isSdCardEnabled = true;
 
-	CONFIG(enableSoftwareKnock) = true;
+	engineConfiguration->enableSoftwareKnock = true;
 
+	// these stm32 pins do not match hellen_meta, is that because hellenNA6 is not using latest MCU version?
 	engineConfiguration->acRelayPin = GPIOH_15; // 1J - AC Relay
 	engineConfiguration->fuelPumpPin = GPIOG_2;	// OUT_IO9
 	engineConfiguration->idle.solenoidPin = GPIOD_14;	// OUT_PWM5
 	engineConfiguration->fanPin = GPIOD_12;	// OUT_PWM8
 	engineConfiguration->mainRelayPin = GPIOI_2;	// OUT_LOW3
+	engineConfiguration->tachOutputPin = GPIOI_0;
+	engineConfiguration->malfunctionIndicatorPin = GPIOG_9;
+
+	engineConfiguration->vehicleSpeedSensorInputPin = H144_IN_VSS;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
@@ -142,7 +147,7 @@ void setBoardDefaultConfiguration(void) {
 	setOperationMode(engineConfiguration, FOUR_STROKE_CRANK_SENSOR);
 	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_60_2;
 	engineConfiguration->useOnlyRisingEdgeForTrigger = true;
-	setAlgorithm(LM_SPEED_DENSITY PASS_CONFIG_PARAMETER_SUFFIX);
+	setAlgorithm(LM_SPEED_DENSITY);
 
 	engineConfiguration->specs.cylindersCount = 4;
 	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
@@ -168,5 +173,5 @@ void setSdCardConfigurationOverrides(void) {
 //	engineConfiguration->spi2misoPin = GPIOB_14;
 //	engineConfiguration->spi2sckPin = GPIOB_13;
 //	engineConfiguration->sdCardCsPin = GPIOB_12;
-	CONFIG(is_enabled_spi_3) = true;
+	engineConfiguration->is_enabled_spi_3 = true;
 }

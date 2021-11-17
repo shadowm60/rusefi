@@ -12,22 +12,23 @@
 #include "cyclic_buffer.h"
 #include "table_helper.h"
 #include "wall_fuel_state_generated.h"
+#include "tps_accel_state_generated.h"
 
-typedef Map3D<TPS_TPS_ACCEL_TABLE, TPS_TPS_ACCEL_TABLE, float, float> tps_tps_Map3D_t;
+typedef Map3D<TPS_TPS_ACCEL_TABLE, TPS_TPS_ACCEL_TABLE, float, float, float> tps_tps_Map3D_t;
 
 /**
  * this object is used for MAP rate-of-change and TPS rate-of-change corrections
  */
-class AccelEnrichment {
+class AccelEnrichment : public tps_accel_state_s {
 public:
 	AccelEnrichment();
-	int getMaxDeltaIndex(DECLARE_ENGINE_PARAMETER_SIGNATURE);
-	float getMaxDelta(DECLARE_ENGINE_PARAMETER_SIGNATURE);
+	int getMaxDeltaIndex();
+	float getMaxDelta();
 
 	void resetAE();
 	void setLength(int length);
 	cyclic_buffer<float> cb;
-	void onNewValue(float currentValue DECLARE_ENGINE_PARAMETER_SUFFIX);
+	void onNewValue(float currentValue);
 	int onUpdateInvocationCounter = 0;
 };
 
@@ -36,22 +37,13 @@ public:
 	/**
 	 * @return Extra fuel squirt duration for TPS acceleration
 	 */
-	floatms_t getTpsEnrichment(DECLARE_ENGINE_PARAMETER_SIGNATURE);
-	void onEngineCycleTps(DECLARE_ENGINE_PARAMETER_SIGNATURE);
+	floatms_t getTpsEnrichment();
+	void onEngineCycleTps();
 	void resetFractionValues();
 	void resetAE();
-private:
-	/**
-	 * Used for Fractional TPS enrichment. 
-	 */
-	floatms_t accumulatedValue = 0;
-	floatms_t maxExtraPerCycle = 0;
-	floatms_t maxExtraPerPeriod = 0;
-	floatms_t maxInjectedPerPeriod = 0;
-	int cycleCnt = 0;
 };
 
-void initAccelEnrichment(DECLARE_ENGINE_PARAMETER_SIGNATURE);
+void initAccelEnrichment();
 
 void setTpsAccelThr(float value);
 void setTpsDecelThr(float value);

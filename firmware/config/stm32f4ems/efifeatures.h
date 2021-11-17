@@ -73,6 +73,10 @@
 #define HAL_TRIGGER_USE_PAL FALSE
 #endif /* HAL_TRIGGER_USE_PAL */
 
+#ifndef HAL_TRIGGER_USE_ADC
+#define HAL_TRIGGER_USE_ADC FALSE
+#endif /* HAL_TRIGGER_USE_ADC */
+
 /**
  * TunerStudio support.
  */
@@ -242,11 +246,27 @@
 #define EFI_USB_SERIAL TRUE
 #endif
 
-/**
- * Should PnP engine configurations be included in the binary?
- */
-#ifndef EFI_INCLUDE_ENGINE_PRESETS
-#define EFI_INCLUDE_ENGINE_PRESETS TRUE
+#define EFI_CONSOLE_USB_DEVICE SDU1
+
+// F42x has more memory, so we can:
+//  - use compressed USB MSD image (requires 32k of memory)
+//  - use perf trace (requires ~16k of memory)
+#ifdef EFI_IS_F42x
+	#define EFI_USE_COMPRESSED_INI_MSD
+	#define ENABLE_PERF_TRACE TRUE
+
+	#define LUA_USER_HEAP 20000
+	#define LUA_SYSTEM_HEAP 20000
+#else
+	// small memory F40x can't fit perf trace
+	#define ENABLE_PERF_TRACE FALSE
+
+	#define LUA_USER_HEAP 15000
+	#define LUA_SYSTEM_HEAP 12000
+#endif
+
+#ifndef EFI_LUA
+#define EFI_LUA TRUE
 #endif
 
 #ifndef EFI_ENGINE_SNIFFER
@@ -363,10 +383,16 @@
 #define EFI_CONSOLE_RX_BRAIN_PIN GPIOC_11
 #endif
 // todo: this should be detected automatically based on pin selection
+// https://github.com/rusefi/rusefi/issues/3536
+#ifndef EFI_CONSOLE_AF
 #define EFI_CONSOLE_AF 7
+#endif
 
 // todo: this should be detected automatically based on pin selection
+// https://github.com/rusefi/rusefi/issues/3536
+#ifndef TS_SERIAL_AF
 #define TS_SERIAL_AF 7
+#endif
 
 #ifndef LED_CRITICAL_ERROR_BRAIN_PIN
 #define LED_CRITICAL_ERROR_BRAIN_PIN GPIOD_14

@@ -90,7 +90,7 @@ template <int HeapIdx>
 static void* myAlloc(void* /*ud*/, void* ptr, size_t osize, size_t nsize) {
 	static_assert(HeapIdx < efi::size(heaps));
 
-	if (CONFIG(debugMode) == DBG_LUA) {
+	if (engineConfiguration->debugMode == DBG_LUA) {
 		switch (HeapIdx) {
 			case 0: tsOutputChannels.debugIntField1 = heaps[HeapIdx].used(); break;
 			case 1: tsOutputChannels.debugIntField2 = heaps[HeapIdx].used(); break;
@@ -116,43 +116,6 @@ static void* myAlloc(void* /*ud*/, void* ptr, size_t /*osize*/, size_t nsize) {
 }
 #endif // EFI_PROD_CODE
 
-class LuaHandle final {
-public:
-	LuaHandle() : LuaHandle(nullptr) { }
-	LuaHandle(lua_State* ptr) : m_ptr(ptr) { }
-
-	// Don't allow copying!
-	LuaHandle(const LuaHandle&) = delete;
-	LuaHandle& operator=(const LuaHandle&) = delete;
-
-	// Allow moving!
-	LuaHandle(LuaHandle&& rhs) {
-		m_ptr = rhs.m_ptr;
-		rhs.m_ptr = nullptr;
-	}
-
-	// Move assignment operator
-	LuaHandle& operator=(LuaHandle&& rhs) {
-		m_ptr = rhs.m_ptr;
-		rhs.m_ptr = nullptr;
-
-		return *this;
-	}
-
-	// Destruction cleans up lua state
-	~LuaHandle() {
-		if (m_ptr) {
-			efiPrintf("LUA: Tearing down instance...");
-			lua_close(m_ptr);
-		}
-	}
-
-	operator lua_State*() const { return m_ptr; }
-
-private:
-	lua_State* m_ptr;
-};
-
 static int luaTickPeriodMs;
 
 static int lua_setTickRate(lua_State* l) {
@@ -165,6 +128,19 @@ static int lua_setTickRate(lua_State* l) {
 	return 0;
 }
 
+static void loadLibraries(LuaHandle& ls) {
+	constexpr luaL_Reg libs[] = {
+		// TODO: do we even need the base lib?
+		//{ LUA_GNAME, luaopen_base },
+		{ LUA_MATHLIBNAME, luaopen_math },
+	};
+
+	for (size_t i = 0; i < efi::size(libs); i++) {
+		luaL_requiref(ls, libs[i].name, libs[i].func, 1);
+		lua_pop(ls, 1);
+	}
+}
+
 static LuaHandle setupLuaState(lua_Alloc alloc) {
 	LuaHandle ls = lua_newstate(alloc, NULL);
 
@@ -174,9 +150,8 @@ static LuaHandle setupLuaState(lua_Alloc alloc) {
 		return nullptr;
 	}
 
-	// load libraries
-	luaopen_base(ls);
-	luaopen_math(ls);
+	// Load Lua's own libraries
+	loadLibraries(ls);
 
 	// Load rusEFI hooks
 	lua_register(ls, "setTickRate", lua_setTickRate);
@@ -328,13 +303,22 @@ static bool runOneLua(lua_Alloc alloc, const char* script) {
 	}
 
 	while (!needsReset && !chThdShouldTerminateX()) {
-		// First, check if there is a pending interactive command entered by the user
+#if EFI_CAN_SUPPORT
+		// First, process any pending can RX messages
+		doLuaCanRx(ls);
+#endif // EFI_CAN_SUPPORT
+
+		// Next, check if there is a pending interactive command entered by the user
 		doInteractive(ls);
 
 		invokeTick(ls);
 
 		chThdSleepMilliseconds(luaTickPeriodMs);
 	}
+
+#if EFI_CAN_SUPPORT
+	resetLuaCanRx();
+#endif // EFI_CAN_SUPPORT
 
 	// De-init pins, they will reinit next start of the script.
 	luaDeInitPins();
@@ -343,13 +327,13 @@ static bool runOneLua(lua_Alloc alloc, const char* script) {
 }
 
 void LuaThread::ThreadTask() {
-	initSystemLua();
+	//initSystemLua();
 
 	while (!chThdShouldTerminateX()) {
 		bool wasOk = runOneLua(myAlloc<0>, config->luaScript);
 
 		// Reset any lua adjustments the script made
-		ENGINE(engineState).luaAdjustments = {};
+		engine->engineState.luaAdjustments = {};
 
 		if (!wasOk) {
 			// Something went wrong executing the script, spin
@@ -367,6 +351,10 @@ static LuaThread luaThread;
 
 void startLua() {
 #if LUA_USER_HEAP > 1
+#if EFI_CAN_SUPPORT
+	initLuaCanRx();
+#endif // EFI_CAN_SUPPORT
+
 	luaThread.Start();
 
 	addConsoleActionS("lua", [](const char* str){

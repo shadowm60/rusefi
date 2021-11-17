@@ -10,17 +10,19 @@
 
 #include "pch.h"
 
-typedef float fsio_table_8x8_f32t_linear[FSIO_TABLE_8 * FSIO_TABLE_8];
+#include "rusefi_lua.h"
 
-bool acceptCanRx(int sid DECLARE_ENGINE_PARAMETER_SUFFIX) {
-	if (!CONFIG(useFSIOTableForCanSniffingFiltering)) {
+typedef float SCRIPT_TABLE_8x8_f32t_linear[SCRIPT_TABLE_8 * SCRIPT_TABLE_8];
+
+bool acceptCanRx(int sid) {
+	if (!engineConfiguration->usescriptTableForCanSniffingFiltering) {
 		// accept anything if filtering is not enabled
 		return true;
 	}
 /*
 	// the whole table reuse and 2D table cast to 1D array is a major hack, but it's OK for prototyping
-	fsio_table_8x8_f32t_linear *array =
-			(fsio_table_8x8_f32t_linear*) (void*) &config->fsioTable1;
+	SCRIPT_TABLE_8x8_f32t_linear *array =
+			(SCRIPT_TABLE_8x8_f32t_linear*) (void*) &config->scriptTable1;
 
 	int arraySize = efi::size(*array);
 
@@ -121,7 +123,7 @@ static void processCanRxImu(const CANRxFrame& frame, efitick_t nowNt) {
 		efiPrintf("CAN_rx 130 %f %f", a, b);
 	}
 
-	if (CONFIG(imuType) == IMU_VAG) {
+	if (engineConfiguration->imuType == IMU_VAG) {
 		if (CAN_SID(frame) == VAG_YAW_RATE_G_LAT) {
 			efiPrintf("CAN_rx VAG_YAW_RATE_G_LAT");
 		} else if (CAN_SID(frame) == VAG_YAW_ACCEL_G_LONG) {
@@ -132,7 +134,7 @@ static void processCanRxImu(const CANRxFrame& frame, efitick_t nowNt) {
 
 
 
-	if (CONFIG(imuType) == IMU_MM5_10) {
+	if (engineConfiguration->imuType == IMU_MM5_10) {
 #define MM5_10_RATE_QUANT 0.005
 #define MM5_10_ACC_QUANT 0.0001274
 
@@ -156,11 +158,10 @@ static void processCanRxImu(const CANRxFrame& frame, efitick_t nowNt) {
 			engine->sensors.accelerometer.z = accZ * MM5_10_ACC_QUANT;
 		}
 	}
-
 }
 
 void processCanRxMessage(const CANRxFrame &frame, efitick_t nowNt) {
-	if (CONFIG(debugMode) == DBG_CAN) {
+	if (engineConfiguration->debugMode == DBG_CAN) {
 		printPacket(frame);
 	}
 
@@ -173,8 +174,10 @@ void processCanRxMessage(const CANRxFrame &frame, efitick_t nowNt) {
 	// todo: convert to CanListener or not?
 	processCanRxImu(frame, nowNt);
 
+	processLuaCan(frame);
+
 #if EFI_CANBUS_SLAVE
-	if (CAN_EID(frame) == CONFIG(verboseCanBaseAddress) + CAN_SENSOR_1_OFFSET) {
+	if (CAN_EID(frame) == engineConfiguration->verboseCanBaseAddress + CAN_SENSOR_1_OFFSET) {
 		int16_t mapScaled = *reinterpret_cast<const int16_t*>(&frame.data8[0]);
 		canMap = mapScaled / (1.0 * PACK_MULT_PRESSURE);
 	} else

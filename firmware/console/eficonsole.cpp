@@ -27,23 +27,37 @@
 #include "console_io.h"
 #include "svnversion.h"
 
-static LoggingWithStorage logger("console");
-
-static void testCritical(void) {
+static void testCritical() {
 	chDbgCheck(0);
 }
 
-static void myerror(void) {
+static void myerror() {
 	firmwareError(CUSTOM_ERR_TEST_ERROR, "firmwareError: %d", getRusEfiVersion());
 }
 
-static void sayNothing(void) {
-	/**
-	 * @see EngineState#TS_PROTOCOL_TAG
-	 * this empty response is part of protocol check
-	 * todo: make this logic smarter?
-	 */
-}
+static void sayHello() {
+	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2021. All rights reserved.");
+	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI v%d@%s", getRusEfiVersion(), VCS_VERSION);
+	efiPrintf(PROTOCOL_HELLO_PREFIX " Chibios Kernel:       %s", CH_KERNEL_VERSION);
+	efiPrintf(PROTOCOL_HELLO_PREFIX " Compiled:     " __DATE__ " - " __TIME__ "");
+	efiPrintf(PROTOCOL_HELLO_PREFIX " COMPILER=%s", __VERSION__);
+
+#ifdef ENABLE_AUTO_DETECT_HSE
+	extern float hseFrequencyMhz;
+	extern uint8_t autoDetectedRoundedMhz;
+	efiPrintf(PROTOCOL_HELLO_PREFIX " detected HSE clock %.2f MHz PLLM = %d", hseFrequencyMhz, autoDetectedRoundedMhz);
+#endif /* ENABLE_AUTO_DETECT_HSE */
+
+#if defined(STM32F4) || defined(STM32F7) || defined(STM32H7)
+	uint32_t *uid = ((uint32_t *)UID_BASE);
+	efiPrintf("UID=%x %x %x", uid[0], uid[1], uid[2]);
+
+#define 	TM_ID_GetFlashSize()    (*(__IO uint16_t *) (FLASHSIZE_BASE))
+#define MCU_REVISION_MASK  0xfff
+
+	int mcuRevision = DBGMCU->IDCODE & MCU_REVISION_MASK;
+
+#define MIN_FLASH_SIZE 1024
 
 static void sayHello(void) {
 	scheduleMsg(&logger, PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2020. All rights reserved.");
@@ -137,7 +151,7 @@ static uintptr_t CountFreeStackSpace(const void* wabase)
 /**
  * This methods prints all threads, their stack usage, and their total times
  */
-static void cmd_threads(void) {
+static void cmd_threads() {
 #if CH_DBG_THREADS_PROFILING && CH_DBG_FILL_THREADS
 
 	thread_t* tp = chRegFirstThread();

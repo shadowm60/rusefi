@@ -10,6 +10,5 @@
 
 #include "engine.h"
 
-void initTachometer(DECLARE_ENGINE_PARAMETER_SIGNATURE);
-
-#endif /* CONTROLLERS_TACHOMETER_H_ */
+void initTachometer();
+void tachSignalCallback();

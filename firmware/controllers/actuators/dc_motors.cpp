@@ -64,6 +64,11 @@ public:
 		// Clamp to >100hz
 		int clampedFrequency = maxI(100, frequency);
 
+		if (clampedFrequency > ETB_HW_MAX_FREQUENCY) {
+			firmwareError(OBD_PCM_Processor_Fault, "Electronic throttle frequency too high, maximum %d hz", ETB_HW_MAX_FREQUENCY);
+			return;
+		}
+
 		if (useTwoWires) {
 			m_pinEnable.initPin("ETB Enable", pinEnable);
 
@@ -109,7 +114,7 @@ public:
 
 static DcHardware dcHardware[ETB_COUNT + DC_PER_STEPPER];
 
-DcMotor* initDcMotor(const dc_io& io, size_t index, bool useTwoWires DECLARE_ENGINE_PARAMETER_SUFFIX) {
+DcMotor* initDcMotor(const dc_io& io, size_t index, bool useTwoWires) {
 	auto& hw = dcHardware[index];
 
 	hw.start(
@@ -118,9 +123,9 @@ DcMotor* initDcMotor(const dc_io& io, size_t index, bool useTwoWires DECLARE_ENG
 		io.directionPin1,
 		io.directionPin2,
 		io.disablePin,
-		CONFIG(stepperDcInvertedPins),
-		&ENGINE(executor),
-		CONFIG(etbFreq)
+		engineConfiguration->stepperDcInvertedPins,
+		&engine->executor,
+		engineConfiguration->etbFreq
 	);
 
 	return &hw.dcMotor;

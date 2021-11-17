@@ -82,7 +82,7 @@ void StepperMotorBase::setInitialPosition(void) {
 	// now check if stepper motor re-initialization is requested - if the throttle pedal is pressed at startup
 	auto tpsPos = Sensor::getOrZero(SensorType::DriverThrottleIntent);
 	bool forceStepperParking = !isRunning && tpsPos > STEPPER_PARKING_TPS;
-	if (CONFIG(stepperForceParkingEveryRestart))
+	if (engineConfiguration->stepperForceParkingEveryRestart)
 		forceStepperParking = true;
 	efiPrintf("Stepper: savedStepperPos=%d forceStepperParking=%d (tps=%.2f)", m_currentPosition, (forceStepperParking ? 1 : 0), tpsPos);
 
@@ -99,7 +99,7 @@ void StepperMotorBase::setInitialPosition(void) {
 		 *
 		 * Add extra steps to compensate step skipping by some old motors.
 		 */
-		int numParkingSteps = (int)efiRound((1.0f + (float)CONFIG(stepperParkingExtraSteps) / PERCENT_MULT) * m_totalSteps, 1.0f);
+		int numParkingSteps = (int)efiRound((1.0f + (float)engineConfiguration->stepperParkingExtraSteps / PERCENT_MULT) * m_totalSteps, 1.0f);
 		for (int i = 0; i < numParkingSteps; i++) {
 			if (!m_hw->step(false)) {
 				initialPositionSet = false;
@@ -188,7 +188,7 @@ bool StepDirectionStepper::pulse() {
 	return true;
 }
 
-void StepperHw::sleep(void) {
+void StepperHw::sleep() {
 	pause();
 }
 
@@ -236,3 +236,7 @@ void StepDirectionStepper::initialize(brain_pin_e stepPin, brain_pin_e direction
 }
 
 #endif
+
+#if EFI_UNIT_TEST
+void StepperHw::sleep() { }
+#endif // EFI_UNIT_TEST

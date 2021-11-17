@@ -12,7 +12,6 @@
 #include "efifeatures.h"
 #include "rusefi_generated.h"
 #include "loggingcentral.h"
-#include "engine_ptr.h"
 #include "error_handling.h"
 #include "global.h"
 #include "efi_gpio.h"
@@ -35,4 +34,5 @@
 #include <gmock/gmock.h>
 #include "mocks.h"
 #include "engine_test_helper.h"
+#include "mock/mock_sensor.h"
 #endif

@@ -33,10 +33,11 @@ float getTachDuty(void)
 }
 #endif
 
-static void tachSignalCallback(trigger_event_e ckpSignalType,
-		uint32_t index, efitick_t edgeTimestamp DECLARE_ENGINE_PARAMETER_SUFFIX) {
-	// only process at index configured to avoid too much cpu time for index 0?
-	if (index != (uint32_t)CONFIG(tachPulseTriggerIndex)) {
+static bool tachHasInit = false;
+
+void tachSignalCallback() {
+	// Only do anything if tach enabled
+	if (!tachHasInit) {
 		return;
 	}
 
@@ -50,7 +51,7 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 #endif
 
 	// How many tach pulse periods do we have?
-	int periods = CONFIG(tachPulsePerRev);
+	int periods = engineConfiguration->tachPulsePerRev;
 
 	if(periods == 0){
 		warning(CUSTOM_ERR_6709,"Check Tachometer Pulse per Rev!");
@@ -62,12 +63,12 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 	float periodTimeMs = cycleTimeMs / periods;
 	tachFreq = 1000.0 / periodTimeMs;
 	
-	if (CONFIG(tachPulseDurationAsDutyCycle)) {
+	if (engineConfiguration->tachPulseDurationAsDutyCycle) {
 		// Simple case - duty explicitly set
-		duty = CONFIG(tachPulseDuractionMs);
+		duty = engineConfiguration->tachPulseDuractionMs;
 	} else {
 		// Constant high-time mode - compute the correct duty cycle
-		duty = CONFIG(tachPulseDuractionMs) / periodTimeMs;
+		duty = engineConfiguration->tachPulseDuractionMs / periodTimeMs;
 	}
 
 	// In case Freq is under 1Hz, we stop pwm to avoid warnings!
@@ -80,9 +81,9 @@ static void tachSignalCallback(trigger_event_e ckpSignalType,
 
 }
 
-void initTachometer(DECLARE_ENGINE_PARAMETER_SIGNATURE) {
-
-	if (CONFIG(tachOutputPin) == GPIO_UNASSIGNED) {
+void initTachometer() {
+	tachHasInit = false;
+	if (!isBrainPinValid(engineConfiguration->tachOutputPin)) {
 		return;
 	}
 

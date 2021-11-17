@@ -67,8 +67,6 @@ RUSEFI_CONSOLE_SETTINGS=""
 # cp firmware/svnversion.h $FOLDER
 
 cp -r misc/install/openocd $CONSOLE_FOLDER
-rem TODO: remove DfuSe soon?
-cp -r misc/install/DfuSe $CONSOLE_FOLDER
 cp -r misc/install/STM32_Programmer_CLI $CONSOLE_FOLDER
 # 407 has additional version of firmware
 #cp firmware/deliver/rusefi_no_asserts.bin $FOLDER
@@ -81,6 +79,12 @@ cp firmware/deliver/rusefi.bin $FOLDER
 cp firmware/deliver/rusefi.dfu $FOLDER
 # just for now - DFU work in progress
 cp firmware/deliver/rusefi.hex $FOLDER
+
+# bootloader
+[ -e firmware/deliver/openblt.bin ] && { cp firmware/deliver/openblt.bin $FOLDER ; }
+[ -e firmware/deliver/openblt.dfu ] && { cp firmware/deliver/openblt.dfu $FOLDER ; }
+# update srec
+[ -e firmware/deliver/rusefi_update.srec ] && { cp firmware/deliver/rusefi_update.srec $FOLDER ; }
 
 if [ -n "$BUNDLE_NAME" ]; then
     mv $FOLDER/rusefi.dfu $FOLDER/rusefi_$BUNDLE_NAME.dfu
@@ -102,11 +106,9 @@ ls -l $FULL_BUNDLE_FILE
 
 [ -e $FULL_BUNDLE_FILE ] || { echo "$SCRIPT_NAME: ERROR not found $FULL_BUNDLE_FILE"; exit 1; }
 
-if [ -n "$RUSEFI_BUILD_FTP_USER" ]; then
+if [ -n "$RUSEFI_SSH_USER" ]; then
  echo "$SCRIPT_NAME: Uploading full bundle"
- echo put $FULL_BUNDLE_FILE . > cmd
- cat cmd
- sshpass -p $RUSEFI_BUILD_FTP_PASS sftp -o StrictHostKeyChecking=no $RUSEFI_BUILD_FTP_USER@$RUSEFI_FTP_SERVER <<< `cat cmd`
+ tar -czf - $FULL_BUNDLE_FILE  | sshpass -p $RUSEFI_SSH_PASS ssh -o StrictHostKeyChecking=no $RUSEFI_SSH_USER@$RUSEFI_SSH_SERVER "tar -xzf - -C build_server"
  retVal=$?
  if [ $retVal -ne 0 ]; then
   echo "full bundle upload failed"
@@ -132,10 +134,8 @@ cd $FOLDER
 zip -r ../$UPDATE_BUNDLE_FILE *
 cd ..
 ls -l $UPDATE_BUNDLE_FILE
-if [ -n "$RUSEFI_BUILD_FTP_USER" ]; then
- echo put $UPDATE_BUNDLE_FILE autoupdate > cmd
- cat cmd
- sshpass -p $RUSEFI_BUILD_FTP_PASS sftp -o StrictHostKeyChecking=no $RUSEFI_BUILD_FTP_USER@$RUSEFI_FTP_SERVER <<< `cat cmd`
+if [ -n "$RUSEFI_SSH_USER" ]; then
+ tar -czf - $UPDATE_BUNDLE_FILE  | sshpass -p $RUSEFI_SSH_PASS ssh -o StrictHostKeyChecking=no $RUSEFI_SSH_USER@$RUSEFI_SSH_SERVER "tar -xzf - -C build_server/autoupdate"
  retVal=$?
  if [ $retVal -ne 0 ]; then
   echo "autoupdate upload failed"

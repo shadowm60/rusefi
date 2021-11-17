@@ -75,16 +75,18 @@ static void setupDefaultSensorInputs() {
 	// Direct hall-only cam input
 	engineConfiguration->camInputs[0] = GPIOA_6; // 86 - CAM1
 
-	engineConfiguration->tps1_1AdcChannel = EFI_ADC_4; // 92 - TPS 1
+	engineConfiguration->tps1_1AdcChannel = H144_IN_TPS; // 92 - TPS 1
+	engineConfiguration->tps1_2AdcChannel = H144_IN_AUX1;
+
 	engineConfiguration->tps2_1AdcChannel = EFI_ADC_NONE;
 
-	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_3; // 34 In PPS1
-	engineConfiguration->throttlePedalPositionSecondAdcChannel = EFI_ADC_14; // 35 In PPS2
+	engineConfiguration->throttlePedalPositionAdcChannel = H144_IN_PPS; // 34 In PPS1
+	engineConfiguration->throttlePedalPositionSecondAdcChannel = H144_IN_AUX2; // 35 In PPS2
 
-	CONFIG(throttlePedalUpVoltage) = 0.4;
-	CONFIG(throttlePedalWOTVoltage) = 2;
-	CONFIG(throttlePedalSecondaryUpVoltage) = 0.7;
-	CONFIG(throttlePedalSecondaryWOTVoltage) = 4.1;
+	engineConfiguration->throttlePedalUpVoltage = 0.4;
+	engineConfiguration->throttlePedalWOTVoltage = 2;
+	engineConfiguration->throttlePedalSecondaryUpVoltage = 0.7;
+	engineConfiguration->throttlePedalSecondaryWOTVoltage = 4.1;
 
 	engineConfiguration->mafAdcChannel = EFI_ADC_10;
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_11;
@@ -137,9 +139,9 @@ void setBoardDefaultConfiguration(void) {
 	engineConfiguration->etbIo[0].directionPin1 = GPIOC_6; // out_pwm2
 	engineConfiguration->etbIo[0].directionPin2 = GPIOC_7; // out_pwm3
 	engineConfiguration->etbIo[0].controlPin = GPIOA_8; // ETB_EN out_io12
-	CONFIG(etb_use_two_wires) = true;
+	engineConfiguration->etb_use_two_wires = true;
 
-	setBoschVAGETB(PASS_CONFIG_PARAMETER_SIGNATURE);
+	setBoschVAGETB();
 
 	engineConfiguration->isSdCardEnabled = true;
 
@@ -149,14 +151,14 @@ void setBoardDefaultConfiguration(void) {
 	engineConfiguration->vvtMode[0] = VVT_BOSCH_QUICK_START;
 	engineConfiguration->map.sensor.type = MT_BOSCH_2_5;
 
-	CONFIG(enableSoftwareKnock) = true;
+	engineConfiguration->enableSoftwareKnock = true;
 
-	engineConfiguration->fuelPumpPin = GPIOH_14;	// 65 - Fuel Pump
+	engineConfiguration->fuelPumpPin = H144_OUT_IO3;
 	engineConfiguration->malfunctionIndicatorPin = GPIOG_4; // 47 - CEL
-	engineConfiguration->tachOutputPin = GPIOD_13; // 37 - TACH
+	engineConfiguration->tachOutputPin = H144_OUT_PWM7;
 	engineConfiguration->idle.solenoidPin = GPIOD_14;	// OUT_PWM5
 	engineConfiguration->fanPin = GPIOD_12;	// OUT_PWM8
-	engineConfiguration->mainRelayPin = GPIOI_2;	// 21 - Main Relay
+	engineConfiguration->mainRelayPin = H144_OUT_IO1;
 
 //	engineConfiguration->injectorCompensationMode
 	engineConfiguration->fuelReferencePressure = 300;
@@ -168,10 +170,10 @@ void setBoardDefaultConfiguration(void) {
 	setOperationMode(engineConfiguration, FOUR_STROKE_CRANK_SENSOR);
 	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_60_2;
 	engineConfiguration->useOnlyRisingEdgeForTrigger = true;
-	setAlgorithm(LM_SPEED_DENSITY PASS_CONFIG_PARAMETER_SUFFIX);
+	setAlgorithm(LM_SPEED_DENSITY);
 
-	strcpy(CONFIG(engineMake), ENGINE_MAKE_VAG);
-	strcpy(CONFIG(engineCode), "base");
+	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_VAG);
+	strcpy(engineConfiguration->engineCode, "base");
 
 	engineConfiguration->specs.cylindersCount = 4;
 	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
@@ -180,7 +182,8 @@ void setBoardDefaultConfiguration(void) {
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 
-	setHellenDefaultVrThresholds(PASS_CONFIG_PARAMETER_SIGNATURE);
+	setHellenDefaultVrThresholds();
+	engineConfiguration->vrThreshold[0].pin = H144_OUT_PWM6;
 	hellenWbo();
 }
 
@@ -200,5 +203,5 @@ void setSdCardConfigurationOverrides(void) {
 //	engineConfiguration->spi2misoPin = GPIOB_14;
 //	engineConfiguration->spi2sckPin = GPIOB_13;
 //	engineConfiguration->sdCardCsPin = GPIOB_12;
-	CONFIG(is_enabled_spi_3) = true;
+	engineConfiguration->is_enabled_spi_3 = true;
 }

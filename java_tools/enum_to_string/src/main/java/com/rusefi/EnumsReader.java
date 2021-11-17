@@ -9,15 +9,24 @@ import java.io.*;
 import java.util.*;
 
 public class EnumsReader {
-    public static final String ENUMCLASS_PREFIX = "enumclass";
-    private final Map<String, Value> currentValues = new TreeMap<>();
+    private static final String ENUMCLASS_PREFIX = "enumclass";
 
-    private final Map<String, EnumState> enums = new TreeMap<>();
+    protected final Map<String, EnumState> enums = new TreeMap<>();
 
+    /**
+     * core implementation sorts by name, we need special considerations to sort by value
+     */
     @NotNull
-    static List<Value> getSortedByOrder(Map<String, Value> brain_pin_e) {
-        Set<Value> byOrdinal = new TreeSet<>(Comparator.comparingInt(Value::getIntValue));
-        byOrdinal.addAll(brain_pin_e.values());
+    static List<Value> getSortedByOrder(VariableRegistry registry, Map<String, Value> enumValues) {
+        Set<Integer> ids = new TreeSet<>();
+        for (Value value : enumValues.values()) {
+            boolean isUniqueId = ids.add(value.getIntValueMaybeResolve(registry));
+            if (!isUniqueId)
+                throw new IllegalArgumentException("Ordinal duplication? " + value);
+        }
+
+        Set<Value> byOrdinal = new TreeSet<>(Comparator.comparingInt(value -> value.getIntValueMaybeResolve(registry)));
+        byOrdinal.addAll(enumValues.values());
         return new ArrayList<>(byOrdinal);
     }
 
@@ -25,16 +34,19 @@ public class EnumsReader {
         return enums;
     }
 
-    public EnumsReader read(String path, String fileName) throws IOException {
-        return read(new FileReader(path + File.separator + fileName));
+    public EnumsReader read(Reader in) throws IOException {
+        enums.putAll(readStatic(in));
+        return this;
     }
 
-    public EnumsReader read(Reader in) throws IOException {
+    public static Map<String, EnumState> readStatic(Reader in) throws IOException {
         boolean isInsideEnum = false;
         BufferedReader reader = new BufferedReader(in);
         String line;
         String enumName = null;
         boolean isEnumClass = false;
+        Map<String, Value> currentValues = new TreeMap<>();
+        Map<String, EnumState> enums = new TreeMap<>();
 
         boolean withAutoValue = false;
 
@@ -89,10 +101,10 @@ public class EnumsReader {
                 }
             }
         }
-        return this;
+        return enums;
     }
 
-    private void validateValues(Map<String, Value> currentValues) {
+    private static void validateValues(Map<String, Value> currentValues) {
         for (Map.Entry<String, Value> entry : currentValues.entrySet()) {
             int v = entry.getValue().getIntValue();
             if (v < 0 || v >= currentValues.size())
