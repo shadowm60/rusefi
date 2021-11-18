@@ -12,3 +12,4 @@
 
 void initTachometer();
 void tachSignalCallback();
+#endif
