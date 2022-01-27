@@ -251,11 +251,10 @@ pins:
     function: K-line/Lin
  
   - pin: C40
-    id: [GPIOF_10]
-    class: [switch_inputs]
+    id: [GPIOF_10, EDI_ADC_3]
+    class: [switch_inputs, analog_inputs]
     ts_name: C40 - start button
     function: Start button
-    type: din
 
   - pin: D1
     function: External Boot Mode Select
