@@ -7,28 +7,33 @@ pins:
     id: EFI_ADC_7
     class: analog_inputs
     ts_name: P30_IN_AUX4
+    type: [av, din]
 
   - pin: P32
     id: EFI_ADC_1
     class: analog_inputs
     ts_name: P32_IN_O2S2
+    type: [av, din]
 
   - pin: P36
     id: EFI_ADC_0
     class: analog_inputs
     ts_name: P36_IN_O2S
+    type: [av, din]
 
   - pin: P40
     # H144_IN_MAP3 AIN15 A15 PA2
     id: EFI_ADC_2
     class: analog_inputs
     ts_name: P40_IN_MAP3
+    type: [av, din]
 
   - pin: P41
     # H144_IN_AUX3 AIN22 PC5
     id: EFI_ADC_15
     class: analog_inputs
     ts_name: P41_IN_AUX3
+    type: [av, din]
 
 #Outputs (via Test Points)
   - pin: P19
