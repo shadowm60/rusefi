@@ -391,7 +391,9 @@
 #define TS_PRIMARY_PORT UARTD3
 #endif
 
+#ifndef TS_SECONDARY_PORT /* todo handle this better! */
 #undef TS_SECONDARY_PORT
+#endif
 
 #define AUX_SERIAL_DEVICE (&SD6)
 

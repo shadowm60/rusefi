@@ -17,7 +17,11 @@ ifeq ($(IS_STM32F429),yes)
 	DDEFS += -DSTM32F429xx
 	DDEFS += -DEFI_IS_F42x
 else
+ifeq ($(IS_H128),yes)
+	DDEFS += -DSTM32F429xx 
+else
 	DDEFS += -DSTM32F407xx
+endif
 endif
 
 # TODO: remove, for efifeatures.h
