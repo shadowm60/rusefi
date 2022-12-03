@@ -76,7 +76,6 @@
 			"servertype": "openocd",
 			"configFiles": ["interface/stlink.cfg", "target/stm32f4x.cfg"],
 			"rtos": "auto",
-			"runToMain": true
 		},
 		{
 			"name": "Debug F7x6",
