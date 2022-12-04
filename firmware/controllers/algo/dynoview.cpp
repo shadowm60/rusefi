@@ -25,6 +25,9 @@ void DynoView::update(vssSrc src) {
         speed = efiRound(speed,0.001);
     }
 
+	//filter input
+	speed = m_filter.filter(speed);
+
     if(timeStamp != 0) {
 
         if (vss != speed) {
@@ -44,16 +47,20 @@ void DynoView::update(vssSrc src) {
         
         //updating here would display acceleration = 0 at constant speed
         updateAcceleration(deltaTime, deltaSpeed);
+        updateHP();
+
 #if EFI_TUNER_STUDIO
-	    if (engineConfiguration->debugMode == DBG_LOGIC_ANALYZER) {
+	    if (engineConfiguration->debugMode == DBG_DYNO_VIEW) {
 		    engine->outputChannels.debugIntField1 = deltaTime;
 		    engine->outputChannels.debugFloatField1 = vss;
 		    engine->outputChannels.debugFloatField2 = speed;
-		    engine->outputChannels.debugFloatField3 = deltaSpeed;
-            engine->outputChannels.debugFloatField4 = acceleration;
+		    engine->outputChannels.debugFloatField3 = acceleration;
+		    engine->outputChannels.debugFloatField4 = engineForce;
+		    engine->outputChannels.debugFloatField5 = enginePower;
+		    engine->outputChannels.debugFloatField6 = engineHP;
+		    engine->outputChannels.debugFloatField7 = engineTorque;
 	    }
-#endif /* EFI_TUNER_STUDIO */        
-        updateHP();
+#endif /* EFI_TUNER_STUDIO */ 		
 
     } else {
         //ensure we grab init values
@@ -89,17 +96,29 @@ void DynoView::updateAcceleration(efitimeus_t deltaTime, float deltaSpeed) {
  */
 void DynoView::updateHP() {
 
+	float dragForce;
+	// drag force of the car is needed to be more accurate
+	// https://en.wikipedia.org/wiki/Automobile_drag_coefficient#Typical_drag_coefficients
+	// https://en.wikipedia.org/wiki/Automobile_drag_coefficient#Drag_area
+	// we use right now C*A = 0.632 m2  -	2007 BMW 335i Coupe -> mid value
+	// todo: add configuration so user could update this
+	dragForce = ((0.632 * AIR_DENSITY) * (vss*vss)) * 0.5;
+
     //these are actually at the wheel
     //we would need final drive to calcualte the correct torque at the wheel
     if (acceleration != 0) {
-        engineForce = engineConfiguration->vehicleWeight * acceleration;
-        enginePower = engineForce * (vss / 3.6);
-        engineHP = enginePower / 746;
-        if (Sensor::getOrZero(SensorType::Rpm) > 0) {
-            engineTorque = ((engineHP * 5252) / Sensor::getOrZero(SensorType::Rpm));
-        }
+        vehicleForce = engineConfiguration->vehicleWeight * acceleration; 
+		//by using gear ration and final drive we would be able to calculate correct values based on VSS/gear selected
+		engineForce = (vehicleForce - (int)dragForce) * 1 ;
     } else {
-        //we should calculate static power
+        //we should calculate static power Fv = Fd
+		engineForce = ((int)dragForce) * 1 ;
+    }
+
+	enginePower = engineForce * (vss / 3.6);
+    engineHP = enginePower / 746;
+    if (Sensor::getOrZero(SensorType::Rpm) > 0) {
+        engineTorque = ((engineHP * 5252) / Sensor::getOrZero(SensorType::Rpm));
     }
 
 }
@@ -130,6 +149,9 @@ int DynoView::getEngineTorque() {
     return (engineTorque/0.73756);
 }
 
+void DynoView::init() {
+	m_filter.configureLowpass(100,1);
+}
 
 float getDynoviewAcceleration() {
     return dynoInstance.getAcceleration();
@@ -160,6 +182,13 @@ void updateDynoViewCan() {
     }
     
     dynoInstance.update(CAN);
+}
+
+/**
+ * This function is called at startup
+*/
+void initDynoView() {
+	dynoInstance.init();
 }
 
 #endif /* EFI_DYNO_VIEW */

@@ -7,11 +7,15 @@
 
 #pragma once
 
+#include "biquad.h"
 
-void updateDynoView();
-void updateDynoViewCan();
+#define AIR_DENSITY 	1.225 /* kg/m3 */
+
+void  updateDynoView();
+void  updateDynoViewCan();
 float getDynoviewAcceleration();
-int getDynoviewPower();
+int   getDynoviewPower();
+void  initDynoView();
 
 typedef enum{
     ICU = 0,
@@ -20,7 +24,9 @@ typedef enum{
 
 class DynoView {
 public:
-	// Update the state of the launch control system
+	// init function
+	void init();
+	// Update inputs and calculated data
 	void update(vssSrc src);
     void updateAcceleration(efitick_t deltaTime, float deltaSpeed);
     void updateHP();
@@ -41,6 +47,8 @@ private:
     float vss = 0;
     //m/s/s unit
     float acceleration = 0;
+	//vehicle force in N
+	int vehicleForce;
     //engine force in N
     int engineForce;
     //engine power in W
@@ -51,4 +59,6 @@ private:
     int engineTorque;
     //sign
     uint8_t direction;
+	//filter
+	Biquad m_filter;
 };

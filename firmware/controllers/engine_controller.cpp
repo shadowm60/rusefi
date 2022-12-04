@@ -483,6 +483,10 @@ void commonInitEngineController() {
 	}
 #endif /* EFI_ENGINE_CONTROL */
 
+#if EFI_DYNO_VIEW
+	initDynoView();
+#endif /* EFI_DYNO_VIEW */
+
 	initTachometer();
 }
 
