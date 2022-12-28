@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_subaru_config.sh integration/rusefi_config.txt Thu Dec 01 00:54:26 UTC 2022
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_subaru_config.sh integration/rusefi_config.txt Wed Dec 21 23:32:42 UTC 2022
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -916,9 +916,14 @@ struct engine_configuration_s {
 	 */
 	engine_load_mode_e fuelAlgorithm;
 	/**
+	%
 	 * offset 381
 	 */
-	uint8_t alignmentFill_at_1[3];
+	uint8_t ALSMaxTPS;
+	/**
+	 * offset 382
+	 */
+	uint8_t unusedHerealignmentFill_at_1[2];
 	/**
 	 * This is the injection strategy during engine start. See Fuel/Injection settings for more detail. It is suggested to use "Simultaneous".
 	 * offset 384
@@ -1799,6 +1804,7 @@ struct engine_configuration_s {
 	 */
 	uint32_t verboseCanBaseAddress;
 	/**
+	 * Boost Voltage
 	v
 	 * offset 788
 	 */
@@ -2249,7 +2255,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 984
 	 */
-	switch_input_pin_e antiLagActivatePin;
+	switch_input_pin_e ALSActivatePin;
 	/**
 	 * offset 986
 	 */
@@ -2690,11 +2696,12 @@ struct engine_configuration_s {
 	offset 1372 bit 27 */
 	bool useBiQuadOnAuxSpeedSensors : 1 {};
 	/**
+	 * 'Trigger' mode will write a high speed log of trigger events (warning: uses lots of space!). 'Normal' mode will write a standard MLG of sensors, engine function, etc. similar to the one captured in TunerStudio.
 	offset 1372 bit 28 */
-	bool unused_1484_bit_38 : 1 {};
+	bool sdTriggerLog : 1 {};
 	/**
 	offset 1372 bit 29 */
-	bool unused_1484_bit_29 : 1 {};
+	bool ALSActivateInverted : 1 {};
 	/**
 	offset 1372 bit 30 */
 	bool unused_1484_bit_30 : 1 {};
@@ -3148,76 +3155,76 @@ struct engine_configuration_s {
 	bool unused1130 : 1 {};
 	/**
 	offset 1628 bit 8 */
-	bool unusedBit_541_8 : 1 {};
+	bool unusedBit_542_8 : 1 {};
 	/**
 	offset 1628 bit 9 */
-	bool unusedBit_541_9 : 1 {};
+	bool unusedBit_542_9 : 1 {};
 	/**
 	offset 1628 bit 10 */
-	bool unusedBit_541_10 : 1 {};
+	bool unusedBit_542_10 : 1 {};
 	/**
 	offset 1628 bit 11 */
-	bool unusedBit_541_11 : 1 {};
+	bool unusedBit_542_11 : 1 {};
 	/**
 	offset 1628 bit 12 */
-	bool unusedBit_541_12 : 1 {};
+	bool unusedBit_542_12 : 1 {};
 	/**
 	offset 1628 bit 13 */
-	bool unusedBit_541_13 : 1 {};
+	bool unusedBit_542_13 : 1 {};
 	/**
 	offset 1628 bit 14 */
-	bool unusedBit_541_14 : 1 {};
+	bool unusedBit_542_14 : 1 {};
 	/**
 	offset 1628 bit 15 */
-	bool unusedBit_541_15 : 1 {};
+	bool unusedBit_542_15 : 1 {};
 	/**
 	offset 1628 bit 16 */
-	bool unusedBit_541_16 : 1 {};
+	bool unusedBit_542_16 : 1 {};
 	/**
 	offset 1628 bit 17 */
-	bool unusedBit_541_17 : 1 {};
+	bool unusedBit_542_17 : 1 {};
 	/**
 	offset 1628 bit 18 */
-	bool unusedBit_541_18 : 1 {};
+	bool unusedBit_542_18 : 1 {};
 	/**
 	offset 1628 bit 19 */
-	bool unusedBit_541_19 : 1 {};
+	bool unusedBit_542_19 : 1 {};
 	/**
 	offset 1628 bit 20 */
-	bool unusedBit_541_20 : 1 {};
+	bool unusedBit_542_20 : 1 {};
 	/**
 	offset 1628 bit 21 */
-	bool unusedBit_541_21 : 1 {};
+	bool unusedBit_542_21 : 1 {};
 	/**
 	offset 1628 bit 22 */
-	bool unusedBit_541_22 : 1 {};
+	bool unusedBit_542_22 : 1 {};
 	/**
 	offset 1628 bit 23 */
-	bool unusedBit_541_23 : 1 {};
+	bool unusedBit_542_23 : 1 {};
 	/**
 	offset 1628 bit 24 */
-	bool unusedBit_541_24 : 1 {};
+	bool unusedBit_542_24 : 1 {};
 	/**
 	offset 1628 bit 25 */
-	bool unusedBit_541_25 : 1 {};
+	bool unusedBit_542_25 : 1 {};
 	/**
 	offset 1628 bit 26 */
-	bool unusedBit_541_26 : 1 {};
+	bool unusedBit_542_26 : 1 {};
 	/**
 	offset 1628 bit 27 */
-	bool unusedBit_541_27 : 1 {};
+	bool unusedBit_542_27 : 1 {};
 	/**
 	offset 1628 bit 28 */
-	bool unusedBit_541_28 : 1 {};
+	bool unusedBit_542_28 : 1 {};
 	/**
 	offset 1628 bit 29 */
-	bool unusedBit_541_29 : 1 {};
+	bool unusedBit_542_29 : 1 {};
 	/**
 	offset 1628 bit 30 */
-	bool unusedBit_541_30 : 1 {};
+	bool unusedBit_542_30 : 1 {};
 	/**
 	offset 1628 bit 31 */
-	bool unusedBit_541_31 : 1 {};
+	bool unusedBit_542_31 : 1 {};
 	/**
 	 * Time between bench test pulses
 	ms
@@ -3411,7 +3418,7 @@ struct engine_configuration_s {
 	/**
 	 * offset 1748
 	 */
-	adc_channel_e auxAnalogInputs[AUX_ANALOG_INPUT_COUNT];
+	adc_channel_e auxAnalogInputs[LUA_ANALOG_INPUT_COUNT];
 	/**
 	 * offset 1756
 	 */
@@ -3674,9 +3681,11 @@ struct engine_configuration_s {
 	 */
 	int8_t launchFuelAdderPercent;
 	/**
+	 * Time required to detect a stuck throttle.
+	sec
 	 * offset 2085
 	 */
-	int8_t sorryUnused[1];
+	scaled_channel<uint8_t, 50, 1> etbJamTimeout;
 	/**
 	 * By the way ETB PID runs at 500hz, length in 1/500 of second here.
 	 * offset 2086
@@ -3923,16 +3932,19 @@ struct engine_configuration_s {
 	 */
 	gppwm_channel gppwm[GPPWM_CHANNELS];
 	/**
+	 * Boost Current
 	mA
 	 * offset 2932
 	 */
 	uint16_t mc33_i_boost;
 	/**
+	 * Peak Current
 	mA
 	 * offset 2934
 	 */
 	uint16_t mc33_i_peak;
 	/**
+	 * Hold Current
 	mA
 	 * offset 2936
 	 */
@@ -3949,6 +3961,7 @@ struct engine_configuration_s {
 	 */
 	uint16_t mc33_t_peak_off;
 	/**
+	 * Peak phase duration
 	us
 	 * offset 2942
 	 */
@@ -3964,6 +3977,7 @@ struct engine_configuration_s {
 	 */
 	uint16_t mc33_t_hold_off;
 	/**
+	 * Hold phase duration
 	us
 	 * offset 2948
 	 */
@@ -4036,9 +4050,15 @@ struct engine_configuration_s {
 	 */
 	scaled_channel<uint16_t, 1000, 1> fordInjectorSmallPulseBreakPoint;
 	/**
+	multiplier
 	 * offset 3126
 	 */
-	int8_t unused4080[5];
+	scaled_channel<uint8_t, 50, 1> tpsTspCorrValues[TPS_TPS_ACCEL_CLT_CORR_TABLE];
+	/**
+	%
+	 * offset 3130
+	 */
+	uint8_t etbJamIntegratorLimit;
 	/**
 	lobes/cam
 	 * offset 3131
@@ -4328,10 +4348,85 @@ struct engine_configuration_s {
 	 */
 	float etbDutyShutdownThreshold;
 	/**
-	units
 	 * offset 3856
 	 */
-	uint8_t mainUnusedEnd[156];
+	Gpio luaDigitalInputPins[LUA_DIGITAL_INPUT_COUNT];
+	/**
+	RPM
+	 * offset 3872
+	 */
+	scaled_channel<uint8_t, 1, 50> tpsTspCorrValuesBins[TPS_TPS_ACCEL_CLT_CORR_TABLE];
+	/**
+	rpm
+	 * offset 3876
+	 */
+	int16_t ALSMinRPM;
+	/**
+	rpm
+	 * offset 3878
+	 */
+	int16_t ALSMaxRPM;
+	/**
+	sec
+	 * offset 3880
+	 */
+	float alsMaxDuration;
+	/**
+	C
+	 * offset 3884
+	 */
+	int8_t ALSMinCLT;
+	/**
+	C
+	 * offset 3885
+	 */
+	int8_t ALSMaxCLT;
+	/**
+	 * offset 3886
+	 */
+	uint8_t alsMinTimeBetween;
+	/**
+	 * offset 3887
+	 */
+	uint8_t alsEtbPosition;
+	/**
+	 * offset 3888
+	 */
+	uint8_t unusedAlignmentFill_at_33[4];
+	/**
+	%
+	 * offset 3892
+	 */
+	int ALSIdleAdd;
+	/**
+	%
+	 * offset 3896
+	 */
+	int ALSEtbAdd;
+	/**
+	 * offset 3900
+	 */
+	int ALSSkipRatio;
+	/**
+	%
+	 * offset 3904
+	 */
+	uint8_t ALSMaxDriverThrottleIntent;
+	/**
+	 * offset 3905
+	 */
+	pin_input_mode_e ALSActivatePinMode;
+	/**
+	units
+	 * offset 3906
+	 */
+	uint8_t mainUnusedEnd[105];
+	/**
+	 * need 4 byte alignment
+	units
+	 * offset 4011
+	 */
+	uint8_t alignmentFill_at_4011[1];
 };
 static_assert(sizeof(engine_configuration_s) == 4012);
 
@@ -5093,15 +5188,45 @@ struct persistent_config_s {
 	 */
 	scaled_channel<uint8_t, 1, 100> maxKnockRetardRpmBins[6];
 	/**
+	deg
 	 * offset 21296
+	 */
+	scaled_channel<int16_t, 10, 1> ALSTimingRetardTable[4][4];
+	/**
+	TPS
+	 * offset 21328
+	 */
+	uint16_t alsIgnRetardLoadBins[4];
+	/**
+	RPM
+	 * offset 21336
+	 */
+	uint16_t alsIgnRetardrpmBins[4];
+	/**
+	deg
+	 * offset 21344
+	 */
+	scaled_channel<int16_t, 10, 1> ALSFuelAdjustment[4][4];
+	/**
+	TPS
+	 * offset 21376
+	 */
+	uint16_t alsFuelAdjustmentLoadBins[4];
+	/**
+	RPM
+	 * offset 21384
+	 */
+	uint16_t alsFuelAdjustmentrpmBins[4];
+	/**
+	 * offset 21392
 	 */
 	blend_table_s ignBlends[IGN_BLEND_COUNT];
 	/**
-	 * offset 22048
+	 * offset 22144
 	 */
 	blend_table_s veBlends[VE_BLEND_COUNT];
 };
-static_assert(sizeof(persistent_config_s) == 22800);
+static_assert(sizeof(persistent_config_s) == 22896);
 
 // end
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_subaru_config.sh integration/rusefi_config.txt Thu Dec 01 00:54:26 UTC 2022
+// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on config/boards/subaru_eg33/config/gen_subaru_config.sh integration/rusefi_config.txt Wed Dec 21 23:32:42 UTC 2022

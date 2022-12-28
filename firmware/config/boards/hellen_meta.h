@@ -121,9 +121,11 @@ void detectHellenBoardType();
 
 // AIN16
 #define H144_IN_RES2 Gpio::F10
+#define H144_ADC_IN_RES2 ADC_CHANNEL_IN8
 
 // AIN8
 #define H144_IN_RES3 Gpio::F8
+#define H144_ADC_IN_RES3 ADC_CHANNEL_IN6
 
 
 #define H144_IN_AUX1 EFI_ADC_8
@@ -182,6 +184,11 @@ void detectHellenBoardType();
 
 #define H176_IN_A16 Gpio::F10
 
+#define H_SPI1_MOSI Gpio::B5
+#define H_SPI1_MISO Gpio::B4
+#define H_SPI1_SCK Gpio::B3
+#define H_SPI1_CS1 Gpio::B6
+#define H_SPI1_CS2 Gpio::B7
 
 // looks like same pins 144 and 176
 #define H_SPI2_MOSI Gpio::B15

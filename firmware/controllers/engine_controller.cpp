@@ -497,6 +497,8 @@ bool validateConfig() {
 		return false;
 	}
 
+	ensureArrayIsAscending("Batt Lag", engineConfiguration->injector.battLagCorrBins);
+
 	// Fueling
 	{
 		ensureArrayIsAscending("VE load", config->veLoadBins);
@@ -513,6 +515,8 @@ bool validateConfig() {
 
 		ensureArrayIsAscending("TPS/TPS AE from", config->tpsTpsAccelFromRpmBins);
 		ensureArrayIsAscending("TPS/TPS AE to", config->tpsTpsAccelToRpmBins);
+
+		ensureArrayIsAscendingOrDefault("TPS TPS RPM correction", engineConfiguration->tpsTspCorrValuesBins);
 	}
 
 	// Ignition
@@ -569,6 +573,14 @@ bool validateConfig() {
 	ensureArrayIsAscending("Boost control TPS", config->boostTpsBins);
 	ensureArrayIsAscending("Boost control RPM", config->boostRpmBins);
 #endif // EFI_BOOST_CONTROL
+
+#if EFI_ANTILAG_SYSTEM
+	// ALS
+	ensureArrayIsAscendingOrDefault("ign ALS TPS", config->alsIgnRetardLoadBins);
+	ensureArrayIsAscendingOrDefault("ign ALS RPM", config->alsIgnRetardrpmBins);
+	ensureArrayIsAscendingOrDefault("fuel ALS TPS", config->alsFuelAdjustmentLoadBins);
+	ensureArrayIsAscendingOrDefault("fuel ALS RPM", config->alsFuelAdjustmentrpmBins);
+#endif // EFI_ANTILAG_SYSTEM
 
 	// ETB
 	ensureArrayIsAscending("Pedal map pedal", config->pedalToTpsPedalBins);

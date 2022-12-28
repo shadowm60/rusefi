@@ -113,7 +113,7 @@ enable2ndByteCanID = false
 	loggerDef = compositeLogger, "Trigger Logger", composite
 		startCommand = "@#TS_SET_LOGGER_SWITCH#@\x01"
 		stopCommand  = "@#TS_SET_LOGGER_SWITCH#@\x02"
-		dataReadCommand = "@#TS_GET_LOGGER_GET_BUFFER#@"
+		dataReadCommand = "@#TS_SET_LOGGER_SWITCH#@\x03"
 		dataReadTimeout = 10000 ; time in ms
 		dataReadyCondition = { toothLogReady }
 		continuousRead = true
@@ -133,6 +133,17 @@ enable2ndByteCanID = false
 		; it seems that TS also needs to know the diff.size of a tooth
 		calcField = toothTime,			"ToothTime",	"ms", { time - pastValue(time, 1) }
 
+	loggerDef = triggerScope, "Trigger Oscilloscope", csv
+		startCommand = "@#TS_SET_LOGGER_SWITCH#@\x04"
+		stopCommand  = "@#TS_SET_LOGGER_SWITCH#@\x05"
+		dataReadCommand = "@#TS_SET_LOGGER_SWITCH#@\x06"
+		dataReadTimeout = 1000
+		dataReadyCondition = { triggerScopeReady }
+		continuousRead = true
+
+		recordDef = 0, 0, 2
+		recordField = channel1, @@TS_TRIGGER_SCOPE_CHANNEL_1_NAME@@, 0, 8, {6.6 / 255}, "v"
+		recordField = channel2, @@TS_TRIGGER_SCOPE_CHANNEL_2_NAME@@, 8, 8, {6.6 / 255}, "v"
 
 [VeAnalyze]
 
@@ -404,6 +415,14 @@ enable2ndByteCanID = false
 		xBins		= dwellVoltageCorrVoltBins, VBatt
 		yBins		= dwellVoltageCorrValues
 		gauge		= VBattGauge
+
+	curve = tpsTspRpmCorrection, "Transient RPM correction"
+		columnLabel = "RPM", "Multiplier"
+		xAxis		=  6, 16, 11
+		yAxis		=  0, 3, 7
+		xBins		= tpsTspCorrValuesBins, RPMValue
+		yBins		= tpsTspCorrValues
+		gauge		= RPMGauge
 
 	curve = primingPulse, "Priming pulse fuel mass"
 		columnLabel = "Coolant", "Prime Pulse"
@@ -820,6 +839,24 @@ curve = 32Curve, "3-2 Shift Solenoid Percent by Speed"
 		xBins		= scriptTable4RpmBins,  RPMValue
 		yBins		= scriptTable4LoadBins,  fuelingLoad
 		zBins		= scriptTable4
+
+	table = IgnRetardTableALS, IgnRetardALS,  "Ignition adjustment",   1
+      ;       constant, variable
+      xBins       = alsIgnRetardrpmBins,  RPMValue
+      yBins       = alsIgnRetardLoadBins,  TPSValue
+      zBins       = ALSTimingRetardTable
+	  gridHeight  = 4.0
+      gridOrient  = 250,   0, 340 ; Space 123 rotation of grid in degrees.
+      upDownLabel = "(RICHER)", "(LEANER)"
+
+   table = FuelAdderTableALS, FuelAdderALS,  "Fuel adjustment",   1
+      ;       constant, variable
+      xBins       = alsFuelAdjustmentrpmBins,  RPMValue
+      yBins       = alsFuelAdjustmentLoadBins,  TPSValue
+      zBins       = ALSFuelAdjustment
+	  gridHeight  = 4.0
+      gridOrient  = 250,   0, 340 ; Space 123 rotation of grid in degrees.
+      upDownLabel = "(RICHER)", "(LEANER)"
 
 	table = baroCorrTbl,  baroCorrMap,  "Baro Correction",	1
 		;		constant, variable
@@ -1413,10 +1450,10 @@ gaugeCategory = GPPWM Outputs
 
 ;						wueCurveName, afrTempCompensationCurve, lambdaTargetTableName, lambdaChannel, coolantTempChannel, egoCorrectionChannel, wueChannel, activeCondition
 #if LAMBDA
-	wueAnalyzeMap = wueAnalyzer_warmup_curve, wueAfrTargetOffsetCurve, lambdaTableTbl, lambdaValue, coolant, cltCorrection, egoCorrectionForVeAnalyze
+	wueAnalyzeMap = wueAnalyzer_warmup_curve, wueAfrTargetOffsetCurve, lambdaTableTbl, lambdaValue, coolant, running_coolantTemperatureCoefficient, egoCorrectionForVeAnalyze
 	lambdaTargetTables = lambdaTableTbl, afrTSCustom
 #else
-	wueAnalyzeMap = wueAnalyzer_warmup_curve, wueAfrTargetOffsetCurve, afrTableTbl, AFRValue, coolant, cltCorrection, egoCorrectionForVeAnalyze
+	wueAnalyzeMap = wueAnalyzer_warmup_curve, wueAfrTargetOffsetCurve, afrTableTbl, AFRValue, coolant, running_coolantTemperatureCoefficient, egoCorrectionForVeAnalyze
 	lambdaTargetTables = afrTableTbl, afrTSCustom
 #endif
 
@@ -1611,6 +1648,7 @@ menuDialog = main
 		# Accel enrichment
 		subMenu = AccelEnrich,				"Acceleration enrichment", 0, {isInjectionEnabled == 1}
 		subMenu = tpsTpsAccelTbl,			"TPS/TPS acceleration extra fuel", 0, {isInjectionEnabled == 1}
+		subMenu = tpsTspRpmCorrection,      "TPS/TPS extra fuelRPM correction", 0, {isInjectionEnabled == 1}
 
 		groupMenu = "Wall wetting AE"
 		groupChildMenu = wwTauCurves, "Evap time", 0, { complexWallModel != 0 }
@@ -1713,6 +1751,7 @@ menuDialog = main
 
 		subMenu = std_separator
 		subMenu = auxInputsDialog,			"Lua Analog Inputs"
+		subMenu = luaDigitalInputsDialog,   "Lua Digital Inputs"
 		subMenu = luaOutputs,				"Lua Script PWM Outputs"
 
 		groupMenu = "Lua Calibrations"
@@ -1832,11 +1871,12 @@ menuDialog = main
 		subMenu = std_separator
 #		subMenu = smRollingLaunch,			"Rolling Launch"
 #		subMenu = std_separator
-#		subMenu = antiLag,					"Antilag Setup"
+#		subMenu = antiLagDialog,					"Antilag Setup"
 #		subMenu = std_separator
 
 		subMenu = std_separator
 		subMenu = parkingLot,				"Experimental/Broken"
+		subMenu = antiLagDialog,                "Anti-Lag ALS"
 		subMenu = rotaryDialog,			"Rotary"
 
 		menu = "Help"
@@ -2491,18 +2531,18 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "Primary min",					tpsMin, {tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 		field = "Primary max",					tpsMax, {tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 		field = "Secondary sensor",				tps1_2AdcChannel, {tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
-		field = "Secondary min",				tps1SecondaryMin, {tps1_2AdcChannel != @@ADC_CHANNEL_NONE@@}
-		field = "Secondary max",				tps1SecondaryMax, {tps1_2AdcChannel != @@ADC_CHANNEL_NONE@@}
-		commandButton = "Auto Calibrate ETB 1", cmb_etb_auto_calibrate, { etb1configured == 1}
+		field = "Secondary min",				tps1SecondaryMin, {tps1_2AdcChannel != @@ADC_CHANNEL_NONE@@ && tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
+		field = "Secondary max",				tps1SecondaryMax, {tps1_2AdcChannel != @@ADC_CHANNEL_NONE@@ && tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
+		commandButton = "Auto Calibrate ETB 1", cmb_etb_auto_calibrate, {etb1configured == 1 && tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 
 	dialog = tpsNum2, "Throttle Body #2"
 		field = "Primary sensor",				tps2_1AdcChannel
 		field = "Primary min",					tps2Min, {tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 		field = "Primary max",					tps2Max, {tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 		field = "Secondary sensor",				tps2_2AdcChannel, {tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
-		field = "Secondary min",				tps2SecondaryMin, {tps2_2AdcChannel != @@ADC_CHANNEL_NONE@@}
-		field = "Secondary max",				tps2SecondaryMax, {tps2_2AdcChannel != @@ADC_CHANNEL_NONE@@}
-		commandButton = "Auto Calibrate ETB 2", cmb_etb_auto_calibrate_2, { etb2configured == 1}
+		field = "Secondary min",				tps2SecondaryMin, {tps2_2AdcChannel != @@ADC_CHANNEL_NONE@@ && tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
+		field = "Secondary max",				tps2SecondaryMax, {tps2_2AdcChannel != @@ADC_CHANNEL_NONE@@ && tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
+		commandButton = "Auto Calibrate ETB 2", cmb_etb_auto_calibrate_2, {etb2configured == 1 && tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 
 	dialog = tpsLimits, "TPS Limits"
 		field = "TPS minimum valid value",	tpsErrorDetectionTooLow, {tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
@@ -3013,26 +3053,38 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "Idle Solenoid output(s) Mode",		idle_solenoidPinMode, !useStepperIdle
 		field = "Idle Solenoid Frequency",				idle_solenoidFrequency, !useStepperIdle
 
-	dialog = etbHbridgeHardware, "ETB H-Bridge Hardware"
-		field = "Two-wire mode",						etb_use_two_wires
+	dialog = etbHbridgeHardwareNo1, "H-Bridge Hardware No1"
 		field = "No1 Direction #1",						etbIo1_directionPin1
 		field = "No1 Direction #2",						etbIo1_directionPin2
 		field = "No1 Control",							etbIo1_controlPin
 		field = "No1 Disable",							etbIo1_disablePin
+
+	dialog = etbHbridgeHardwareNo2, "H-Bridge Hardware No2"
 		field = "No2 Direction #1",						etbIo2_directionPin1
 		field = "No2 Direction #2",						etbIo2_directionPin2
 		field = "No2 Control",							etbIo2_controlPin
 		field = "No2 Disable",							etbIo2_disablePin
 
-	dialog = stepperHbridgeHardware, "Stepper H-Bridge Hardware"
-		topicHelp = "stepperHbridgeHardwareHelp"
-		field = "Inverted driver pins",					stepperDcInvertedPins
+	dialog = etbHbridgeHardware, "ETB H-Bridge Hardware"
+		field = "Two-wire mode",						etb_use_two_wires
+		panel = etbHbridgeHardwareNo1, { etbFunctions1 != @@etb_function_e_ETB_None@@ }
+		panel = etbHbridgeHardwareNo2, { etbFunctions2 != @@etb_function_e_ETB_None@@ }
+
+	dialog = stepperHbridgeHardwareNo1, "H-Bridge Hardware No1"
 		field = "No1 Direction #1",						stepperDcIo1_directionPin1
 		field = "No1 Direction #2",						stepperDcIo1_directionPin2
 		field = "No1 Disable",							stepperDcIo1_disablePin
+
+	dialog = stepperHbridgeHardwareNo2, "H-Bridge Hardware No2"
 		field = "No2 Direction #1",						stepperDcIo2_directionPin1
 		field = "No2 Direction #2",						stepperDcIo2_directionPin2
 		field = "No2 Disable",							stepperDcIo2_disablePin
+	
+	dialog = stepperHbridgeHardware, "Stepper H-Bridge Hardware"
+		topicHelp = "stepperHbridgeHardwareHelp"
+		field = "Inverted driver pins",					stepperDcInvertedPins
+		panel = stepperHbridgeHardwareNo1, { etbFunctions1 != @@etb_function_e_ETB_None@@ }
+		panel = stepperHbridgeHardwareNo2, { etbFunctions2 != @@etb_function_e_ETB_None@@ }
 
 	dialog = idleStepperHw, "Stepper Controller Hardware"
 		topicHelp = "idleStepperHwHelp"
@@ -3544,6 +3596,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "CS Pin",								sdCardCsPin			@@if_ts_show_sd_pins
 		field = "SPI",									sdCardSpiDevice		@@if_ts_show_sd_pins
 		field = "SD logger rate",						sdCardLogFrequency
+		field = "SD logger mode",						sdTriggerLog
 
 	dialog = gpsReceiver, "GPS Receiver"
 		field = "gps RX",								gps_rx_pin
@@ -3719,6 +3772,16 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 
 	dialog = scriptSettingDialog, "Script Settings", border
 		panel = scriptSetting,	East
+
+	dialog = luaDigitalInputsDialog, "Lua Digital Inputs"
+		field = "Digital #1",							luaDigitalInputPins1
+		field = "Digital #2",							luaDigitalInputPins2
+		field = "Digital #3",							luaDigitalInputPins3
+		field = "Digital #4",							luaDigitalInputPins4
+		field = "Digital #5",							luaDigitalInputPins5
+		field = "Digital #6",							luaDigitalInputPins6
+		field = "Digital #7",							luaDigitalInputPins7
+		field = "Digital #8",							luaDigitalInputPins8
 
 	dialog = auxInputsDialog, "Lua Analog Inputs"
 		field = "ADC #1",								auxAnalogInputs1
@@ -3935,6 +3998,8 @@ dialog = tcuControls, "Transmission Settings"
 		field = "PWM Frequency",						etbFreq
 		field = "Minimum ETB position",					etbMinimumPosition
 		field = "Maximum ETB position",					etbMaximumPosition
+		field = "Jam detection integrator max",			etbJamIntegratorLimit
+		field = "Jam detection timeout period",			etbJamTimeout
 		field = "Duty Averaging Length",                etbExpAverageLength
 		field = "Rate of change Averaging Length",      etbRocExpAverageLength
 		; we need the term about stepper idle in here, because there's a bug in TS that you can't have different visibility
@@ -3945,8 +4010,8 @@ dialog = tcuControls, "Transmission Settings"
 
 	dialog = etbAutotune, "PID Autotune"
 		field = "First step: calibrate TPS and hit 'Burn'"
-		commandButton = "Auto Calibrate ETB 1", cmb_etb_auto_calibrate,   { etb1configured == 1}
-		commandButton = "Auto Calibrate ETB 2", cmb_etb_auto_calibrate_2, { etb2configured == 1}
+		commandButton = "Auto Calibrate ETB 1", cmb_etb_auto_calibrate, {etb1configured == 1 && tps1_1AdcChannel != @@ADC_CHANNEL_NONE@@}
+		commandButton = "Auto Calibrate ETB 2", cmb_etb_auto_calibrate_2, {etb2configured == 1 && tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@}
 		field = "Second step"
 		commandButton = "Start ETB PID Autotune", cmd_etb_autotune,       { etb1configured == 1 || etb2configured == 1 }
 		commandButton = "Stop ETB PID Autotune",  cmd_etb_autotune_stop,  { etb1configured == 1 || etb2configured == 1 }
@@ -4158,11 +4223,23 @@ dialog = tcuControls, "Transmission Settings"
 	dialog = smRollingLaunch, "Rolling Launch Settings NOT WORKING"
 		field = "Enable Rolling Launch",					rollingLaunchEnabled
 
-					;			Racing Features->Rolling Launch
-	dialog = antiLag, "AntiLag Settings NOT WORKING"
-		field = "Enable AntiLag",					antiLagEnabled
-		field = "Activation Mode",				antiLagActivationMode,  {antiLagEnabled == 1}
-		field = "Switch Input",					antiLagActivatePin,  {antiLagActivatePin != 0 || ( antiLagActivationMode == 1 && antiLagEnabled == 1 ) }
+					;			Racing Features->Antilag
+	dialog = antiLagDialog, "AntiLag Settings"
+	    field = "Enable AntiLag",                   antiLagEnabled
+		field = "Activation Mode",          	    antiLagActivationMode
+		field = "Switch Input",                     ALSActivatePin,  {antiLagActivationMode != @@antiLagActivationMode_e_SWITCH_INPUT_ANTILAG@@ && antiLagEnabled == 1}
+		field = "ALS Button inverted",				ALSActivateInverted,  {antiLagActivationMode != @@antiLagActivationMode_e_SWITCH_INPUT_ANTILAG@@ && antiLagEnabled == 1}
+		field = "ALS Button mode",                  ALSActivatePinMode,  {antiLagActivationMode != @@antiLagActivationMode_e_SWITCH_INPUT_ANTILAG@@ && antiLagEnabled == 1}
+		field = "Max TPS",                          ALSMaxTPS,  {antiLagEnabled == 1}
+		field = "Min RPM",            	    		ALSMinRPM,  {antiLagEnabled == 1}
+		field = "Max RPM",                          ALSMaxRPM,  {antiLagEnabled == 1}
+		field = "Min CLT",                          ALSMinCLT,  {antiLagEnabled == 1}
+		field = "Max CLT",          	    		ALSMaxCLT,  {antiLagEnabled == 1}                 
+		field = "Idle Air Add",                     ALSIdleAdd, {useETBforIdleControl != 1 && antiLagEnabled == 1}
+		field = "ETB Air Add",                      ALSEtbAdd,  {useETBforIdleControl == 1 && antiLagEnabled == 1}
+		field = "Spark Skip Ratio",                 ALSSkipRatio,  {antiLagEnabled == 1}
+		panel = FuelAdderTableALS
+		panel = IgnRetardTableALS
 
 
 	dialog = coastingFuelCutControl, "Coasting Fuel Cutoff Settings"

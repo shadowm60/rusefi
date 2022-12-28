@@ -42,6 +42,14 @@ void setDefaultBaseEngine() {
 	engineConfiguration->failedMapFallback = 60;
 	engineConfiguration->enableMapEstimationTableFallback = false;
 
+	engineConfiguration->ALSMinRPM = 400;
+	engineConfiguration->ALSMaxRPM = 3200;
+	engineConfiguration->alsMaxDuration = 3.5;
+	engineConfiguration->ALSMaxCLT = 105;
+//	engineConfiguration->alsMinPps = 10;
+	engineConfiguration->alsMinTimeBetween = 5;
+	engineConfiguration->alsEtbPosition = 30;
+
 	// Trigger
 	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_60_2;
 

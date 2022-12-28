@@ -22,6 +22,8 @@ public class GetOutputValueConsumer implements ConfigurationConsumer {
     private final List<Pair<String, String>> getterPairs = new ArrayList<>();
     private final String fileName;
 
+    public String currentSectionPrefix = "engine->outputChannels";
+
     public GetOutputValueConsumer(String fileName) {
         this.fileName = fileName;
     }
@@ -46,7 +48,7 @@ public class GetOutputValueConsumer implements ConfigurationConsumer {
         }
 
         String userName = prefix + cf.getName();
-        String javaName = "engine->outputChannels." + prefix;
+        String javaName = currentSectionPrefix + "." + prefix;
 
         getterPairs.add(new Pair<>(userName, javaName + cf.getName()));
 
@@ -82,11 +84,11 @@ public class GetOutputValueConsumer implements ConfigurationConsumer {
     }
 
     @NotNull
-    static StringBuilder getGetters(StringBuilder switchBody, List<Pair<String, String>> getterPairs1) {
-        HashMap<Integer, AtomicInteger> hashConflicts = getHashConflicts(getterPairs1);
+    static StringBuilder getGetters(StringBuilder switchBody, List<? extends Pair<String, String>> getterPairs) {
+        HashMap<Integer, AtomicInteger> hashConflicts = getHashConflicts(getterPairs);
 
         StringBuilder getterBody = new StringBuilder();
-        for (Pair<String, String> pair : getterPairs1) {
+        for (Pair<String, String> pair : getterPairs) {
             String returnLine = "\t\treturn " + pair.second + ";\n";
 
             int hash = HashUtil.hash(pair.first);
@@ -102,7 +104,7 @@ public class GetOutputValueConsumer implements ConfigurationConsumer {
     }
 
     @NotNull
-    static HashMap<Integer, AtomicInteger> getHashConflicts(List<Pair<String, String>> getterPairs1) {
+    static HashMap<Integer, AtomicInteger> getHashConflicts(List<? extends Pair<String, String>> getterPairs1) {
         HashMap<Integer, AtomicInteger> hashConflicts = new HashMap<>();
         for (Pair<String, String> pair : getterPairs1) {
             hashConflicts.computeIfAbsent(HashUtil.hash(pair.first), integer -> new AtomicInteger(0)).incrementAndGet();
