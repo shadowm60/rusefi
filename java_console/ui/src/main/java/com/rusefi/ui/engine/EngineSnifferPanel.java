@@ -8,7 +8,7 @@ import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.ui.*;
 import com.rusefi.ui.config.BitConfigField;
-import com.rusefi.ui.config.ConfigField;
+import com.rusefi.ui.config.ConfigUiField;
 import com.rusefi.core.preferences.storage.Node;
 import com.rusefi.ui.util.URLLabel;
 import com.rusefi.ui.util.UiUtils;
@@ -126,12 +126,12 @@ public class EngineSnifferPanel {
 
         if (!uiContext.getLinkManager().isLogViewer()) {
             JPanel lowerButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-            lowerButtons.add(new ConfigField(uiContext, Fields.GLOBALTRIGGERANGLEOFFSET, "Trigger Offset").getContent());
+            lowerButtons.add(new ConfigUiField(uiContext, Fields.GLOBALTRIGGERANGLEOFFSET, "Trigger Offset").getContent());
             lowerButtons.add(new BitConfigField(uiContext, Fields.VERBOSETRIGGERSYNCHDETAILS, "Verbose trigger Sync").getContent());
             lowerButtons.add(new BitConfigField(uiContext, Fields.VERBOSEVVTDECODING, "Verbose VVT Sync").getContent());
             lowerButtons.add(new BitConfigField(uiContext, Fields.ENGINESNIFFERFOCUSONINPUTS, "Focus On Inputs").getContent());
-            lowerButtons.add(new ConfigField(uiContext, Fields.ENGINECHARTSIZE, "Engine Sniffer size").getContent());
-            lowerButtons.add(new ConfigField(uiContext, Fields.ENGINESNIFFERRPMTHRESHOLD, "RPM threshold").getContent());
+            lowerButtons.add(new ConfigUiField(uiContext, Fields.ENGINECHARTSIZE, "Engine Sniffer size").getContent());
+            lowerButtons.add(new ConfigUiField(uiContext, Fields.ENGINESNIFFERRPMTHRESHOLD, "RPM threshold").getContent());
             lowerButtons.add(new BitConfigField(uiContext, Fields.INVERTPRIMARYTRIGGERSIGNAL, "Invert Primary Input").getContent());
             bottomPanel.add(lowerButtons, BorderLayout.NORTH);
         }
@@ -153,7 +153,7 @@ public class EngineSnifferPanel {
 
         resetImagePanel();
 
-        uiContext.getLinkManager().getEngineState().registerStringValueAction(EngineReport.ENGINE_CHART, new EngineState.ValueCallback<String>() {
+        uiContext.getLinkManager().getEngineState().registerStringValueAction(Fields.PROTOCOL_ENGINE_SNIFFER, new EngineState.ValueCallback<String>() {
             @Override
             public void onUpdate(String value) {
                 if (isPaused)
@@ -288,7 +288,7 @@ public class EngineSnifferPanel {
             signalBody = Color.darkGray;
         } else if (name.startsWith("HIP")) {
             signalBody = Color.white;
-        } else if (name.startsWith("i")) {
+        } else if (name.startsWith("i") || name.startsWith("j")) {
             // injection
             signalBody = Color.green;
         } else if (name.startsWith("map")) {
@@ -297,7 +297,18 @@ public class EngineSnifferPanel {
             signalBody = Color.gray;
         }
 
-        UpDownImage image = new UpDownImage(name) {
+        UpDownImage image = new UpDownImage(name, new UpDownImage.PinNameSource() {
+            @Override
+            public String getPinByName(String name) {
+                return ChannelNaming.INSTANCE.channelName2PhysicalPin.get(name);
+            }
+
+            @Override
+            public boolean isSimulationMode() {
+                System.out.println("isSimulationMode");
+                return false;
+            }
+        }) {
             @Override
             protected boolean isShowTdcLabel() {
                 /**

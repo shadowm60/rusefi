@@ -10,8 +10,14 @@
 #include "pch.h"
 
 #include "can_msg_tx.h"
+#include "auto_generated_can_category.h"
 
 #include "can.h"
+
+#if EFI_SIMULATOR
+#include "fifo_buffer.h"
+fifo_buffer<CANTxFrame, 1024> txCanBuffer;
+#endif // EFI_SIMULATOR
 
 #if EFI_CAN_SUPPORT
 /*static*/ CANDriver* CanTxMessage::s_devices[2] = {nullptr, nullptr};
@@ -22,9 +28,9 @@
 }
 #endif // EFI_CAN_SUPPORT
 
-CanTxMessage::CanTxMessage(CanCategory category, uint32_t eid, uint8_t dlc, bool isExtended) {
-    this->category = category;
-#if HAL_USE_CAN || EFI_UNIT_TEST
+CanTxMessage::CanTxMessage(CanCategory p_category, uint32_t eid, uint8_t dlc, size_t bus, bool isExtended) {
+    category = p_category;
+#if HAS_CAN_FRAME
 #ifndef STM32H7XX
 	// ST bxCAN device
 	m_frame.IDE = isExtended ? CAN_IDE_EXT : CAN_IDE_STD;
@@ -38,21 +44,31 @@ CanTxMessage::CanTxMessage(CanCategory category, uint32_t eid, uint8_t dlc, bool
 	if (isExtended) {
 		CAN_EID(m_frame) = eid;
 	} else {
+	    if (eid >= 0x800) {
+	        criticalError("Looks like extended CAN ID %x %s", eid, getCanCategory(category));
+	        return;
+	    }
 		CAN_SID(m_frame) = eid;
 	}
 
 	setDlc(dlc);
 
+	setBus(bus);
+
 	memset(m_frame.data8, 0, sizeof(m_frame.data8));
-#endif // HAL_USE_CAN || EFI_UNIT_TEST
+#endif // HAS_CAN_FRAME
 }
 
 CanTxMessage::~CanTxMessage() {
+#if EFI_SIMULATOR
+	txCanBuffer.put(m_frame);
+#endif // EFI_SIMULATOR
+
 #if EFI_CAN_SUPPORT
 	auto device = s_devices[busIndex];
 
 	if (!device) {
-		warning(CUSTOM_ERR_CAN_CONFIGURATION, "Send: CAN configuration issue %d", busIndex);
+		warning(ObdCode::CUSTOM_ERR_CAN_CONFIGURATION, "Send: CAN configuration issue %d", busIndex);
 		return;
 	}
 
@@ -61,7 +77,8 @@ CanTxMessage::~CanTxMessage() {
 	}
 
 	if (engineConfiguration->verboseCan) {
-		efiPrintf("Sending CAN bus%d message: ID=%x/l=%x %x %x %x %x %x %x %x %x",
+		efiPrintf("%s Sending CAN bus%d message: ID=%x/l=%x %x %x %x %x %x %x %x %x",
+		        getCanCategory(category),
 				busIndex,
 #ifndef STM32H7XX
 				(m_frame.IDE == CAN_IDE_EXT) ? CAN_EID(m_frame) : CAN_SID(m_frame),
@@ -87,9 +104,13 @@ CanTxMessage::~CanTxMessage() {
 #endif /* EFI_CAN_SUPPORT */
 }
 
-#if HAL_USE_CAN || EFI_UNIT_TEST
+#if HAS_CAN_FRAME
 void CanTxMessage::setDlc(uint8_t dlc) {
 	m_frame.DLC = dlc;
+}
+
+void CanTxMessage::setBus(size_t bus) {
+	busIndex = bus;
 }
 
 void CanTxMessage::setShortValue(uint16_t value, size_t offset) {
@@ -104,5 +125,5 @@ void CanTxMessage::setBit(size_t byteIdx, size_t bitIdx) {
 uint8_t& CanTxMessage::operator[](size_t index) {
 	return m_frame.data8[index];
 }
-#endif // HAL_USE_CAN || EFI_UNIT_TEST
+#endif // HAS_CAN_FRAME
 

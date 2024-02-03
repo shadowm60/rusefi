@@ -3,6 +3,7 @@
 #include "defaults.h"
 #include "table_helper.h"
 
+#if EFI_ENGINE_CONTROL
 static void setDefaultMultisparkParameters() {
 	// 1ms spark + 2ms dwell
 	engineConfiguration->multisparkSparkDuration = 1;
@@ -14,39 +15,19 @@ static void setDefaultMultisparkParameters() {
 	engineConfiguration->multisparkMaxSparkingAngle = 30;
 }
 
-static constexpr float iatTimingRpmBins[] = { 880, 1260, 1640, 2020, 2400, 2780, 3000, 3380, 3760, 4140, 4520, 5000, 5700, 6500, 7200, 8000 };
-
 static void setDefaultIatTimingCorrection() {
-	setLinearCurve(config->ignitionIatCorrLoadBins, /*from*/CLT_CURVE_RANGE_FROM, 110, 1);
-#if IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT
-	copyArray(config->ignitionIatCorrRpmBins, iatTimingRpmBins);
+	copyArray(config->ignitionIatCorrTempBins, { -40, 0, 10, 20, 30, 40, 50, 60});
+	setLinearCurve(config->ignitionIatCorrLoadBins, /*from=*/ 0, /*to*/ 140, 1);
 
-	static constexpr int8_t defaultIatCorr[16] = {
-		4,	// -40 deg
-		4,
-		3,
-		2,
-		0,	// 0 deg
-		0,
-		0,
-		0,
-		0,
-		-1,	// 50 deg
-		-2,
-		-4,
-		-4,
-		-4,
-		-4,
-		-4,	// 110 deg
-	};
-
-	// Set each row of the table to the same value (no rpm dependence by default)
-	for (size_t i = 0; i < efi::size(defaultIatCorr); i++) {
-		setArrayValues(config->ignitionIatCorrTable[i], defaultIatCorr[i]);
+	// top 5 rows are the same
+	for (size_t i = 3; i < 8; i++) {
+		//                                                         40  50  60 deg C
+		copyArray(config->ignitionIatCorrTable[i], {0, 0, 0, 0, 0, -1, -2, -3});
 	}
-#else
-	setLinearCurve(config->ignitionIatCorrLoadBins, /*from*/0, 6000, 1);
-#endif /* IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT */
+
+	// 6th row tapers out
+	//                                                        40  50  60 deg C
+	copyArray(config->ignitionIatCorrTable[2], {0, 0, 0, 0, 0, 0, -1, -2});
 }
 
 static float getAdvanceForRpm(int rpm, float advanceMax) {
@@ -73,7 +54,7 @@ float getInitialAdvance(int rpm, float map, float advanceMax) {
  */
 static void buildTimingMap(float advanceMax) {
 	if (engineConfiguration->fuelAlgorithm != LM_SPEED_DENSITY) {
-		warning(CUSTOM_WRONG_ALGORITHM, "wrong algorithm for MAP-based timing");
+		warning(ObdCode::CUSTOM_WRONG_ALGORITHM, "wrong algorithm for MAP-based timing");
 		return;
 	}
 	/**
@@ -94,6 +75,9 @@ void setDefaultIgnition() {
 
 	engineConfiguration->timingMode = TM_DYNAMIC;
 	engineConfiguration->fixedModeTiming = 50;
+
+	engineConfiguration->minimumIgnitionTiming = -10;
+	engineConfiguration->maximumIgnitionTiming = 60;
 
 	// Dwell table
 	setConstantDwell(4);
@@ -117,4 +101,19 @@ void setDefaultIgnition() {
 
 	// IAT correction
 	setDefaultIatTimingCorrection();
+
+	// Give default axes for cylinder trim tables
+	copyArray(config->ignTrimRpmBins, { 1000, 3000, 5000, 7000 });
+	copyArray(config->ignTrimLoadBins, { 20, 50, 80, 100 });
+
+	// Default axes for VE blends
+	for (size_t i = 0; i < efi::size(config->ignBlends); i++) {
+		auto& blend = config->ignBlends[i];
+		setLinearCurve(blend.loadBins, 0, 100, 10);
+		setLinearCurve(blend.rpmBins, 0, 7000);
+
+		setLinearCurve(blend.blendBins, 0, 100);
+		setLinearCurve(blend.blendValues, 0, 100);
+	}
 }
+#endif // EFI_ENGINE_CONTROL

@@ -3,7 +3,7 @@ package com.rusefi.binaryprotocol;
 import com.devexperts.logging.Logging;
 import com.rusefi.Timeouts;
 import com.rusefi.binaryprotocol.test.Bug3923;
-import com.rusefi.io.IoStream;
+import com.rusefi.util.HexBinary;
 import com.rusefi.io.serial.AbstractIoStream;
 import etch.util.CircularByteBuffer;
 import net.jcip.annotations.ThreadSafe;
@@ -45,14 +45,18 @@ public class IncomingDataBuffer {
     }
 
     public byte[] getPacket(String msg) throws EOFException {
-        return getPacket(msg, System.currentTimeMillis());
+        return getPacket(Timeouts.BINARY_IO_TIMEOUT, msg, System.currentTimeMillis());
+    }
+
+    public byte[] getPacket(int timeoutMs, String msg) throws EOFException {
+        return getPacket(timeoutMs, msg, System.currentTimeMillis());
     }
 
     /**
      * why does this method return NULL in case of timeout?!
      * todo: there is a very similar BinaryProtocolServer#readPromisedBytes which throws exception in case of timeout
      */
-    public byte[] getPacket(String msg, long start) throws EOFException {
+    public byte[] getPacket(int timeoutMs, String msg, long start) throws EOFException {
         boolean isTimeout = waitForBytes(msg + " header", start, 2);
         if (isTimeout) {
             if (Bug3923.obscene)
@@ -66,7 +70,7 @@ public class IncomingDataBuffer {
         if (packetSize < 0)
             return null;
 
-        isTimeout = waitForBytes(loggingPrefix + msg + " body", start, packetSize + 4);
+        isTimeout = waitForBytes(timeoutMs, loggingPrefix + msg + " body", start, packetSize + 4);
         if (isTimeout)
             return null;
 
@@ -154,7 +158,7 @@ public class IncomingDataBuffer {
                 log.error("dropPending: Unexpected pending data: " + pending + " byte(s)");
                 byte[] bytes = new byte[pending];
                 cbb.get(bytes);
-                log.error("DROPPED FROM BUFFER: " + IoStream.printByteArray(bytes));
+                log.error("DROPPED FROM BUFFER: " + HexBinary.printByteArray(bytes));
             }
             return pending;
         }

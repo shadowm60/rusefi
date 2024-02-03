@@ -7,25 +7,13 @@
  * @author Andrey Gusakov, 2021
  */
 
+#pragma once
+
 #include "../../stm32f7ems/efifeatures.h"
 
-#ifndef EFIFEATURES_SUBARUEG33_H_
-#define EFIFEATURES_SUBARUEG33_H_
-
-/* LEDs */
-#undef LED_ERROR_BRAIN_PIN_MODE
-#define LED_ERROR_BRAIN_PIN_MODE 		INVERTED_OUTPUT
-#undef LED_WARNING_BRAIN_PIN_MODE
-#define LED_WARNING_BRAIN_PIN_MODE		INVERTED_OUTPUT
-#undef LED_RUNING_BRAIN_PIN_MODE
-#define LED_RUNING_BRAIN_PIN_MODE		INVERTED_OUTPUT
-
 /* debug console */
-#undef TS_PRIMARY_PORT
-#define TS_PRIMARY_PORT		SD1
-
-// no secondary channel
-#undef TS_SECONDARY_PORT
+#define TS_PRIMARY_UxART_PORT		SD1
+#define EFI_TS_PRIMARY_IS_SERIAL TRUE
 
 /* Knock detection */
 #undef EFI_HIP_9011
@@ -70,9 +58,6 @@
 #undef EFI_MAX_31855
 #define EFI_MAX_31855				FALSE
 
-#undef EFI_HD44780_LCD
-#define EFI_HD44780_LCD				FALSE
-
 #undef EFI_IDLE_CONTROL
 #define EFI_IDLE_CONTROL			TRUE
 
@@ -92,15 +77,7 @@
 #undef SERIAL_SPEED
 #define SERIAL_SPEED				115200
 
-#ifdef TS_PRIMARY_PORT
-	#undef EFI_CONSOLE_TX_PORT
-	#define EFI_CONSOLE_TX_PORT 		GPIOA
-	#undef EFI_CONSOLE_TX_PIN
-	#define EFI_CONSOLE_TX_PIN			9
-	#undef EFI_CONSOLE_RX_PORT
-	#define EFI_CONSOLE_RX_PORT			GPIOA
-	#undef EFI_CONSOLE_RX_PIN
-	#define EFI_CONSOLE_RX_PIN 			10
+#ifdef TS_PRIMARY_UxART_PORT
 	#undef EFI_CONSOLE_AF
 	#define EFI_CONSOLE_AF 				7
 #endif
@@ -108,23 +85,14 @@
 #undef TS_SERIAL_AF
 #define TS_SERIAL_AF				8
 
-/* no console switch */
-#undef CONSOLE_MODE_SWITCH_PORT
-#undef CONSOLE_MODE_SWITCH_PIN
-#define GET_CONSOLE_MODE_VALUE()	(FALSE)
-
-/* no reset switch */
-#undef CONFIG_RESET_SWITCH_PORT
-#undef CONFIG_RESET_SWITCH_PIN
-
 #undef ADC_VCC
 #define ADC_VCC						2.5f
 
 #undef EFI_MAIN_RELAY_CONTROL
 #define EFI_MAIN_RELAY_CONTROL		FALSE
 
-#undef EFI_MEMS
-#define EFI_MEMS 					FALSE
+#undef EFI_ONBOARD_MEMS
+#define EFI_ONBOARD_MEMS 			FALSE
 
 #undef EFI_IDLE_PID_CIC
 #define EFI_IDLE_PID_CIC TRUE
@@ -132,13 +100,11 @@
 #define RPM_LOW_THRESHOLD 			8				// RPM=8 is an empirical lower sensitivity threshold of MAX9926 for 60-2
 #define NO_RPM_EVENTS_TIMEOUT_SECS	5	// (RPM < 12)
 
-#define EFI_NARROW_EGO_AVERAGING		TRUE
-
+#ifndef EFI_BOOTLOADER // bootloader needs INT_FLASH and doesn't have MFS
 /* this board has external QSPI NOR flash */
-#undef EFI_STORAGE_EXT_SNOR
-#define EFI_STORAGE_EXT_SNOR		TRUE
+#undef EFI_STORAGE_MFS
+#define EFI_STORAGE_MFS				TRUE
 
 #undef EFI_STORAGE_INT_FLASH
 #define EFI_STORAGE_INT_FLASH   	FALSE
-
-#endif /* EFIFEATURES_SUBARUEG33_H_ */
+#endif // EFI_BOOTLOADER

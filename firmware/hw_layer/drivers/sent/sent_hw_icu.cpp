@@ -9,8 +9,7 @@
 
 #if EFI_PROD_CODE
 
-#include "ch.h"
-#include "hal.h"
+#include "pch.h"
 
 #include "sent.h"
 #include "sent_hw_icu.h"
@@ -47,8 +46,7 @@ static ICUConfig icucfg[SENT_INPUT_COUNT] =
 	}
 };
 
-void startSent()
-{
+void startSent() {
 	for (int i = 0; i < SENT_INPUT_COUNT; i++) {
 		brain_input_pin_e sentPin = engineConfiguration->sentInputPins[i];
 
@@ -63,7 +61,7 @@ void startSent()
 
 		if (getIcuParams(sentPin, &pinAF, &icu, &cfg->channel, &baseClock) != true) {
 			/* this pin has no ICU functionality, of ICU driver is not enabled for TIM on this pin */
-			/* throw error? */
+			criticalError("No ICU on selected SENT pin");
 			continue;
 		}
 
@@ -75,8 +73,7 @@ void startSent()
 	}
 }
 
-void stopSent()
-{
+void stopSent() {
 	for (int i = 0; i < SENT_INPUT_COUNT; i++) {
 		brain_input_pin_e sentPin = activeConfiguration.sentInputPins[i];
 

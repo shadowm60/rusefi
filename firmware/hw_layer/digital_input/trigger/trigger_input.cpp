@@ -91,7 +91,7 @@ static int turnOnTriggerInputPin(const char *msg, int index, bool isTriggerShaft
 		return 0;
 	}
 
-	firmwareError(CUSTOM_ERR_NOT_INPUT_PIN, "%s: Not input pin %s", msg, hwPortname(brainPin));
+	firmwareError(ObdCode::CUSTOM_ERR_NOT_INPUT_PIN, "%s: Not input pin %s", msg, hwPortname(brainPin));
 
 	return -1;
 }
@@ -145,7 +145,7 @@ static const char* const camNames[] = { "cam1", "cam2", "cam3", "cam4"};
 void startTriggerInputPins() {
 	for (int i = 0; i < TRIGGER_INPUT_PIN_COUNT; i++) {
 		if (isConfigurationChanged(triggerInputPins[i])) {
-			const char * msg = (i == 0 ? "Trigger #1" : (i == 1 ? "Trigger #2" : "Trigger #3"));
+			const char * msg = (i == 0 ? "Trigger #1" : "Trigger #2");
 			turnOnTriggerInputPin(msg, i, true);
 		}
 	}
@@ -157,8 +157,7 @@ void startTriggerInputPins() {
 	}
 }
 
-void turnOnTriggerInputPins() {
-	applyNewTriggerInputPins();
+void onEcuStartTriggerImplementation() {
 }
 
 #endif /* (HAL_TRIGGER_USE_PAL == TRUE) || (HAL_TRIGGER_USE_ADC == TRUE) */
@@ -182,25 +181,20 @@ void startTriggerDebugPins() {
 	}
 }
 
-void applyNewTriggerInputPins() {
+#endif /* EFI_SHAFT_POSITION_INPUT */
+
+void onEcuStartDoSomethingTriggerInputPins() {
 	if (hasFirmwareError()) {
 		return;
 	}
 
-#if EFI_PROD_CODE
-	// first we will turn off all the changed pins
-	stopTriggerInputPins();
-
+#if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
 	if (isBrainPinValid(engineConfiguration->triggerInputPins[0])) {
+	    // todo: we have another 'rpmCalculator.Register' for UNIT_TEST would be great to unify
 		engine->rpmCalculator.Register();
 	} else {
 		// if we do not have primary input channel maybe it's BCM mode and we inject RPM value via Lua?
 		engine->rpmCalculator.unregister();
 	}
-
-	// then we will enable all the changed pins
-	startTriggerInputPins();
-#endif /* EFI_PROD_CODE */
+#endif /* EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT */
 }
-
-#endif /* EFI_SHAFT_POSITION_INPUT */

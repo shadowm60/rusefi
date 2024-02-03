@@ -6,10 +6,10 @@ bool TriggerScheduler::assertNotInList(AngleBasedEvent *head, AngleBasedEvent *e
        assertNotInListMethodBody(head, element, nextToothEvent)
 }
 
-void TriggerScheduler::schedule(AngleBasedEvent* event, angle_t angle, action_s action) {
+void TriggerScheduler::schedule(const char *msg, AngleBasedEvent* event, angle_t angle, action_s action) {
 	event->setAngle(angle);
 
-	schedule(event, action);
+	schedule(msg, event, action);
 }
 
 /**
@@ -18,13 +18,14 @@ void TriggerScheduler::schedule(AngleBasedEvent* event, angle_t angle, action_s 
  * @return true if event corresponds to current tooth and was time-based scheduler
  *         false if event was put into queue for scheduling at a later tooth
  */
-bool TriggerScheduler::scheduleOrQueue(AngleBasedEvent *event,
+bool TriggerScheduler::scheduleOrQueue(const char *msg, AngleBasedEvent *event,
 		efitick_t edgeTimestamp,
 		angle_t angle,
 		action_s action,
 		float currentPhase, float nextPhase) {
 	event->setAngle(angle);
 
+    // *kludge* naming mess: if (shouldSchedule) { scheduleByAngle } else { schedule } see header for more details
 	if (event->shouldSchedule(currentPhase, nextPhase)) {
 		// if we're due now, just schedule the event
 		scheduleByAngle(
@@ -37,13 +38,19 @@ bool TriggerScheduler::scheduleOrQueue(AngleBasedEvent *event,
 		return true;
 	} else {
 		// If not due now, add it to the queue to be scheduled later
-		schedule(event, action);
+		schedule(msg, event, action);
 
 		return false;
 	}
 }
 
-void TriggerScheduler::schedule(AngleBasedEvent* event, action_s action) {
+void TriggerScheduler::schedule(const char *msg, AngleBasedEvent* event, action_s action) {
+	if (event->enginePhase < 0) {
+	    // at the moment we expect API consumer to wrap angle. shall we do the wrapping in the enginePhase setter?
+	    // i.e. what is the best level to take care of the range constraint?
+		criticalError("Negative angle %s %f", msg, event->enginePhase);
+	}
+
 	event->action = action;
 
 	{
@@ -123,10 +130,6 @@ void TriggerScheduler::scheduleEventsUntilNextTriggerTooth(int rpm,
 	}
 }
 
-void AngleBasedEvent::setAngle(angle_t angle) {
-	this->enginePhase = angle;
-}
-
 bool AngleBasedEvent::shouldSchedule(float currentPhase, float nextPhase) const {
 	return isPhaseInRange(this->enginePhase, currentPhase, nextPhase);
 }
@@ -151,7 +154,7 @@ AngleBasedEvent * TriggerScheduler::getElementAtIndexForUnitTest(int index) {
 			return current;
 		index--;
 	}
-	firmwareError(OBD_PCM_Processor_Fault, "getElementAtIndexForUnitText: null");
+	criticalError("getElementAtIndexForUnitText: null");
 	return nullptr;
 }
 #endif /* EFI_UNIT_TEST */

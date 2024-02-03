@@ -25,8 +25,9 @@
 
 #define EFI_HPFP FALSE
 
-#define EFI_ENABLE_CRITICAL_ENGINE_STOP FALSE
-#define EFI_ENABLE_ENGINE_WARNING FALSE
+#define ATOFF_BUFFER_SIZE 4
+
+#define ATOFF_BUFFER_SIZE 4
 
 /**
  * if you have a 60-2 trigger, or if you just want better performance, you
@@ -54,7 +55,7 @@
 /**
  * TunerStudio support.
  */
-#define EFI_TUNER_STUDIO TRUE
+#define EFI_TUNER_STUDIO FALSE
 
 /**
  * Bluetooth UART setup support.
@@ -77,7 +78,7 @@
 
 #define EFI_ALTERNATOR_CONTROL FALSE
 
-#define EFI_AUX_PID FALSE
+#define EFI_VVT_PID FALSE
 
 #define EFI_SIGNAL_EXECUTOR_SLEEP FALSE
 #define EFI_SIGNAL_EXECUTOR_ONE_TIMER TRUE
@@ -89,7 +90,7 @@
 
 #define TRIGGER_EXTREME_LOGGING FALSE
 
-#define EFI_INTERNAL_FLASH TRUE
+#define EFI_STORAGE_INT_FLASH TRUE
 
 /**
  * Usually you need shaft position input, but maybe you do not need it?
@@ -126,8 +127,8 @@
 #define EFI_CJ125 FALSE
 #endif
 
-#if !defined(EFI_MEMS) || defined(__DOXYGEN__)
- #define EFI_MEMS FALSE
+#if !defined(EFI_ONBOARD_MEMS) || defined(__DOXYGEN__)
+ #define EFI_ONBOARD_MEMS FALSE
 #endif
 
 #ifndef EFI_INTERNAL_ADC
@@ -155,10 +156,6 @@
  * Control the main power relay based on measured ignition voltage (Vbatt)
  */
 #define EFI_MAIN_RELAY_CONTROL FALSE
-
-#ifndef EFI_PWM
-#define EFI_PWM FALSE
-#endif
 
 #ifndef EFI_VEHICLE_SPEED
 #define EFI_VEHICLE_SPEED FALSE
@@ -259,8 +256,7 @@
  */
 #define EFI_USE_UART_DMA FALSE
 
-#define TS_PRIMARY_PORT UARTD2
-#undef TS_SECONDARY_PORT
+#define TS_PRIMARY_UxART_PORT UARTD2
 
 #define EFI_CONSOLE_TX_BRAIN_PIN Gpio::A10
 #define EFI_CONSOLE_RX_BRAIN_PIN Gpio::A11
@@ -286,16 +282,13 @@
 
 #define EFI_WARNING_LED FALSE
 
-#undef CONSOLE_MODE_SWITCH_PORT
-#undef CONFIG_RESET_SWITCH_PORT
-
 /**
  * This is the size of the MemoryStream used by chvprintf
  */
 #define LOGIC_ANALYZER_BUFFER_SIZE 10 /*1800*/
 #define DL_OUTPUT_BUFFER 10 /*6500*/
 
-#define UTILITY_THREAD_STACK_SIZE 270 /*400*/
+#define UTILITY_THREAD_STACK_SIZE 20 /*400*/
 
 //#define CONSOLE_THREAD_STACK_SIZE UTILITY_THREAD_STACK_SIZE
 
@@ -337,6 +330,8 @@
 #define RAM_UNUSED_SIZE 1
 #define CCM_UNUSED_SIZE 1
 
+#define EFI_BACKUP_SRAM FALSE
+
 #define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
 // #define EFI_PRINT_MESSAGES_TO_TERMINAL TRUE
 
@@ -351,6 +346,6 @@
 	if (__debugEnabled) { \
 		extern char __debugBuffer[80]; \
 		chsnprintf(__debugBuffer, sizeof(__debugBuffer), fmt, ##__VA_ARGS__); \
-		uart_lld_blocking_send(TS_PRIMARY_PORT, strlen(__debugBuffer), (void *)__debugBuffer); \
+		uart_lld_blocking_send(TS_PRIMARY_UxART_PORT, strlen(__debugBuffer), (void *)__debugBuffer); \
 	} \
 }

@@ -1,12 +1,15 @@
 # List of all the board related files.
 
-BOARDCPPSRC = $(PROJECT_DIR)/config/boards/nucleo_h743/board_configuration.cpp
+BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
 DDEFS += -DLED_CRITICAL_ERROR_BRAIN_PIN=Gpio::B14
 
 # Enable ethernet
 LWIP = yes
+ALLOW_SHADOW = yes
 DDEFS += -DEFI_ETHERNET=TRUE
 
 DDEFS += -DFIRMWARE_ID=\"nucleo_h743\"
-DDEFS += -DDEFAULT_ENGINE_TYPE=MINIMAL_PINS
+DDEFS += -DDEFAULT_ENGINE_TYPE=engine_type_e::MINIMAL_PINS
+DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_NUCLEO_H743
+SHORT_BOARD_NAME=stm32h743_nucleo

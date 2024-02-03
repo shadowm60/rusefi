@@ -1,19 +1,24 @@
 package com.rusefi.core;
 
 public class RusEfiSignature {
+    private final String branch;
     private final String year;
     private final String month;
     private final String day;
-    private final String bundle;
+    private final String bundleTarget;
     private final String hash;
 
-    public RusEfiSignature(String year, String month, String day, String bundle, String hash) {
-
+    public RusEfiSignature(String branch, String year, String month, String day, String bundleTarget, String hash) {
+        this.branch = branch;
         this.year = year;
         this.month = month;
         this.day = day;
-        this.bundle = bundle;
+        this.bundleTarget = bundleTarget;
         this.hash = hash;
+    }
+
+    public String getBranch() {
+        return branch;
     }
 
     public String getYear() {
@@ -28,8 +33,8 @@ public class RusEfiSignature {
         return day;
     }
 
-    public String getBundle() {
-        return bundle;
+    public String getBundleTarget() {
+        return bundleTarget;
     }
 
     public String getHash() {

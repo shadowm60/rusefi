@@ -16,19 +16,24 @@ angle_t getEngineCycle(operation_mode_e operationMode) {
 	return operationMode == TWO_STROKE ? 360 : FOUR_STROKE_ENGINE_CYCLE;
 }
 
+/**
+ * last fall aligned at 720 and skipped area is right before 720
+ */
 void addSkippedToothTriggerEvents(TriggerWheel wheel, TriggerWaveform *s, int totalTeethCount, int skippedCount,
 		float toothWidth, float offset, float engineCycle, float filterLeft, float filterRight) {
-	efiAssertVoid(CUSTOM_ERR_6586, totalTeethCount > 0, "total count");
-	efiAssertVoid(CUSTOM_ERR_6587, skippedCount >= 0, "skipped count");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6586, totalTeethCount > 0, "total count");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6587, skippedCount >= 0, "skipped count");
+
+	float oneTooth = engineCycle / totalTeethCount;
 
 	for (int i = 0; i < totalTeethCount - skippedCount - 1; i++) {
-		float angleDown = engineCycle / totalTeethCount * (i + (1 - toothWidth));
-		float angleUp = engineCycle / totalTeethCount * (i + 1);
+		float angleDown = oneTooth * (i + (1 - toothWidth));
+		float angleUp = oneTooth * (i + 1);
 		s->addEventClamped(offset + angleDown, TriggerValue::RISE, wheel, filterLeft, filterRight);
 		s->addEventClamped(offset + angleUp, TriggerValue::FALL, wheel, filterLeft, filterRight);
 	}
 
-	float angleDown = engineCycle / totalTeethCount * (totalTeethCount - skippedCount - 1 + (1 - toothWidth));
+	float angleDown = oneTooth * (totalTeethCount - skippedCount - 1 + (1 - toothWidth));
 	s->addEventClamped(offset + angleDown, TriggerValue::RISE, wheel, filterLeft, filterRight);
 	// custom handling of last event in order to avoid rounding error
 	s->addEventClamped(offset + engineCycle, TriggerValue::FALL, wheel, filterLeft, filterRight);
@@ -37,11 +42,11 @@ void addSkippedToothTriggerEvents(TriggerWheel wheel, TriggerWaveform *s, int to
 void initializeSkippedToothTrigger(TriggerWaveform *s, int totalTeethCount, int skippedCount,
 		operation_mode_e operationMode, SyncEdge syncEdge) {
 	if (totalTeethCount <= 0) {
-		firmwareError(CUSTOM_OBD_TRIGGER_WAVEFORM, "Invalid total tooth count for missing tooth decoder: %d", totalTeethCount);
+		firmwareError(ObdCode::CUSTOM_OBD_TRIGGER_WAVEFORM, "Invalid total tooth count for missing tooth decoder: %d", totalTeethCount);
 		s->setShapeDefinitionError(true);
 		return;
 	}
-	efiAssertVoid(CUSTOM_NULL_SHAPE, s != NULL, "TriggerWaveform is NULL");
+	efiAssertVoid(ObdCode::CUSTOM_NULL_SHAPE, s != NULL, "TriggerWaveform is NULL");
 
 	s->initialize(operationMode, syncEdge);
 
@@ -125,30 +130,41 @@ void configureKawaKX450F(TriggerWaveform *s) {
 	addSkippedToothTriggerEvents(TriggerWheel::T_PRIMARY, s, 18, 0, toothWidth, 0, engineCycle,
 			NO_LEFT_FILTER, 720 - 39);
 
-	s->addEvent(0.97, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEvent(1, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+	s->addToothRiseFall(360, /* width*/10.80);
 }
 
 void configureQuickStartSenderWheel(TriggerWaveform *s) {
+	// todo: most cam wheels are defined as 'SyncEdge::Rise' or 'SyncEdge::RiseOnly' shall we unify?
 	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::Fall);
-
-	int offset = 20;
 
 	// our preference is to sync not too close to crank sync point
 	s->setTriggerSynchronizationGap(0.645);
 	s->setSecondTriggerSynchronizationGap(1.556);
 
-	s->addEvent360(offset + 0, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEvent360(offset + 70, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+	s->addToothRiseFall(90, /* width*/ 70);
+	s->addToothRiseFall(130, /* width*/ 20);
+	s->addToothRiseFall(220, /* width*/ 20);
+	s->addToothRiseFall(360, /* width*/ 70);
+}
 
-	s->addEvent360(offset + 90, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEvent360(offset + 110, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+static void commonSymmetrical(TriggerWaveform* s, int count) {
+	s->shapeWithoutTdc = true;
 
-	s->addEvent360(offset + 180, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEvent360(offset + 200, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+	// Sync after 2 good teeth
+	for (size_t i = 0; i < 2; i++) {
+		/**
+		 * https://github.com/rusefi/rusefi/issues/4943#issuecomment-1376289608
+		 * gaps would be nice during running but horrible during running
+		 * Hopefully we do not want variable gap logic yet?
+		 */
+		s->setTriggerSynchronizationGap3(i, 0.2f, 3.4f);
+	}
 
-	s->addEvent360(offset + 270, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEvent360(offset + 340, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+    float width = 360 / count;
+
+	// Just a single tooth with 50% duty cycle
+	s->addEventAngle(width / 2, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
+	s->addEventAngle(width, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
 }
 
 // Useful for:
@@ -157,14 +173,16 @@ void configureQuickStartSenderWheel(TriggerWaveform *s) {
 void configure12ToothCrank(TriggerWaveform* s) {
 	s->initialize(FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
 
-	s->shapeWithoutTdc = true;
+	// 2JZ would be global trigger offset 65 but same wheel could be Honda, not hard coding for now
+  commonSymmetrical(s, 12);
+}
 
-	// Sync after 3 good teeth
-	for (size_t i = 0; i < 3; i++) {
-		s->setTriggerSynchronizationGap3(i, 0.55f, 1.45f);
-	}
+void configure3ToothCrank(TriggerWaveform* s) {
+	s->initialize(FOUR_STROKE_THREE_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
+  commonSymmetrical(s, 3);
+}
 
-	// Just a single tooth with 50% duty cycle
-	s->addEventAngle(15, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
-	s->addEventAngle(30, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
+void configure6ToothCrank(TriggerWaveform* s) {
+	s->initialize(FOUR_STROKE_SIX_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
+  commonSymmetrical(s, 6);
 }

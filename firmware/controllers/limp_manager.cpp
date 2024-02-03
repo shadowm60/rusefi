@@ -4,8 +4,11 @@
 #include "fuel_math.h"
 #include "main_trigger_callback.h"
 
+#if EFI_ENGINE_CONTROL
+
 #define CLEANUP_MODE_TPS 90
 
+#if EFI_SHAFT_POSITION_INPUT
 static bool noFiringUntilVvtSync(vvt_mode_e vvtMode) {
 	auto operationMode = getEngineRotationState()->getOperationMode();
 
@@ -18,10 +21,15 @@ static bool noFiringUntilVvtSync(vvt_mode_e vvtMode) {
 		// in rare cases engines do not like random sequential mode
 		return true;
 	}
+	if (isGdiEngine()) {
+#if EFI_PROD_CODE
+	    criticalError("For GDI please configure CAM and require sync for ignition");
+#endif
+	}
 
 	// Odd cylinder count engines don't work properly with wasted spark, so wait for full sync (so that sequential works)
 	// See https://github.com/rusefi/rusefi/issues/4195 for the issue to properly support this case
-	if (engineConfiguration->specs.cylindersCount > 1 && engineConfiguration->specs.cylindersCount % 2 == 1) {
+	if (engineConfiguration->cylindersCount > 1 && engineConfiguration->cylindersCount % 2 == 1) {
 		return true;
 	}
 
@@ -33,42 +41,73 @@ static bool noFiringUntilVvtSync(vvt_mode_e vvtMode) {
 		operationMode == FOUR_STROKE_THREE_TIMES_CRANK_SENSOR ||
 		operationMode == FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR;
 }
+#endif // EFI_SHAFT_POSITION_INPUT
 
 void LimpManager::onFastCallback() {
 	updateState(Sensor::getOrZero(SensorType::Rpm), getTimeNowNt());
+}
+
+void LimpManager::updateRevLimit(int rpm) {
+	// User-configured hard RPM limit, either constant or CLT-lookup
+	m_revLimit = engineConfiguration->useCltBasedRpmLimit
+		? interpolate2d(Sensor::getOrZero(SensorType::Clt), engineConfiguration->cltRevLimitRpmBins, engineConfiguration->cltRevLimitRpm)
+		: (float)engineConfiguration->rpmHardLimit;
+
+	// Require configurable rpm drop before resuming
+	resumeRpm = m_revLimit - engineConfiguration->rpmHardLimitHyst;
+
+	m_timingRetard = interpolateClamped(resumeRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitTimingRetard, rpm);
+
+	percent_t fuelAdded = interpolateClamped(resumeRpm, 0, m_revLimit, engineConfiguration->rpmSoftLimitFuelAdded, rpm);
+	m_fuelCorrection = 1.0f + fuelAdded / 100;
 }
 
 void LimpManager::updateState(int rpm, efitick_t nowNt) {
 	Clearable allowFuel = engineConfiguration->isInjectionEnabled;
 	Clearable allowSpark = engineConfiguration->isIgnitionEnabled;
 
-#if !EFI_UNIT_TEST
-	if (!m_ignitionOn) {
+#if EFI_SHAFT_POSITION_INPUT && !EFI_UNIT_TEST
+	if (!m_ignitionOn
+	&& !engine->triggerCentral.directSelfStimulation // useful to try things on real ECU even without ignition voltage
+	) {
 		allowFuel.clear(ClearReason::IgnitionOff);
 		allowSpark.clear(ClearReason::IgnitionOff);
 	}
 #endif
 
-	{
-		// User-configured hard RPM limit, either constant or CLT-lookup
-		// todo: migrate to engineState->desiredRpmLimit to get this variable logged
-		float revLimit = engineConfiguration->useCltBasedRpmLimit
-			? interpolate2d(Sensor::getOrZero(SensorType::Clt), engineConfiguration->cltRevLimitRpmBins, engineConfiguration->cltRevLimitRpm)
-			: (float)engineConfiguration->rpmHardLimit;
+    if (isGdiEngine()) {
+        if (gdiComms.getElapsedSeconds() > 1) {
+            allowFuel.clear(ClearReason::GdiComms);
+        }
+    }
 
-		// Require 50 rpm drop before resuming
-		if (m_revLimitHysteresis.test(rpm, revLimit, revLimit - 50)) {
-			if (engineConfiguration->cutFuelOnHardLimit) {
-				allowFuel.clear(ClearReason::HardLimit);
-			}
+	if (engine->engineState.lua.luaIgnCut) {
+		allowSpark.clear(ClearReason::Lua);
+	}
 
-			if (engineConfiguration->cutSparkOnHardLimit) {
-				allowSpark.clear(ClearReason::HardLimit);
-			}
+#if EFI_HD_ACR
+	// Don't inject fuel during Harley compression release - it sprays fuel everywhere
+	if (engine->module<HarleyAcr>()->isActive() && engineConfiguration->cutFuelInAcr) {
+		allowFuel.clear(ClearReason::ACR);
+	}
+#endif // EFI_HD_ACR
+
+	updateRevLimit(rpm);
+	if (m_revLimitHysteresis.test(rpm, m_revLimit, resumeRpm)) {
+		if (engineConfiguration->cutFuelOnHardLimit) {
+			allowFuel.clear(ClearReason::HardLimit);
+		}
+
+		if (engineConfiguration->cutSparkOnHardLimit) {
+			allowSpark.clear(ClearReason::HardLimit);
 		}
 	}
 
 #if EFI_SHAFT_POSITION_INPUT
+	if (engine->lambdaMonitor.isCut()) {
+		allowFuel.clear(ClearReason::LambdaProtection);
+	}
+
 	if (noFiringUntilVvtSync(engineConfiguration->vvtMode[0])
 			&& !engine->triggerCentral.triggerState.hasSynchronizedPhase()) {
 		// Any engine that requires cam-assistance for a full crank sync (symmetrical crank) can't schedule until we have cam sync
@@ -78,7 +117,6 @@ void LimpManager::updateState(int rpm, efitick_t nowNt) {
 		allowFuel.clear(ClearReason::EnginePhase);
 		allowSpark.clear(ClearReason::EnginePhase);
 	}
-#endif // EFI_SHAFT_POSITION_INPUT
 
 	// Force fuel limiting on the fault rev limit
 	if (rpm > m_faultRevLimit) {
@@ -88,12 +126,12 @@ void LimpManager::updateState(int rpm, efitick_t nowNt) {
 	// Limit fuel only on boost pressure (limiting spark bends valves)
 	float mapCut = engineConfiguration->boostCutPressure;
 	if (mapCut != 0) {
-		// require drop of 20kPa to resume fuel
-		if (m_boostCutHysteresis.test(Sensor::getOrZero(SensorType::Map), mapCut, mapCut - 20)) {
+		// require drop of 'boostCutPressureHyst' kPa to resume fuel
+		if (m_boostCutHysteresis.test(Sensor::getOrZero(SensorType::Map), mapCut, mapCut - engineConfiguration->boostCutPressureHyst)) {
 			allowFuel.clear(ClearReason::BoostCut);
 		}
 	}
-#if EFI_SHAFT_POSITION_INPUT
+
 	if (engine->rpmCalculator.isRunning()) {
 		uint16_t minOilPressure = engineConfiguration->minOilPressureAfterStart;
 
@@ -132,11 +170,33 @@ void LimpManager::updateState(int rpm, efitick_t nowNt) {
 		allowFuel.clear(ClearReason::StopRequested);
 	}
 
-	// If duty cycle is high, impose a fuel cut rev limiter.
-	// This is safer than attempting to limp along with injectors or a pump that are out of flow.
-	// only reset once below 20% duty to force the driver to lift
-	if (m_injectorDutyCutHysteresis.test(getInjectorDutyCycle(rpm), 96, 20)) {
-		allowFuel.clear(ClearReason::InjectorDutyCycle);
+	{
+		// If duty cycle is high, impose a fuel cut rev limiter.
+		// This is safer than attempting to limp along with injectors or a pump that are out of flow.
+		// Two conditions will trigger a cut:
+		// - An instantaneous excursion above maxInjectorDutyInstant
+		// - A sustained excursion above maxInjectorDutySustained for a duration of >= maxInjectorDutySustainedTimeout
+		// Only reset once below 20% duty to force the driver to lift off the pedal
+
+		auto injDutyCycle = getInjectorDutyCycle(rpm);
+		bool isOverInstantDutyCycle = injDutyCycle > engineConfiguration->maxInjectorDutyInstant;
+		bool isOverSustainedDutyCycle = injDutyCycle > engineConfiguration->maxInjectorDutySustained;
+		bool isUnderLowDuty = injDutyCycle < 20;
+
+		if (!isOverSustainedDutyCycle) {
+			// Duty cycle is OK, reset timer.
+			m_injectorDutySustainedTimer.reset(nowNt);
+		}
+
+		// True if isOverSustainedDutyCycle has been true for longer than the timeout
+		bool sustainedLimitTimedOut = m_injectorDutySustainedTimer.hasElapsedSec(engineConfiguration->maxInjectorDutySustainedTimeout);
+
+		bool someLimitTripped = isOverInstantDutyCycle || sustainedLimitTimedOut;
+
+		if (m_injectorDutyCutHysteresis.test(someLimitTripped, isUnderLowDuty)) {
+			allowFuel.clear(ClearReason::InjectorDutyCycle);
+			warning(ObdCode::CUSTOM_TOO_LONG_FUEL_INJECTION, "Injector duty cycle cut %.1f", injDutyCycle);
+		}
 	}
 
 	// If the pedal is pushed while not running, cut fuel to clear a flood condition.
@@ -145,6 +205,7 @@ void LimpManager::updateState(int rpm, efitick_t nowNt) {
 		Sensor::getOrZero(SensorType::DriverThrottleIntent) > CLEANUP_MODE_TPS) {
 		allowFuel.clear(ClearReason::FloodClear);
 	}
+#endif // EFI_SHAFT_POSITION_INPUT
 
 	if (!engine->isMainRelayEnabled()) {
 /*
@@ -153,8 +214,6 @@ todo AndreiKA this change breaks 22 unit tests?
 		allowSpark.clear();
 */
 	}
-	
-#endif // EFI_SHAFT_POSITION_INPUT
 
 #if EFI_LAUNCH_CONTROL
 	// Fuel cut if launch control engaged
@@ -170,6 +229,11 @@ todo AndreiKA this change breaks 22 unit tests?
 
 	m_transientAllowInjection = allowFuel;
 	m_transientAllowIgnition = allowSpark;
+
+	if (!m_transientAllowInjection || !m_transientAllowIgnition) {
+		// Tracks the last time any cut happened
+		m_lastCutTime.reset(nowNt);
+	}
 }
 
 void LimpManager::onIgnitionStateChanged(bool ignitionOn) {
@@ -223,3 +287,20 @@ LimpState LimpManager::allowIgnition() const {
 	}
 	return {true, ClearReason::None};
 }
+
+angle_t LimpManager::getLimitingTimingRetard() const {
+	if (!engineConfiguration->cutSparkOnHardLimit)
+		return 0;
+	return m_timingRetard;
+}
+
+float LimpManager::getLimitingFuelCorrection() const {
+	if (!engineConfiguration->cutFuelOnHardLimit)
+		return 1.0f;	// no correction
+	return m_fuelCorrection;
+}
+
+float LimpManager::getTimeSinceAnyCut() const {
+	return m_lastCutTime.getElapsedSeconds();
+}
+#endif // EFI_ENGINE_CONTROL

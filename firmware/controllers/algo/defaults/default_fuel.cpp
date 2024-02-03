@@ -4,31 +4,31 @@
 #include "table_helper.h"
 #include "mazda_miata_vvt.h"
 
-static void setBosch02880155868() {
+static void setBosch02880155868(injector_s& cfg) {
 	// http://www.boschdealer.com/specsheets/0280155868cs.jpg
-	engineConfiguration->injector.battLagCorrBins[0] = 6;
-	engineConfiguration->injector.battLagCorr[0] = 3.371;
+	cfg.battLagCorrBins[0] = 6;
+	cfg.battLagCorr[0] = 3.371;
 
-	engineConfiguration->injector.battLagCorrBins[1] = 8;
-	engineConfiguration->injector.battLagCorr[1] = 1.974;
+	cfg.battLagCorrBins[1] = 8;
+	cfg.battLagCorr[1] = 1.974;
 
-	engineConfiguration->injector.battLagCorrBins[2] = 10;
-	engineConfiguration->injector.battLagCorr[2] = 1.383;
+	cfg.battLagCorrBins[2] = 10;
+	cfg.battLagCorr[2] = 1.383;
 
-	engineConfiguration->injector.battLagCorrBins[3] = 11;
-	engineConfiguration->injector.battLagCorr[3] = 1.194;
+	cfg.battLagCorrBins[3] = 11;
+	cfg.battLagCorr[3] = 1.194;
 
-	engineConfiguration->injector.battLagCorrBins[4] = 12;
-	engineConfiguration->injector.battLagCorr[4] = 1.04;
+	cfg.battLagCorrBins[4] = 12;
+	cfg.battLagCorr[4] = 1.04;
 
-	engineConfiguration->injector.battLagCorrBins[5] = 13;
-	engineConfiguration->injector.battLagCorr[5] = 0.914;
+	cfg.battLagCorrBins[5] = 13;
+	cfg.battLagCorr[5] = 0.914;
 
-	engineConfiguration->injector.battLagCorrBins[6] = 14;
-	engineConfiguration->injector.battLagCorr[6] = 0.797;
+	cfg.battLagCorrBins[6] = 14;
+	cfg.battLagCorr[6] = 0.797;
 
-	engineConfiguration->injector.battLagCorrBins[7] = 15;
-	engineConfiguration->injector.battLagCorr[7] = 0.726;
+	cfg.battLagCorrBins[7] = 15;
+	cfg.battLagCorr[7] = 0.726;
 }
 
 static void setDefaultWarmupFuelEnrichment() {
@@ -86,6 +86,20 @@ static void setDefaultVETable() {
 
 	// Default baro table is all 1.0, we can't recommend a reasonable default here
 	setTable(config->baroCorrTable, 1);
+
+	// Give default axes for cylinder trim tables
+	copyArray(config->fuelTrimRpmBins, { 1000, 3000, 5000, 7000 });
+	copyArray(config->fuelTrimLoadBins, { 20, 50, 80, 100 });
+
+	// Default axes for VE blends
+	for (size_t i = 0; i < efi::size(config->veBlends); i++) {
+		auto& blend = config->veBlends[i];
+		setLinearCurve(blend.loadBins, 0, 100, 10);
+		setLinearCurve(blend.rpmBins, 0, 7000);
+
+		setLinearCurve(blend.blendBins, 0, 100);
+		setLinearCurve(blend.blendValues, 0, 100);
+	}
 }
 
 static void setDefaultFuelCutParameters() {
@@ -210,6 +224,28 @@ void setDefaultWallWetting() {
 	copyArray(engineConfiguration->wwBetaMapValues, betaMap);
 }
 
+static void setDefaultLambdaProtection() {
+	engineConfiguration->lambdaProtectionEnable = false;
+
+	engineConfiguration->lambdaProtectionMinLoad = 60;
+	engineConfiguration->lambdaProtectionMinRpm = 2500;
+	engineConfiguration->lambdaProtectionMinTps = 50;
+	engineConfiguration->lambdaProtectionTimeout = 0.5f;
+
+	engineConfiguration->lambdaProtectionRestoreLoad = 30;
+	engineConfiguration->lambdaProtectionRestoreRpm = 2000;
+	engineConfiguration->lambdaProtectionRestoreTps = 20;
+}
+
+static void setDefaultPriming() {
+	// These defaults are reasonable for ~500cc cylinders
+	static constexpr int8_t primeBins[]     = { -40, -20,   0,  20, 40, 60, 80, 100 };
+	static constexpr uint16_t primeValues[] = { 755, 605, 265, 140, 75, 50, 45,  40 };
+
+	copyArray(engineConfiguration->primeBins, primeBins);
+	copyArray(engineConfiguration->primeValues, primeValues);
+}
+
 void setDefaultFuel() {
 	// Base injection configuration
 	engineConfiguration->isInjectionEnabled = true;
@@ -219,13 +255,15 @@ void setDefaultFuel() {
 	 * By the way http://users.erols.com/srweiss/tableifc.htm has a LOT of data
 	 */
 	engineConfiguration->injector.flow = 200;
+	engineConfiguration->injectorSecondary.flow = 200;
 	engineConfiguration->stoichRatioPrimary = STOICH_RATIO;
 
 	// 9.0 = E100 pure ethanol
 	engineConfiguration->stoichRatioSecondary = 9.0f;
 
 	// Injector deadtime
-	setBosch02880155868();
+	setBosch02880155868(engineConfiguration->injector);
+	setBosch02880155868(engineConfiguration->injectorSecondary);
 
 	// Tables
 	setFuelTablesLoadBin(10, 160);
@@ -237,6 +275,14 @@ void setDefaultFuel() {
 	setDefaultVETable();
 	setDefaultLambdaTable();
 
+	setLinearCurve(config->injectorStagingLoadBins, 0, 100, 10);
+	setRpmTableBin(config->injectorStagingRpmBins);
+
+	setRpmTableBin(config->mapEstimateRpmBins);
+	setLinearCurve(config->mapEstimateTpsBins, 0, 100);
+	setTable(config->mapEstimateTable, 60);
+
+	// most of rusEFI installations are still port injected, for GDI see 'setGDIFueling'
 	// -400 will close the injector just before TDC at the end of the exhaust stroke,
 	// around the time the intake valve opens.
 	setTable(config->injectionPhase, -400.0f);
@@ -274,4 +320,15 @@ void setDefaultFuel() {
 
 	// Some reasonable reference pressure that many vehicles use
 	engineConfiguration->fuelReferencePressure = 300;
+
+	// Lambda protection defaults
+	setDefaultLambdaProtection();
+
+	setDefaultPriming();
+
+	// Cut at 110% instantly
+	engineConfiguration->maxInjectorDutyInstant = 110;
+	// Cut at 96% after 0.5 second
+	engineConfiguration->maxInjectorDutySustained = 96;
+	engineConfiguration->maxInjectorDutySustainedTimeout = 0.5f;
 }

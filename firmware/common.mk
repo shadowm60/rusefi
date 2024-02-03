@@ -19,7 +19,8 @@ ALLCPPSRC += \
 	$(CONTROLLERS_ALGO_SRC_CPP) \
 	$(CONTROLLERS_SENSORS_SRC_CPP) \
 	$(TUNERSTUDIO_SRC_CPP) \
-	$(HW_LAYER_EMS_CPP) \
+	$(HW_LAYER_CPP) \
+	$(HW_LAYER_PORT_CPP) \
 	$(HW_SENSORS_CPP) \
 	$(SYSTEMSRC_CPP) \
 	$(UTILSRC_CPP) \
@@ -32,8 +33,9 @@ ALLCPPSRC += \
 ALLINC += \
 	$(CONSOLE_INC) \
  	$(DEVELOPMENT_DIR) \
+	$(ENGINES_INC) \
 	$(PROJECT_DIR)/config/engines \
-	$(PROJECT_DIR)/config/boards/ \
+	$(BOARDS_DIR) \
 	$(PROJECT_DIR)/hw_layer/algo \
     $(PROJECT_DIR)/init \
     $(PROJECT_DIR)/ext_algo \
@@ -41,6 +43,7 @@ ALLINC += \
 	$(HW_LAYER_INC) \
   	$(HW_SENSORS_INC) \
 	$(UTIL_INC) \
+	$(CONTROLLERS_SENSORS_INC) \
 	$(CONTROLLERS_INC) \
 	$(PROJECT_DIR)/console/binary/generated \
 	

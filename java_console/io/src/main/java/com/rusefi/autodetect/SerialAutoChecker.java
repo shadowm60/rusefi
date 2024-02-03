@@ -4,11 +4,10 @@ import com.devexperts.logging.Logging;
 import com.rusefi.binaryprotocol.IncomingDataBuffer;
 import com.rusefi.config.generated.Fields;
 import com.rusefi.io.IoStream;
-import com.rusefi.io.can.Elm327Connector;
+import com.rusefi.io.can.elm.Elm327Connector;
 import com.rusefi.io.commands.HelloCommand;
 import com.rusefi.io.serial.BufferedSerialIoStream;
 import com.rusefi.io.serial.SerialIoStream;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -33,27 +32,27 @@ public class SerialAutoChecker {
     /**
      * @return ECU signature from specified stream
      */
-    public String checkResponse(IoStream stream, Function<CallbackContext, Void> callback) {
+    public static String checkResponse(IoStream stream, Function<CallbackContext, Void> callback) {
         if (stream == null)
             return null;
-        if (mode == PortDetector.DetectorMode.DETECT_ELM327) {
-            if (Elm327Connector.checkConnection(serialPort, stream)) {
-                // todo: this method is supposed to return signature not serial port!
-                return serialPort;
-            }
-            return null;
-        }
+//        if (mode == PortDetector.DetectorMode.DETECT_ELM327) {
+//            if (Elm327Connector.checkConnection(serialPort, stream)) {
+//                // todo: this method is supposed to return signature not serial port!
+//                return serialPort;
+//            }
+//            return null;
+//        }
         IncomingDataBuffer incomingData = stream.getDataBuffer();
         try {
             HelloCommand.send(stream);
             byte[] response = incomingData.getPacket("auto detect");
-            if (!checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK))
+            if (!checkResponseCode(response))
                 return null;
             String signature = new String(response, 1, response.length - 1);
             if (!signature.startsWith(Fields.PROTOCOL_SIGNATURE_PREFIX)) {
                 return null;
             }
-            log.info("Got signature=" + signature + " from " + serialPort);
+            log.info("Got signature=" + signature + " from " + stream);
             if (callback != null) {
                 callback.apply(new CallbackContext(stream, signature));
             }

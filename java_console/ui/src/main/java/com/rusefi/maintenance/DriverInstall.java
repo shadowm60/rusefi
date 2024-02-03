@@ -1,13 +1,13 @@
 package com.rusefi.maintenance;
 
 import com.rusefi.FileLog;
-import com.rusefi.ui.StatusConsumer;
-import com.rusefi.ui.StatusWindow;
+import com.rusefi.io.UpdateOperationCallbacks;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.FileNotFoundException;
 
 /**
  * This code automates drivers unpacking and installation
@@ -33,8 +33,7 @@ public class DriverInstall {
                 if (dialogResult != JOptionPane.YES_OPTION)
                     return;
 
-                final StatusWindow wnd = new StatusWindow();
-                wnd.showFrame("Windows rusEFI ST Drivers");
+                final UpdateOperationCallbacks wnd = new UpdateStatusWindow("Windows rusEFI ST Drivers");
 
                 ExecHelper.submitAction(() -> installDrivers(wnd), getClass() + " thread");
 
@@ -44,7 +43,7 @@ public class DriverInstall {
         return button;
     }
 
-    private static void installDrivers(StatusConsumer wnd) {
+    private static void installDrivers(UpdateOperationCallbacks wnd) {
         FileLog.MAIN.logLine("IsWindows=" + FileLog.isWindows());
         if (!new File(FOLDER).exists()) {
             String message = FOLDER + " not found";
@@ -52,13 +51,18 @@ public class DriverInstall {
             FileLog.MAIN.logLine(message);
             return;
         }
+      try {
         ExecHelper.executeCommand(FOLDER,
                 FOLDER + File.separator + SELF_UNCOMPRESSING_ARCHIVE + YES,
                 SELF_UNCOMPRESSING_ARCHIVE,
                 wnd);
 
-        String batch = isWindows7orBelow() ? WINDOWS7_BATCH : WINDOWS8_BATCH;
+      String batch = isWindows7orBelow() ? WINDOWS7_BATCH : WINDOWS8_BATCH;
         ExecHelper.executeCommand(UNPACKED_FOLDER, ExecHelper.getBatchCommand(batch), batch, wnd);
+      } catch (FileNotFoundException e) {
+        wnd.append(e.toString());
+        wnd.error();
+      }
     }
 
     private static boolean isWindows7orBelow() {

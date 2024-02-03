@@ -1,7 +1,10 @@
 /*
- * mc33972.c
+ * mc33972.cpp
+ * looks like chip is not very available these days TODO https://github.com/rusefi/rusefi/issues/5733
  *
  * Multiple Switch Detection Interface with Suppressed Wake-up
+ *
+ * TODO: add analog muxing part of the driver
  *
  * The 33972 Multiple Switch Detection Interface with suppressed
  * wake-up is designed to detect the closing and opening of up to 22
@@ -415,7 +418,7 @@ int mc33972_add(brain_pin_e base, unsigned int index, const struct mc33972_confi
 		return -1;
 
 	/* check for valid cs.
-	 * DOTO: remove this check? CS can be driven by SPI */
+	 * TODO: remove this check? CS can be driven by SPI */
 	if (!cfg->spi_config.ssport) {
 		return -1;
 	}

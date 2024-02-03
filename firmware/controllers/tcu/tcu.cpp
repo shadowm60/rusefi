@@ -30,7 +30,12 @@ gear_e TransmissionControllerBase::getCurrentGear() const {
 
 void TransmissionControllerBase::postState() {
 #if EFI_TUNER_STUDIO
-    engine->outputChannels.tcuCurrentGear = getCurrentGear();
+	auto iss = Sensor::get(SensorType::InputShaftSpeed);
+	auto rpm = Sensor::get(SensorType::Rpm);
+	if (iss.Valid && rpm.Valid) {
+		tcRatio = rpm.Value / iss.Value;
+	}
+  tcuCurrentGear = getCurrentGear();
 #endif
 }
 
@@ -41,7 +46,7 @@ void TransmissionControllerBase::measureShiftTime(gear_e gear) {
 }
 
 float TransmissionControllerBase::isShiftCompleted() {
-	if (m_shiftTime &&  m_shiftTimeGear == engine->module<GearDetector>()->getCurrentGear()) {
+	if (m_shiftTime &&  m_shiftTimeGear == Sensor::getOrZero(SensorType::DetectedGear)) {
 		m_shiftTime = false;
 		return m_shiftTimer.getElapsedSeconds();
 	} else {

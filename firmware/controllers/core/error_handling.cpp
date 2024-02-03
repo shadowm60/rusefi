@@ -6,15 +6,14 @@
  */
 
 #include "pch.h"
+#include "rusefi/efistringutil.h"
 
 #include "backup_ram.h"
+#include "error_handling_led.h"
+#include "log_hard_fault.h"
 
 static critical_msg_t warningBuffer;
 static critical_msg_t criticalErrorMessageBuffer;
-
-#if EFI_HD44780_LCD
-#include "HD44780.h"
-#endif /* EFI_HD44780_LCD */
 
 extern int warningEnabled;
 
@@ -29,19 +28,41 @@ const char* getCriticalErrorMessage(void) {
 
 #if EFI_PROD_CODE
 void checkLastBootError() {
+#if EFI_BACKUP_SRAM
 	auto sramState = getBackupSram();
-	
+
 	switch (sramState->Cookie) {
 	case ErrorCookie::FirmwareError:
 		efiPrintf("Last boot had firmware error: %s", sramState->ErrorString);
 		break;
 	case ErrorCookie::HardFault: {
+		efiPrintf("Last boot had raw: %s", sramState->rawMsg);
+		efiPrintf("Last boot had hardFile: %s", sramState->hardFile);
+		efiPrintf("Last boot had line: %d", sramState->hardLine);
+		efiPrintf("Last boot had check: %d", sramState->check);
+		efiPrintf("Last boot had error: %s", sramState->ErrorString);
 		efiPrintf("Last boot had hard fault type: %x addr: %x CSFR: %x", sramState->FaultType, sramState->FaultAddress, sramState->Csfr);
+		if (engineConfiguration->rethrowHardFault) {
+		    criticalError("Last boot had hard fault type: %x addr: %x CSFR: %x", sramState->FaultType, sramState->FaultAddress, sramState->Csfr);
+		}
 
-		// Print out the context as a sequence of uintptr
-		uintptr_t* data = reinterpret_cast<uintptr_t*>(&sramState->FaultCtx);
-		for (size_t i = 0; i < sizeof(port_extctx) / sizeof(uintptr_t); i++) {
-			efiPrintf("Fault ctx %d: %x", i, data[i]);
+		auto ctx = &sramState->FaultCtx;
+		efiPrintf("r0  0x%x", ctx->r0);
+		efiPrintf("r1  0x%x", ctx->r1);
+		efiPrintf("r2  0x%x", ctx->r2);
+		efiPrintf("r3  0x%x", ctx->r3);
+		efiPrintf("r12 0x%x", ctx->r12);
+		efiPrintf("lr (thread)  0x%x", ctx->lr_thd);
+		efiPrintf("pc  0x%x", ctx->pc);
+		efiPrintf("xpsr  0x%x", ctx->xpsr);
+
+		/* FPU registers - not very usefull for debug */
+		if (0) {
+			// Print rest the context as a sequence of uintptr
+			uintptr_t* data = reinterpret_cast<uintptr_t*>(&sramState->FaultCtx);
+			for (size_t i = 8; i < sizeof(port_extctx) / sizeof(uintptr_t); i++) {
+				efiPrintf("Fault ctx %d: %x", i, data[i]);
+			}
 		}
 
 		break;
@@ -61,20 +82,22 @@ void checkLastBootError() {
 
 	efiPrintf("Power cycle count: %d", sramState->BootCount);
 	sramState->BootCount++;
+#endif // EFI_BACKUP_SRAM
 }
 
 void logHardFault(uint32_t type, uintptr_t faultAddress, port_extctx* ctx, uint32_t csfr) {
+    criticalShutdown();
+#if EFI_BACKUP_SRAM
 	auto sramState = getBackupSram();
 	sramState->Cookie = ErrorCookie::HardFault;
+	sramState->check = 321;
 	sramState->FaultType = type;
 	sramState->FaultAddress = faultAddress;
 	sramState->Csfr = csfr;
 	memcpy(&sramState->FaultCtx, ctx, sizeof(port_extctx));
+#endif // EFI_BACKUP_SRAM
 }
 
-extern ioportid_t criticalErrorLedPort;
-extern ioportmask_t criticalErrorLedPin;
-extern uint8_t criticalErrorLedState;
 #endif /* EFI_PROD_CODE */
 
 #if EFI_SIMULATOR || EFI_PROD_CODE
@@ -84,6 +107,14 @@ void chDbgPanic3(const char *msg, const char * file, int line) {
 	// Attempt to break in to the debugger, if attached
 	__asm volatile("BKPT #0\n");
 #endif
+
+#if EFI_BACKUP_SRAM
+	auto sramState = getBackupSram();
+	strncpy(sramState->hardFile, file, efi::size(sramState->hardFile) - 1);
+	sramState->hardLine = line;
+	sramState->check = 123;
+	strncpy(sramState->rawMsg, msg, efi::size(sramState->rawMsg) - 1);
+#endif // EFI_BACKUP_SRAM
 
 	if (hasOsPanicError())
 		return;
@@ -98,11 +129,7 @@ void chDbgPanic3(const char *msg, const char * file, int line) {
 	exit(-1);
 #else // EFI_PROD_CODE
 
-#if EFI_HD44780_LCD
-	lcdShowPanicMessage((char *) msg);
-#endif /* EFI_HD44780_LCD */
-
-	firmwareError(OBD_PCM_Processor_Fault, "assert fail %s %s:%d", msg, file, line);
+	criticalError("assert fail %s %s:%d", msg, file, line);
 
 	// If on the main thread, longjmp back to the init process so we can keep USB alive
 	if (chThdGetSelfX()->threadId == 0) {
@@ -131,34 +158,38 @@ WarningCodeState unitTestWarningCodeState;
 #endif /* EFI_SIMULATOR || EFI_PROD_CODE */
 
 /**
- * OBD_PCM_Processor_Fault is the general error code for now
+ * ObdCode::OBD_PCM_Processor_Fault is the general error code for now
  *
  * @returns TRUE in case there were warnings recently
  */
-bool warning(obd_code_e code, const char *fmt, ...) {
+bool warning(ObdCode code, const char *fmt, ...) {
 	if (hasFirmwareErrorFlag)
 		return true;
 
-#if EFI_SIMULATOR
-	printf("sim_warning %s\r\n", fmt);
-#endif /* EFI_SIMULATOR */
-
 #if EFI_SIMULATOR || EFI_PROD_CODE
+	bool known = engine->engineState.warnings.isWarningNow(code);
+
+	// if known - just reset timer
+	engine->engineState.warnings.addWarningCode(code);
+
 	// we just had this same warning, let's not spam
-	if (engine->engineState.warnings.isWarningNow(code) || !warningEnabled) {
+	if (known) {
 		return true;
 	}
 
-	engine->engineState.warnings.addWarningCode(code);
+	// print Pxxxx (for standard OBD) or Cxxxx (for custom) prefix
+	size_t size = snprintf(warningBuffer, sizeof(warningBuffer), "%s%04d: ",
+		code < ObdCode::CUSTOM_NAN_ENGINE_LOAD ? "P" : "C", (int) code);
 
 	va_list ap;
 	va_start(ap, fmt);
-	chvsnprintf(warningBuffer, sizeof(warningBuffer), fmt, ap);
+	chvsnprintf(warningBuffer + size, sizeof(warningBuffer) - size, fmt, ap);
 	va_end(ap);
 
 	if (engineConfiguration->showHumanReadableWarning) {
 #if EFI_TUNER_STUDIO
-  memcpy(persistentState.persistentConfiguration.warning_message, warningBuffer, sizeof(warningBuffer));
+	// TODO: does this work? Fix or remove
+	memcpy(persistentState.persistentConfiguration.warning_message, warningBuffer, sizeof(warningBuffer));
 #endif /* EFI_TUNER_STUDIO */
 	}
 
@@ -231,21 +262,24 @@ void onUnlockHook(void) {
 #include <stdexcept>
 #endif
 
-void firmwareError(obd_code_e code, const char *fmt, ...) {
+void firmwareError(ObdCode code, const char *fmt, ...) {
 #if EFI_PROD_CODE
 	if (hasFirmwareErrorFlag)
 		return;
+#if EFI_ENGINE_CONTROL
 	getLimpManager()->fatalError();
+#endif // EFI_ENGINE_CONTROL
 	engine->engineState.warnings.addWarningCode(code);
 #ifdef EFI_PRINT_ERRORS_AS_WARNINGS
-	va_list ap;
-	va_start(ap, fmt);
-	chvsnprintf(warningBuffer, sizeof(warningBuffer), fmt, ap);
-	va_end(ap);
-#endif
-	palWritePad(criticalErrorLedPort, criticalErrorLedPin, criticalErrorLedState);
-	turnAllPinsOff();
-	enginePins.communicationLedPin.setValue(1);
+	{
+	    va_list ap;
+	    va_start(ap, fmt);
+	    chvsnprintf(warningBuffer, sizeof(warningBuffer), fmt, ap);
+	    va_end(ap);
+	}
+#endif // EFI_PRINT_ERRORS_AS_WARNINGS
+    criticalShutdown();
+	enginePins.communicationLedPin.setValue(1, /*force*/true);
 
 	hasFirmwareErrorFlag = true;
 	if (indexOf(fmt, '%') == -1) {
@@ -270,14 +304,15 @@ void firmwareError(obd_code_e code, const char *fmt, ...) {
 		strcpy((char*)(criticalErrorMessageBuffer) + errorMessageSize, versionBuffer);
 	}
 
+#if EFI_BACKUP_SRAM
 	auto sramState = getBackupSram();
-	if (sramState != nullptr) {
-		strncpy(sramState->ErrorString, criticalErrorMessageBuffer, efi::size(sramState->ErrorString));
-		sramState->Cookie = ErrorCookie::FirmwareError;
-	}
+	strncpy(sramState->ErrorString, criticalErrorMessageBuffer, efi::size(sramState->ErrorString));
+	sramState->Cookie = ErrorCookie::FirmwareError;
+#endif // EFI_BACKUP_SRAM
 #else
 
-	char errorBuffer[200];
+  // large buffer on stack is risky we better use normal memory
+	static char errorBuffer[200];
 
 	va_list ap;
 	va_start(ap, fmt);

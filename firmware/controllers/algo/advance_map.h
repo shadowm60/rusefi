@@ -10,10 +10,12 @@
 #pragma once
 
 angle_t getAdvance(int rpm, float engineLoad);
-angle_t getCylinderIgnitionTrim(size_t cylinderNumber, int rpm, float ignitionLoad);
+angle_t getCombinedCylinderIgnitionTrim(size_t cylinderNumber, int rpm, float ignitionLoad);
+/**
+ * this method is used to build default advance map
+ */
 float getInitialAdvance(int rpm, float map, float advanceMax);
 
-angle_t getAdvanceCorrections(int rpm);
 size_t getMultiSparkCount(int rpm);
 
 class IgnitionState : public ignition_state_s {

@@ -10,7 +10,7 @@ static SimplePwm pwms[VR_THRESHOLD_COUNT];
 #define VR_SUPPLY_VOLTAGE 3.3f
 #endif
 
-static void updateVrPwm(int rpm, size_t index) {
+static void updateVrThresholdPwm(int rpm, size_t index) {
 	auto& cfg = engineConfiguration->vrThreshold[index];
 
 	if (!isBrainPinValid(cfg.pin)) {
@@ -28,15 +28,15 @@ static void updateVrPwm(int rpm, size_t index) {
 	pwms[index].setSimplePwmDutyCycle(duty);
 }
 
-void updateVrPwm() {
+void updateVrThresholdPwm() {
 	auto rpm = Sensor::getOrZero(SensorType::Rpm);
 
 	for (size_t i = 0; i < efi::size(engineConfiguration->vrThreshold); i++) {
-		updateVrPwm(rpm, i);
+		updateVrThresholdPwm(rpm, i);
 	}
 }
 
-void initVrPwm() {
+void initVrThresholdPwm() {
 	for (size_t i = 0; i < efi::size(engineConfiguration->vrThreshold); i++) {
 		auto& cfg = engineConfiguration->vrThreshold[i];
 
@@ -44,7 +44,7 @@ void initVrPwm() {
 			continue;
 		}
 
-		startSimplePwmHard(&pwms[i], "VR PWM",
+		startSimplePwmHard(&pwms[i], "VR Threshold",
 			&engine->executor,
 			cfg.pin,
 			&pins[i],
@@ -56,7 +56,7 @@ void initVrPwm() {
 
 void setDefaultVrThresholds() {
 	for (int i = 0;i<VR_THRESHOLD_COUNT;i++) {
-		setLinearCurve(engineConfiguration->vrThreshold[i].rpmBins, 600, 7000, 100);
+		setRpmTableBin(engineConfiguration->vrThreshold[i].rpmBins);
 		setLinearCurve(engineConfiguration->vrThreshold[i].values, 0.6, 1.2, 0.1);
 	}
 }

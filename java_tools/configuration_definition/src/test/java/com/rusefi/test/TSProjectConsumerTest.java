@@ -1,12 +1,10 @@
 package com.rusefi.test;
 
-import com.rusefi.ReaderState;
+import com.rusefi.ReaderStateImpl;
 import com.rusefi.output.BaseCHeaderConsumer;
 import com.rusefi.output.JavaFieldsConsumer;
 import com.rusefi.output.TSProjectConsumer;
-import org.junit.Test;
-
-import java.io.IOException;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.assertEquals;
 
@@ -39,7 +37,7 @@ public class TSProjectConsumerTest {
                 "end_struct\n" +
                 "";
 
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
 
@@ -69,31 +67,58 @@ public class TSProjectConsumerTest {
 
 
         assertEquals("// start of pid_s\n" +
+            "struct pid_s {\n" +
+            "\t/**\n" +
+            "\t * PID dTime\n" +
+            "\t * units: ms\n" +
+            "\t * offset 0\n" +
+            "\t */\n" +
+            "\tint periodMs2 = (int)0;\n" +
+            "\t/**\n" +
+            "\t * offset 4\n" +
+            "\t */\n" +
+            "\tafr_table_t afrTable;\n" +
+            "\t/**\n" +
+            "\t * PID dTime\n" +
+            "\t * units: ms\n" +
+            "\t * offset 20\n" +
+            "\t */\n" +
+            "\tscaled_channel<int16_t, 10, 1> periodMs = (int16_t)0;\n" +
+            "\t/**\n" +
+            "\t * need 4 byte alignment\n" +
+            "\t * units: units\n" +
+            "\t * offset 22\n" +
+            "\t */\n" +
+            "\tuint8_t alignmentFill_at_22[2];\n" +
+            "};\n" +
+            "static_assert(sizeof(pid_s) == 24);\n" +
+            "\n", consumer.getContent());
+    }
+
+    @Test
+    public void cppCornerCaseEmptyStruct() {
+        String test = "struct pid_s\n" +
+                "end_struct\n" +
+                "";
+
+        ReaderStateImpl state = new ReaderStateImpl();
+        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
+
+
+        BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
+
+        state.readBufferedReader(test, javaFieldsConsumer, consumer, tsProjectConsumer);
+
+        assertEquals("; total TS size = 0\n", tsProjectConsumer.getContent());
+
+        assertEquals("", javaFieldsConsumer.getContent());
+
+
+        assertEquals("// start of pid_s\n" +
                 "struct pid_s {\n" +
-                "\t/**\n" +
-                "\t * PID dTime\n" +
-                "\tms\n" +
-                "\t * offset 0\n" +
-                "\t */\n" +
-                "\tint periodMs2 = (int)0;\n" +
-                "\t/**\n" +
-                "\t * offset 4\n" +
-                "\t */\n" +
-                "\tafr_table_t afrTable;\n" +
-                "\t/**\n" +
-                "\t * PID dTime\n" +
-                "\tms\n" +
-                "\t * offset 20\n" +
-                "\t */\n" +
-                "\tscaled_channel<int16_t, 10, 1> periodMs = (int16_t)0;\n" +
-                "\t/**\n" +
-                "\t * need 4 byte alignment\n" +
-                "\tunits\n" +
-                "\t * offset 22\n" +
-                "\t */\n" +
-                "\tuint8_t alignmentFill_at_22[2];\n" +
                 "};\n" +
-                "static_assert(sizeof(pid_s) == 24);\n" +
+                "static_assert(sizeof(pid_s) == 1);\n" +
                 "\n", consumer.getContent());
     }
 }

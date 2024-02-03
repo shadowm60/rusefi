@@ -31,17 +31,17 @@ float MafAirmass::getMaf() const {
 	}
 }
 
-AirmassResult MafAirmass::getAirmass(int rpm) {
+AirmassResult MafAirmass::getAirmass(int rpm, bool postState) {
 	float maf = getMaf();
 
-	return getAirmassImpl(maf, rpm);
+	return getAirmassImpl(maf, rpm, postState);
 }
 
 /**
  * Function block now works to create a standardised load from the cylinder filling as well as tune fuel via VE table. 
  * @return total duration of fuel injection per engine cycle, in milliseconds
  */
-AirmassResult MafAirmass::getAirmassImpl(float massAirFlow, int rpm) const {
+AirmassResult MafAirmass::getAirmassImpl(float massAirFlow, int rpm, bool postState) const {
 	// If the engine is stopped, MAF is meaningless
 	if (rpm == 0) {
 		return {};
@@ -56,7 +56,7 @@ AirmassResult MafAirmass::getAirmassImpl(float massAirFlow, int rpm) const {
 
 	// Now we have to divide among cylinders - on a 4 stroke, half of the cylinders happen every revolution
 	// This math is floating point to work properly on engines with odd cylinder count
-	float halfCylCount = engineConfiguration->specs.cylindersCount / 2.0f;
+	float halfCylCount = engineConfiguration->cylindersCount / 2.0f;
 
 	mass_t cylinderAirmass = airPerRevolution / halfCylCount;
 
@@ -64,7 +64,7 @@ AirmassResult MafAirmass::getAirmassImpl(float massAirFlow, int rpm) const {
 	float airChargeLoad = 100 * cylinderAirmass / getStandardAirCharge();
 	
 	//Correct air mass by VE table
-	mass_t correctedAirmass = cylinderAirmass * getVe(rpm, airChargeLoad);
+	mass_t correctedAirmass = cylinderAirmass * getVe(rpm, airChargeLoad, postState);
 
 	return {
 		correctedAirmass,

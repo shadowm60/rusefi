@@ -3,7 +3,7 @@
 #include "global.h"
 #include "io_pins.h"
 #include "persistent_configuration.h"
-#include "engine_configuration_generated_structures.h"
+#include "generated_lookup_engine_configuration.h"
 #include "simple_tcu.h"
 #include "tc_4l6x.h"
 
@@ -16,10 +16,11 @@ public:
 	virtual GearControllerMode getMode() const {
 		return GearControllerMode::ButtonShift;
 	}
+	TransmissionControllerBase *transmissionController;
 protected:
 	virtual gear_e setDesiredGear(gear_e);
 	void initTransmissionController();
-	TransmissionControllerBase *transmissionController;
+	uint8_t* getRangeStateArray(int);
 private:
 	gear_e desiredGear = NEUTRAL;
 	void postState();

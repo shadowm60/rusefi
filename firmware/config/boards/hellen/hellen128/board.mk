@@ -1,26 +1,23 @@
 # Combine the related files for a specific platform and MCU.
 
 # Target ECU board design
-BOARDCPPSRC = $(BOARDS_DIR)/hellen/hellen128/board_configuration.cpp
-
-BOARDINC = $(BOARDS_DIR)/hellen/hellen128
+BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
 # Set this if you want a default engine type other than normal hellen128
 ifeq ($(VAR_DEF_ENGINE_TYPE),)
-  VAR_DEF_ENGINE_TYPE = -DDEFAULT_ENGINE_TYPE=HELLEN_128_MERCEDES_4_CYL
+  VAR_DEF_ENGINE_TYPE = -DDEFAULT_ENGINE_TYPE=engine_type_e::HELLEN_128_MERCEDES_4_CYL
 endif
 
 
 DDEFS += -DEFI_MAIN_RELAY_CONTROL=TRUE
 
-# Disable serial ports on this board as UART3 causes a DMA conflict with the SD card
-DDEFS += -DTS_NO_PRIMARY=1
-
 # Add them all together
 DDEFS += -DFIRMWARE_ID=\"hellen128\" $(VAR_DEF_ENGINE_TYPE)
 DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE -DSTM32_ADC_USE_ADC3=TRUE
+DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_HELLEN_128
 
-DDEFS += -DSHORT_BOARD_NAME=hellen128
+SHORT_BOARD_NAME = hellen128
 
 include $(BOARDS_DIR)/hellen/hellen-common176.mk
 
+DDEFS += -DHW_HELLEN_MERCEDES=1

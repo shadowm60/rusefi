@@ -23,7 +23,7 @@ size_t TsChannelBase::read(uint8_t* buffer, size_t size) {
 
 void TsChannelBase::copyAndWriteSmallCrcPacket(uint8_t responseCode, const uint8_t* buf, size_t size) {
 	// don't transmit too large a buffer
-	efiAssertVoid(OBD_PCM_Processor_Fault, !isBigPacket(size), "copyAndWriteSmallCrcPacket tried to transmit too large a packet")
+	criticalAssertVoid(!isBigPacket(size), "copyAndWriteSmallCrcPacket tried to transmit too large a packet")
 
 	// If transmitting data, copy it in to place in the scratch buffer
 	// We want to prevent the data changing itself (higher priority threads could write
@@ -37,7 +37,7 @@ void TsChannelBase::copyAndWriteSmallCrcPacket(uint8_t responseCode, const uint8
 }
 
 void TsChannelBase::crcAndWriteBuffer(uint8_t responseCode, size_t size) {
-	efiAssertVoid(OBD_PCM_Processor_Fault, !isBigPacket(size), "crcAndWriteBuffer tried to transmit too large a packet")
+	criticalAssertVoid(!isBigPacket(size), "crcAndWriteBuffer tried to transmit too large a packet")
 
 	// Index 0/1 = packet size (big endian)
 	*(uint16_t*)scratchBuffer = SWAP_UINT16(size + 1);
@@ -86,13 +86,13 @@ void TsChannelBase::writeCrcPacketLarge(const uint8_t responseCode, const uint8_
 	flush();
 }
 
-TsChannelBase::TsChannelBase(const char *name) {
-	this->name = name;
+TsChannelBase::TsChannelBase(const char *p_name) {
+	this->name = p_name;
 }
 
 void TsChannelBase::assertPacketSize(size_t size, bool allowLongPackets) {
 	if (isBigPacket(size) && !allowLongPackets) {
-		firmwareError(OBD_PCM_Processor_Fault, "[USE PROPER CONSOLE VERSION ] disallowed long packet of size %d", size);
+		criticalError("[USE PROPER CONSOLE VERSION ] disallowed long packet of size %d", size);
 	}
 }
 

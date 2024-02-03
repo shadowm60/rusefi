@@ -11,8 +11,9 @@
 #pragma once
 
 #include "state_sequence.h"
-#include "engine_configuration_generated_structures.h"
+#include "generated_lookup_engine_configuration.h"
 #include <rusefi/isnan.h>
+#include "engine_state.h"
 
 #define FOUR_STROKE_ENGINE_CYCLE 720
 
@@ -23,29 +24,34 @@
 #if EFI_ENABLE_ASSERTS
 #define assertAngleRange(angle, msg, code) if (angle > 10000000 || angle < -10000000) { firmwareError(code, "angle range %s %.2f", msg, angle);angle = 0;}
 #else
-#define assertAngleRange(angle, msg, code) {}
+#define assertAngleRange(angle, msg, code) {UNUSED(code);}
 #endif
 
-/**
- * @brief Shifts angle into the [0..720) range for four stroke and [0..360) for two stroke
- * I guess this implementation would be faster than 'angle % engineCycle'
- */
-#define wrapAngle2(angle, msg, code, engineCycle)			   	    	    \
-	{																		\
-   	    if (cisnan(angle)) {                                                \
-		   firmwareError(CUSTOM_ERR_ANGLE, "a NaN %s", msg);                \
-		   angle = 0;                                                       \
-	    }                                                                   \
-		assertAngleRange(angle, msg, code);	   					            \
-		float engineCycleDurationLocalCopy = engineCycle;	                \
-		/* todo: split this method into 'fixAngleUp' and 'fixAngleDown'*/   \
-		/*       as a performance optimization?*/                           \
-		while (angle < 0)                       							\
-			angle += engineCycleDurationLocalCopy;   						\
-			/* todo: would 'if' work as good as 'while'? */                 \
-		while (angle >= engineCycleDurationLocalCopy)						\
-			angle -= engineCycleDurationLocalCopy;   						\
+// Shifts angle into the [0..720) range for four stroke and [0..360) for two stroke
+// See also wrapVvt
+static inline void wrapAngle(angle_t& angle, const char* msg, ObdCode code) {
+	if (cisnan(angle)) {
+		firmwareError(ObdCode::CUSTOM_ERR_ANGLE, "a NaN %s", msg);
+		angle = 0;
 	}
+
+	assertAngleRange(angle, msg, code);
+	float engineCycle = getEngineState()->engineCycle;
+
+	while (angle < 0) {
+		angle += engineCycle;
+	}
+
+	while (angle >= engineCycle) {
+		angle -= engineCycle;
+	}
+}
+
+// proper method avoids un-wrapped state of variables
+static inline angle_t wrapAngleMethod(angle_t param, const char *msg = "", ObdCode code = ObdCode::OBD_PCM_Processor_Fault) {
+	wrapAngle(param, msg, code);
+	return param;
+}
 
 class TriggerDecoderBase;
 class TriggerFormDetails;
@@ -60,7 +66,7 @@ class TriggerConfiguration;
 class TriggerWaveform {
 public:
 	TriggerWaveform();
-	void initializeTriggerWaveform(operation_mode_e triggerOperationMode, const TriggerConfiguration& triggerConfig);
+	void initializeTriggerWaveform(operation_mode_e triggerOperationMode, const trigger_config_s &triggerType);
 	void setShapeDefinitionError(bool value);
 
 	/**
@@ -104,8 +110,8 @@ public:
 	 * gaps ratios to sync
 	 */
 
-	float syncronizationRatioFrom[GAP_TRACKING_LENGTH];
-	float syncronizationRatioTo[GAP_TRACKING_LENGTH];
+	float synchronizationRatioFrom[GAP_TRACKING_LENGTH];
+	float synchronizationRatioTo[GAP_TRACKING_LENGTH];
 
 
 	/**
@@ -152,6 +158,7 @@ public:
 	TriggerWheel triggerSignalIndeces[PWM_PHASE_MAX_COUNT];
 	TriggerValue triggerSignalStates[PWM_PHASE_MAX_COUNT];
 	// see also 'doesTriggerImplyOperationMode'
+	// todo: reuse doesTriggerImplyOperationMode instead of separate field only which is only used for metadata anyway?
 	bool knownOperationMode = true;
 #endif
 
@@ -163,10 +170,6 @@ public:
 	 * Please use "getSize()" function to read this value
 	 */
 	MultiChannelStateSequenceWithData<PWM_PHASE_MAX_COUNT> wave;
-
-	// todo: add a runtime validation which would verify that this field was set properly
-	// todo: maybe even automate this flag calculation?
-	pin_state_t initialState[PWM_PHASE_MAX_WAVE_PER_PWM];
 
 	bool isRiseEvent[PWM_PHASE_MAX_COUNT];
 
@@ -183,6 +186,8 @@ public:
 	 * this method helps us use real world 360 degrees shape for FOUR_STROKE_CAM_SENSOR and FOUR_STROKE_CRANK_SENSOR
 	 */
 	void addEvent360(angle_t angle, TriggerValue const state, TriggerWheel const channelIndex = TriggerWheel::T_PRIMARY);
+
+	void addToothRiseFall(angle_t angle, angle_t width = 10, TriggerWheel const channelIndex = TriggerWheel::T_PRIMARY);
 
 	/**
 	 * This version of the method is best when same wheel could be mounted either on crank or cam

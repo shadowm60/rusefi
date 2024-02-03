@@ -27,7 +27,7 @@ struct IIdleController {
 	virtual Phase determinePhase(int rpm, int targetRpm, SensorResult tps, float vss, float crankingTaperFraction) = 0;
 	virtual int getTargetRpm(float clt) = 0;
 	virtual float getCrankingOpenLoop(float clt) const = 0;
-	virtual float getRunningOpenLoop(float rpm, float clt, SensorResult tps) = 0;
+	virtual float getRunningOpenLoop(IIdleController::Phase phase, float rpm, float clt, SensorResult tps) = 0;
 	virtual float getOpenLoop(Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction) = 0;
 	virtual float getClosedLoop(Phase phase, float tps, int rpm, int target) = 0;
 	virtual float getCrankingTaperFraction() const = 0;
@@ -37,7 +37,8 @@ struct IIdleController {
 
 class IdleController : public IIdleController, public EngineModule, public idle_state_s {
 public:
-	typedef IIdleController interface_t;
+	// Mockable<> interface
+	using interface_t = IIdleController;
 
 	void init();
 
@@ -52,7 +53,7 @@ public:
 
 	// OPEN LOOP CORRECTIONS
 	percent_t getCrankingOpenLoop(float clt) const override;
-	percent_t getRunningOpenLoop(float rpm, float clt, SensorResult tps) override;
+	percent_t getRunningOpenLoop(IIdleController::Phase phase, float rpm, float clt, SensorResult tps) override;
 	percent_t getOpenLoop(Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction) override;
 
 	float getIdleTimingAdjustment(int rpm) override;
@@ -92,6 +93,11 @@ private:
 	Phase m_lastPhase = Phase::Cranking;
 	int m_lastTargetRpm = 0;
 	efitimeus_t restoreAfterPidResetTimeUs = 0;
+	// used by 'dashpot' (hold+decay) logic for iacByTpsTaper
+	efitimeus_t lastTimeRunningUs = 0;
+	// used by "soft" idle entry
+	float m_crankTaperEndTime = 0.0f;
+	float m_idleTimingSoftEntryEndTime = 0.0f;
 
 	// This is stored by getClosedLoop and used in case we want to "do nothing"
 	float m_lastAutomaticPosition = 0;
@@ -107,10 +113,7 @@ void setManualIdleValvePosition(int positionPercent);
 void startIdleThread();
 void setDefaultIdleParameters();
 void startIdleBench(void);
-void setIdlePFactor(float value);
-void setIdleIFactor(float value);
-void setIdleDFactor(float value);
 void setIdleMode(idle_mode_e value);
 void setTargetIdleRpm(int value);
-void startPedalPins();
-void stopPedalPins();
+void startSwitchPins();
+void stopSwitchPins();

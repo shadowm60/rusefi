@@ -7,7 +7,7 @@
 
 #include "scheduler.h"
 #include "utlist.h"
-#include "expected.h"
+#include <rusefi/expected.h>
 
 #pragma once
 
@@ -20,7 +20,7 @@
 	int counter = 0;                                                        \
 	LL_FOREACH2(head, current, field) {                                     \
 		if (++counter > QUEUE_LENGTH_LIMIT) {                               \
-			firmwareError(CUSTOM_ERR_LOOPED_QUEUE, "Looped queue?");        \
+			firmwareError(ObdCode::CUSTOM_ERR_LOOPED_QUEUE, "Looped queue?");        \
 			return false;                                                   \
 		}                                                                   \
 		if (current == element) {                                           \
@@ -29,7 +29,7 @@
 			 * was not scheduled by angle but was scheduled by time. In case of scheduling          \
 			 * by time with slow RPM the whole next fast revolution might be within the wait period \
 			 */                                                                                     \
-			warning(CUSTOM_RE_ADDING_INTO_EXECUTION_QUEUE, "re-adding element into event_queue");   \
+			warning(ObdCode::CUSTOM_RE_ADDING_INTO_EXECUTION_QUEUE, "re-adding element into event_queue");   \
 			return true;                                                    \
 		} \
 	} \
@@ -41,7 +41,7 @@
  */
 class EventQueue {
 public:
-	// See comment in EventQueue::executeAll for info about lateDelay - it sets the 
+	// See comment in EventQueue::executeAll for info about lateDelay - it sets the
 	// time gap between events for which we will wait instead of rescheduling the next
 	// event in a group of events near one another.
 	explicit EventQueue(efitick_t lateDelay = 0);
@@ -60,18 +60,18 @@ public:
 	int size(void) const;
 	scheduling_s *getElementAtIndexForUnitText(int index);
 	scheduling_s * getHead();
-	void assertListIsSorted() const;
 
 	scheduling_s* getFreeScheduling();
 	void tryReturnScheduling(scheduling_s* sched);
 private:
+	void assertListIsSorted() const;
 	/**
 	 * this list is sorted
 	 */
-	scheduling_s *head = nullptr;
-	const efitick_t lateDelay;
+	scheduling_s *m_head = nullptr;
+	const efitick_t m_lateDelay;
 
-	scheduling_s* m_freelist = nullptr; 
+	scheduling_s* m_freelist = nullptr;
 	scheduling_s m_pool[64];
 };
 

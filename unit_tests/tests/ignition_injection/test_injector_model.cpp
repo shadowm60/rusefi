@@ -9,7 +9,7 @@ public:
 	MOCK_METHOD(floatms_t, getDeadtime, (), (const, override));
 	MOCK_METHOD(float, getBaseFlowRate, (), (const, override));
 	MOCK_METHOD(float, getInjectorFlowRatio, (), (override));
-	MOCK_METHOD(expected<float>, getAbsoluteRailPressure, (), (const, override));
+	MOCK_METHOD(expected<float>, getFuelDifferentialPressure, (), (const, override));
 	MOCK_METHOD(float, getSmallPulseFlowRate, (), (const, override));
 	MOCK_METHOD(float, getSmallPulseBreakPoint, (), (const, override));
 	MOCK_METHOD(InjectorNonlinearMode, getNonlinearMode, (), (const, override));
@@ -106,8 +106,8 @@ TEST(InjectorModel, nonLinearFordMode) {
 }
 
 TEST(InjectorModel, nonlinearPolynomial) {
-	EngineTestHelper eth(TEST_ENGINE);
-	InjectorModel dut;
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	InjectorModelPrimary dut;
 
 	engineConfiguration->applyNonlinearBelowPulse = 10;
 
@@ -130,7 +130,7 @@ TEST(InjectorModel, nonlinearPolynomial) {
 }
 
 TEST(InjectorModel, Deadtime) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Some test data in the injector correction table
 	for (size_t i = 0; i < efi::size(engineConfiguration->injector.battLagCorr); i++) {
@@ -138,7 +138,7 @@ TEST(InjectorModel, Deadtime) {
 		engineConfiguration->injector.battLagCorrBins[i] = i;
 	}
 
-	InjectorModel dut;
+	InjectorModelPrimary dut;
 
 	Sensor::setMockValue(SensorType::BatteryVoltage, 3);
 	EXPECT_EQ(dut.getDeadtime(), 6);
@@ -147,12 +147,12 @@ TEST(InjectorModel, Deadtime) {
 	EXPECT_EQ(dut.getDeadtime(), 14);
 }
 
-struct TesterGetFlowRate : public InjectorModel {
+struct TesterGetFlowRate : public InjectorModelPrimary {
 	MOCK_METHOD(float, getInjectorFlowRatio, (), (override));
 };
 
-struct TesterGetRailPressure : public InjectorModel {
-	MOCK_METHOD(expected<float>, getAbsoluteRailPressure, (), (const, override));
+struct TesterGetRailPressure : public InjectorModelPrimary {
+	MOCK_METHOD(expected<float>, getFuelDifferentialPressure, (), (const, override));
 };
 
 class FlowRateFixture : public ::testing::TestWithParam<float> {
@@ -168,21 +168,17 @@ TEST_P(FlowRateFixture, PressureRatio) {
 	float pressureRatio = GetParam();
 	// Flow ratio should be the sqrt of pressure ratio
 	float expectedFlowRatio = sqrtf(pressureRatio);
-	float fakeMap = 35.0f;
 
 	StrictMock<TesterGetRailPressure> dut;
-	EXPECT_CALL(dut, getAbsoluteRailPressure()).WillOnce(Return(400 * pressureRatio + fakeMap));
+	EXPECT_CALL(dut, getFuelDifferentialPressure()).WillOnce(Return(400 * pressureRatio));
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Use injector compensation
 	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
 
-	// Reference pressure is 400kPa 
+	// Reference pressure is 400kPa
 	engineConfiguration->fuelReferencePressure = 400.0f;
-
-	// MAP sensor always reads 35 kpa
-	Sensor::setMockValue(SensorType::Map, fakeMap);
 
 	// Should return the expected ratio
 	EXPECT_FLOAT_EQ(expectedFlowRatio, dut.getInjectorFlowRatio());
@@ -191,17 +187,15 @@ TEST_P(FlowRateFixture, PressureRatio) {
 TEST(InjectorModel, NegativePressureDelta) {
 	StrictMock<TesterGetRailPressure> dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Use injector compensation
 	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
 
-	// Reference pressure is 400kPa 
+	// Reference pressure is 400kPa
 	engineConfiguration->fuelReferencePressure = 400.0f;
 
-	EXPECT_CALL(dut, getAbsoluteRailPressure()).WillOnce(Return(50));
-	// MAP sensor reads more pressure than fuel rail
-	Sensor::setMockValue(SensorType::Map, 100);
+	EXPECT_CALL(dut, getFuelDifferentialPressure()).WillOnce(Return(-50));
 
 	// Flow ratio defaults to 1.0 in this case
 	EXPECT_FLOAT_EQ(1.0f, dut.getInjectorFlowRatio());
@@ -210,48 +204,96 @@ TEST(InjectorModel, NegativePressureDelta) {
 TEST(InjectorModel, VariableInjectorFlowModeNone) {
 	StrictMock<TesterGetRailPressure> dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->injectorCompensationMode = ICM_None;
 
-	// This shoudn't call getAbsoluteRailPressure, it should just return 1.0
+	// This shoudn't call getFuelDifferentialPressure, it should just return 1.0
 	EXPECT_FLOAT_EQ(1, dut.getInjectorFlowRatio());
 }
 
 TEST(InjectorModel, RailPressureFixed) {
-	InjectorModel dut;
+	InjectorModelPrimary dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Reference pressure is 350kpa
 	engineConfiguration->fuelReferencePressure = 350;
 	engineConfiguration->injectorCompensationMode = ICM_FixedRailPressure;
 
-	// Should be reference pressure + 1 atm
-	EXPECT_FLOAT_EQ(101.325f + 350.0f, dut.getAbsoluteRailPressure().value_or(0));
+	// MAP is 75kPa
+	Sensor::setMockValue(SensorType::Map, 75);
+
+	// Baro is 100kpa
+	Sensor::setMockValue(SensorType::BarometricPressure, 100);
+
+	// Should be reference pressure + 1 atm - 75kpa -> 375kPa
+	EXPECT_FLOAT_EQ(375.0f, dut.getFuelDifferentialPressure().value_or(0));
 }
 
-TEST(InjectorModel, RailPressureSensed) {
-	InjectorModel dut;
+TEST(InjectorModel, RailPressureSensedAbsolute) {
+	InjectorModelPrimary dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Reference pressure is 350kpa
 	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
+	engineConfiguration->fuelPressureSensorMode = FPM_Absolute;
+
+	Sensor::setMockValue(SensorType::Map, 50);
+
+	// Should just return rail sensor value - MAP
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 100);
+	EXPECT_FLOAT_EQ(100 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 200);
+	EXPECT_FLOAT_EQ(200 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 300);
+	EXPECT_FLOAT_EQ(300 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+}
+
+TEST(InjectorModel, RailPressureSensedGauge) {
+	InjectorModelPrimary dut;
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Reference pressure is 350kpa
+	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
+	engineConfiguration->fuelPressureSensorMode = FPM_Gauge;
+
+	Sensor::setMockValue(SensorType::BarometricPressure, 110);
+	Sensor::setMockValue(SensorType::Map, 50);
+
+	// Should just return rail sensor value + baro - MAP
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 100);
+	EXPECT_FLOAT_EQ(100 + 110 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 200);
+	EXPECT_FLOAT_EQ(200 + 110 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+	Sensor::setMockValue(SensorType::FuelPressureInjector, 300);
+	EXPECT_FLOAT_EQ(300 + 110 - 50, dut.getFuelDifferentialPressure().value_or(-1));
+}
+
+TEST(InjectorModel, RailPressureSensedDifferential) {
+	InjectorModelPrimary dut;
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Reference pressure is 350kpa
+	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
+	engineConfiguration->fuelPressureSensorMode = FPM_Differential;
 
 	// Should just return rail sensor value
 	Sensor::setMockValue(SensorType::FuelPressureInjector, 100);
-	EXPECT_FLOAT_EQ(100, dut.getAbsoluteRailPressure().value_or(-1));
+	EXPECT_FLOAT_EQ(100, dut.getFuelDifferentialPressure().value_or(-1));
 	Sensor::setMockValue(SensorType::FuelPressureInjector, 200);
-	EXPECT_FLOAT_EQ(200, dut.getAbsoluteRailPressure().value_or(-1));
+	EXPECT_FLOAT_EQ(200, dut.getFuelDifferentialPressure().value_or(-1));
 	Sensor::setMockValue(SensorType::FuelPressureInjector, 300);
-	EXPECT_FLOAT_EQ(300, dut.getAbsoluteRailPressure().value_or(-1));
+	EXPECT_FLOAT_EQ(300, dut.getFuelDifferentialPressure().value_or(-1));
 }
 
 TEST(InjectorModel, FailedPressureSensor) {
-	InjectorModel dut;
+	InjectorModelPrimary dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Reference pressure is 350kpa
 	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;
@@ -267,9 +309,9 @@ TEST(InjectorModel, FailedPressureSensor) {
 }
 
 TEST(InjectorModel, MissingPressureSensor) {
-	InjectorModel dut;
+	InjectorModelPrimary dut;
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Reference pressure is 350kpa
 	engineConfiguration->injectorCompensationMode = ICM_SensedRailPressure;

@@ -12,10 +12,6 @@
 #include "trigger_input.h"
 #include "adc_inputs.h"
 
-
-#define DELTA_THRESHOLD_CNT_LOW (GPT_FREQ_FAST / GPT_PERIOD_FAST / 32)		// ~1/32 second?
-#define DELTA_THRESHOLD_CNT_HIGH (GPT_FREQ_FAST / GPT_PERIOD_FAST / 4)		// ~1/4 second?
-
 class TriggerAdcDetector {
 public:
 	void init();
@@ -23,6 +19,8 @@ public:
 
 	void digitalCallback(efitick_t stamp, bool isPrimary, bool rise);
 	void analogCallback(efitick_t stamp, triggerAdcSample_t value);
+
+	void setWeakSignal(bool isWeak);
 
 public:
 	triggerAdcSample_t adcDefaultThreshold;

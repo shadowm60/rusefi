@@ -10,8 +10,8 @@
 
 #include "pch.h"
 #include "hellen_meta.h"
+#include "defaults.h"
 
-static OutputPin alphaEn;
 static OutputPin alphaTachPullUp;
 static OutputPin alphaTempPullUp;
 static OutputPin alphaCrankPPullUp;
@@ -20,17 +20,10 @@ static OutputPin alpha2stepPullDown;
 static OutputPin alphaCamPullDown;
 
 static void setInjectorPins() {
-	engineConfiguration->injectionPins[0] = H144_LS_1;
-	engineConfiguration->injectionPins[1] = H144_LS_2;
+	engineConfiguration->injectionPins[0] = Gpio::H144_LS_1;
+	engineConfiguration->injectionPins[1] = Gpio::H144_LS_2;
 	engineConfiguration->injectionPins[2] = Gpio::Unassigned;
 	engineConfiguration->injectionPins[3] = Gpio::Unassigned;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 
 	engineConfiguration->clutchDownPin = Gpio::Unassigned;
 	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
@@ -39,44 +32,21 @@ static void setInjectorPins() {
 }
 
 static void setIgnitionPins() {
-	engineConfiguration->ignitionPins[0] = H144_IGN_1;
+	engineConfiguration->ignitionPins[0] = Gpio::H144_IGN_1;
 	engineConfiguration->ignitionPins[1] = Gpio::Unassigned;
-	engineConfiguration->ignitionPins[2] = H144_IGN_2;
+	engineConfiguration->ignitionPins[2] = Gpio::H144_IGN_2;
 	engineConfiguration->ignitionPins[3] = Gpio::Unassigned;
-
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	engineConfiguration->vbattAdcChannel = H144_IN_VBATT;
-
-	engineConfiguration->adcVcc = 3.29f;
 }
 
 static void setupDefaultSensorInputs() {
 	// trigger inputs, hall
-	engineConfiguration->triggerInputPins[0] = H144_IN_CRANK;
-	engineConfiguration->triggerInputPins[1] = H144_IN_CAM;
+	engineConfiguration->triggerInputPins[0] = Gpio::H144_IN_CRANK;
+	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_CAM;
 	engineConfiguration->camInputs[0] = Gpio::Unassigned;
 
 	engineConfiguration->tps1_1AdcChannel = H144_IN_TPS;
 
-	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2;
-	engineConfiguration->baroSensor.type = MT_MPXH6400;
-	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3;
+
 
 	engineConfiguration->afr.hwChannel = EFI_ADC_1;
 
@@ -86,15 +56,13 @@ static void setupDefaultSensorInputs() {
 }
 
 void boardInitHardware() {
-	alphaEn.initPin("a-EN", H144_OUT_IO3);
-	alphaEn.setValue(1);
 
-	alphaTachPullUp.initPin("a-tach", H144_OUT_IO1);
-	alphaTempPullUp.initPin("a-temp", H144_OUT_IO4);
-	alphaCrankPPullUp.initPin("a-crank-p", H144_OUT_IO2);
-	alphaCrankNPullUp.initPin("a-crank-n", H144_OUT_IO5);
-	alpha2stepPullDown.initPin("a-2step", H144_OUT_IO7);
-	alphaCamPullDown.initPin("a-cam", H144_OUT_IO8);
+	alphaTachPullUp.initPin("a-tach", Gpio::H144_OUT_IO1);
+	alphaTempPullUp.initPin("a-temp", Gpio::H144_OUT_IO4);
+	alphaCrankPPullUp.initPin("a-crank-p", Gpio::H144_OUT_IO2);
+	alphaCrankNPullUp.initPin("a-crank-n", Gpio::H144_OUT_IO5);
+	alpha2stepPullDown.initPin("a-2step", Gpio::H144_OUT_IO7);
+	alphaCamPullDown.initPin("a-cam", Gpio::H144_OUT_IO8);
 	boardOnConfigurationChange(nullptr);
 }
 
@@ -107,14 +75,41 @@ void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration
 	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
 }
 
+
+
+static bool isMegaModuleRevision() {
+    int16_t hellenBoardId = engine->engineState.hellenBoardId;
+    return hellenBoardId != BOARD_ID_ALPHA2CH_B && hellenBoardId != BOARD_ID_ALPHA2CH_C && hellenBoardId != BOARD_ID_ALPHA2CH_D;
+}
+
 void setBoardConfigOverrides() {
-	setHellen144LedPins();
-	setupVbatt();
+	setHellenVbatt();
+    int16_t hellenBoardId = engine->engineState.hellenBoardId;
 
-	setHellenSdCardSpi2();
+	// rev.D uses SPI1 pins for CAN2, but rev.E and later uses mega-module meaning SPI1 for SD-card
+	if (isMegaModuleRevision()) {
+		setHellenSdCardSpi1();
+		configureHellenMegaAccCS2Pin();
+	    setHellenMegaEnPin();
+	} else {
+	    setHellenEnPin(Gpio::H144_OUT_IO3);
+	}
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+	// todo: is it time for some helper method to work with sets?!
+	bool isBeforeRevG = hellenBoardId == BOARD_ID_ALPHA2CH_B ||
+	                    hellenBoardId == BOARD_ID_ALPHA2CH_C ||
+	                    hellenBoardId == BOARD_ID_ALPHA2CH_D ||
+	                    hellenBoardId == BOARD_ID_ALPHA2CH_E ||
+	                    hellenBoardId == BOARD_ID_ALPHA2CH_F;
+
+	if (isBeforeRevG) {
+	    engineConfiguration->vrThreshold[0].pin = Gpio::H144_OUT_PWM6;
+	} else {
+	    engineConfiguration->vrThreshold[0].pin = Gpio::Unassigned; // rev G started to use MAX9924
+	}
+
+    engineConfiguration->vrThreshold[1].pin = Gpio::Unassigned; // 2chan never had second VR
+    setDefaultHellenAtPullUps();
 
 	setHellenCan();
 }
@@ -124,35 +119,36 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
+	if (isMegaModuleRevision()) {
+	    setHellenMMbaro();
+	    engineConfiguration->map.sensor.hwChannel = H144_IN_MAP3; // On-board MAP
+	    engineConfiguration->map.sensor.type = MT_MPXH6400;
+	} else {
+	    engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2; // B2 external signal
+	    engineConfiguration->baroSensor.type = MT_MPXH6400;
+    	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3; // On-board MAP
+	}
+
     engineConfiguration->boardUseTempPullUp = true;
 
-	engineConfiguration->acSwitch = Gpio::Unassigned;
-	engineConfiguration->fuelPumpPin = H144_OUT_PWM2;
-	engineConfiguration->fanPin = H144_OUT_PWM4;
-	engineConfiguration->mainRelayPin = Gpio::Unassigned;
-    engineConfiguration->tachOutputPin = H144_OUT_PWM3;
+	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_PWM2;
+	engineConfiguration->fanPin = Gpio::H144_OUT_PWM4;
+    engineConfiguration->tachOutputPin = Gpio::H144_OUT_PWM3;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	setInline4();
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 
-	engineConfiguration->clutchDownPin = H144_IN_D_2;
-	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 // ?	engineConfiguration->malfunctionIndicatorPin = Gpio::G4; //1E - Check Engine Light
-	engineConfiguration->vrThreshold[0].pin = H144_OUT_PWM6;
 }
 
 void boardPrepareForStop() {
@@ -161,8 +157,8 @@ void boardPrepareForStop() {
 }
 
 static Gpio OUTPUTS[] = {
-		H144_LS_1,
-		H144_LS_2,
+		Gpio::H144_LS_1,
+		Gpio::H144_LS_2,
 };
 
 int getBoardMetaOutputsCount() {
@@ -172,3 +168,4 @@ int getBoardMetaOutputsCount() {
 Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
 }
+

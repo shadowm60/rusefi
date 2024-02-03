@@ -13,13 +13,16 @@
 void initBenchTest();
 void onConfigurationChangeBenchTest();
 
-bool isRunningBenchTest(void);
+bool isRunningBenchTest();
+const OutputPin *getOutputOnTheBenchTest();
 
-void fanBench(void);
-void fan2Bench(void);
-void fuelPumpBench(void);
-void acRelayBench(void);
-void milBench(void);
-void starterRelayBench(void);
+void fanBench();
+void fan2Bench();
+void fuelPumpBench();
+void acRelayBench();
+void milBench();
+void starterRelayBench();
 
 void executeTSCommand(uint16_t subsystem, uint16_t index);
+void handleBenchCategory(uint16_t index);
+int getSavedBenchTestPinStates(uint32_t durationsInStateMs[2]);

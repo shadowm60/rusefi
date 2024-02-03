@@ -29,7 +29,7 @@ public class TriggerWheelTSLogic {
         TriggerWheelInfo.readWheels(folder, wheelInfo -> {
             System.out.println("onWheel " + wheelInfo.getTriggerName());
 
-            if (!wheelInfo.isHardcodedOperationMode()) {
+            if (!wheelInfo.isKnownOperationMode()) {
                 appendOrIfNotEmpty(triggerTypesWithoutKnownLocation);
                 triggerTypesWithoutKnownLocation.append("trigger_type == ").append(wheelInfo.getId());
             }
@@ -39,7 +39,7 @@ public class TriggerWheelTSLogic {
                 triggerTypesWithSecondWheel.append("trigger_type == ").append(wheelInfo.getId());
             }
 
-            if (wheelInfo.isCrankBased()) {
+            if (wheelInfo.isCrankBased() && wheelInfo.isKnownOperationMode()) {
                 appendOrIfNotEmpty(triggerTypesCrankBased);
                 triggerTypesCrankBased.append("trigger_type == ").append(wheelInfo.getId());
             }

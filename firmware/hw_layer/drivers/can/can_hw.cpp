@@ -26,109 +26,18 @@ static bool isCanEnabled = false;
 
 #if EFI_PROD_CODE
 
-// Values below calculated with http://www.bittiming.can-wiki.info/
-// Pick ST micro bxCAN
-// Clock rate of 42mhz for f4, 54mhz for f7, 80mhz for h7
-#ifdef STM32F4XX
-// These have an 85.7% sample point
-#define CAN_BTR_100 (CAN_BTR_SJW(0) | CAN_BTR_BRP(29) | CAN_BTR_TS1(10) | CAN_BTR_TS2(1))
-#define CAN_BTR_250 (CAN_BTR_SJW(0) | CAN_BTR_BRP(11) | CAN_BTR_TS1(10) | CAN_BTR_TS2(1))
-#define CAN_BTR_500 (CAN_BTR_SJW(0) | CAN_BTR_BRP(5)  | CAN_BTR_TS1(10) | CAN_BTR_TS2(1))
-#define CAN_BTR_1k0 (CAN_BTR_SJW(0) | CAN_BTR_BRP(2)  | CAN_BTR_TS1(10) | CAN_BTR_TS2(1))
-#elif defined(STM32F7XX)
-// These have an 88.9% sample point
-#define CAN_BTR_100 (CAN_BTR_SJW(0) | CAN_BTR_BRP(30) | CAN_BTR_TS1(15) | CAN_BTR_TS2(2))
-#define CAN_BTR_250 (CAN_BTR_SJW(0) | CAN_BTR_BRP(11) | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
-#define CAN_BTR_500 (CAN_BTR_SJW(0) | CAN_BTR_BRP(5)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
-#define CAN_BTR_1k0 (CAN_BTR_SJW(0) | CAN_BTR_BRP(2)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1))
-#elif defined(STM32H7XX)
-// These have an 87.5% sample point
-// FDCAN driver has different bit timing registers (yes, different format)
-// for the arbitration and data phases
-#define CAN_NBTP_100 0x00310C01
-#define CAN_DBTP_100 0x00310C13
-
-#define CAN_NBTP_250 0x00130C01
-#define CAN_DBTP_250 0x00130C13
-
-#define CAN_NBTP_500 0x00090C01
-#define CAN_DBTP_500 0x00090C13
-
-#define CAN_NBTP_1k0 0x00040C01
-#define CAN_DBTP_1k0 0x00040C13
-#else
-#error Please define CAN BTR settings for your MCU!
-#endif
-
-/*
- * 500KBaud
- * automatic wakeup
- * automatic recover from abort mode
- * See section 22.7.7 on the STM32 reference manual.
- * 
- * 29 bit would be CAN_TI0R_EXID (?) but we do not mention it here
- * CAN_TI0R_STID "Standard Identifier or Extended Identifier"? not mentioned as well
- */
-#if defined(STM32F4XX) || defined(STM32F7XX)
-static const CANConfig canConfig100 = {
-	.mcr = CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP,
-	.btr = CAN_BTR_100
-};
-
-static const CANConfig canConfig250 = {
-	.mcr = CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP,
-	.btr = CAN_BTR_250
-};
-
-static const CANConfig canConfig500 = {
-	.mcr = CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP,
-	.btr = CAN_BTR_500
-};
-
-static const CANConfig canConfig1000 = {
-CAN_MCR_ABOM | CAN_MCR_AWUM | CAN_MCR_TXFP,
-CAN_BTR_1k0 };
-#elif defined(STM32H7XX)
-static const CANConfig canConfig100 = {
-	.NBTP = CAN_NBTP_100,
-	.DBTP = CAN_DBTP_100,
-	.CCCR = 0,
-	.TEST = 0,
-	.RXGFC = 0,
-};
-
-static const CANConfig canConfig250 = {
-	.NBTP = CAN_NBTP_250,
-	.DBTP = CAN_DBTP_250,
-	.CCCR = 0,
-	.TEST = 0,
-	.RXGFC = 0,
-};
-
-static const CANConfig canConfig500 = {
-	.NBTP = CAN_NBTP_500,
-	.DBTP = CAN_DBTP_500,
-	.CCCR = 0,
-	.TEST = 0,
-	.RXGFC = 0,
-};
-
-static const CANConfig canConfig1000 = {
-	.NBTP = CAN_NBTP_1k0,
-	.DBTP = CAN_DBTP_1k0,
-	.CCCR = 0,
-	.TEST = 0,
-	.RXGFC = 0,
-};
-#endif
+extern const CANConfig *findCanConfig(can_baudrate_e rate);
 
 #else // not EFI_PROD_CODE
 // Nothing to actually set for the simulator's CAN config.
 // It's impossible to set CAN bitrate from userspace, so we can't set it.
-static const CANConfig canConfig100;
-static const CANConfig canConfig250;
-static const CANConfig canConfig500;
-static const CANConfig canConfig1000;
+static const CANConfig canConfig_dummy;
+
+static const CANConfig * findCanConfig(can_baudrate_e rate)
+{
+	return &canConfig_dummy;
+}
+
 #endif
 
 class CanRead final : protected ThreadController<UTILITY_THREAD_STACK_SIZE> {
@@ -181,9 +90,11 @@ static void canInfo() {
 
 	efiPrintf("CAN1 TX %s %s", hwPortname(engineConfiguration->canTxPin), getCan_baudrate_e(engineConfiguration->canBaudRate));
 	efiPrintf("CAN1 RX %s", hwPortname(engineConfiguration->canRxPin));
+	canHwInfo(detectCanDevice(engineConfiguration->canRxPin, engineConfiguration->canTxPin));
 
 	efiPrintf("CAN2 TX %s %s", hwPortname(engineConfiguration->can2TxPin), getCan_baudrate_e(engineConfiguration->can2BaudRate));
 	efiPrintf("CAN2 RX %s", hwPortname(engineConfiguration->can2RxPin));
+	canHwInfo(detectCanDevice(engineConfiguration->can2RxPin, engineConfiguration->can2TxPin));
 
 	efiPrintf("type=%d canReadEnabled=%s canWriteEnabled=%s period=%d", engineConfiguration->canNbcType,
 			boolToString(engineConfiguration->canReadEnabled), boolToString(engineConfiguration->canWriteEnabled),
@@ -210,12 +121,6 @@ void postCanState() {
 }
 #endif /* EFI_TUNER_STUDIO */
 
-void enableFrankensoCan() {
-	engineConfiguration->canTxPin = Gpio::B6;
-	engineConfiguration->canRxPin = Gpio::B12;
-	engineConfiguration->canReadEnabled = false;
-}
-
 void stopCanPins() {
 	efiSetPadUnusedIfConfigurationChanged(canTxPin);
 	efiSetPadUnusedIfConfigurationChanged(canRxPin);
@@ -236,7 +141,7 @@ void startCanPins() {
 			// todo: smarter online change of settings, kill isCanEnabled with fire
 			return;
 		}
-		firmwareError(CUSTOM_OBD_70, "invalid CAN TX %s", hwPortname(engineConfiguration->canTxPin));
+		firmwareError(ObdCode::CUSTOM_OBD_70, "invalid CAN TX %s", hwPortname(engineConfiguration->canTxPin));
 		return;
 	}
 
@@ -245,7 +150,7 @@ void startCanPins() {
 			// todo: smarter online change of settings, kill isCanEnabled with fire
 			return;
 		}
-		firmwareError(CUSTOM_OBD_70, "invalid CAN RX %s", hwPortname(engineConfiguration->canRxPin));
+		firmwareError(ObdCode::CUSTOM_OBD_70, "invalid CAN RX %s", hwPortname(engineConfiguration->canRxPin));
 		return;
 	}
 
@@ -258,21 +163,14 @@ void startCanPins() {
 #endif // EFI_PROD_CODE
 }
 
-static const CANConfig * findConfig(can_baudrate_e rate) {
-	switch (rate) {
-	case B100KBPS:
-		return &canConfig100;
-		break;
-	case B250KBPS:
-		return &canConfig250;
-		break;
-	case B1MBPS:
-		return &canConfig1000;
-		break;
-	case B500KBPS:
-	default:
-		return &canConfig500;
-	}
+static void applyListenOnly(CANConfig* canConfig, bool isListenOnly) {
+#if defined(STM32F4XX) || defined(STM32F7XX)
+    if (isListenOnly)
+    	canConfig->btr += CAN_BTR_SILM;
+#else
+    if (isListenOnly)
+        criticalError("CAN:ListenOnly not implemented yet");
+#endif
 }
 
 void initCan() {
@@ -296,21 +194,24 @@ void initCan() {
 
 	// Devices can't be the same!
 	if (device1 == device2) {
-		firmwareError(OBD_PCM_Processor_Fault, "CAN pins must be set to different devices");
+		criticalError("CAN pins must be set to different devices");
 		return;
 	}
 
-	// Generate configs based on baud rate
-	auto config1 = findConfig(engineConfiguration->canBaudRate);
-	auto config2 = findConfig(engineConfiguration->can2BaudRate);
-
 	// Initialize peripherals
 	if (device1) {
-		canStart(device1, config1);
+	    // Config based on baud rate
+	    CANConfig canConfig;
+	    memcpy(&canConfig, findCanConfig(engineConfiguration->canBaudRate), sizeof(canConfig));
+	    applyListenOnly(&canConfig, engineConfiguration->can1ListenMode);
+		canStart(device1, &canConfig);
 	}
 
 	if (device2) {
-		canStart(device2, config2);
+	    CANConfig canConfig;
+	    memcpy(&canConfig, findCanConfig(engineConfiguration->can2BaudRate), sizeof(canConfig));
+	    applyListenOnly(&canConfig, engineConfiguration->can2ListenMode);
+		canStart(device2, &canConfig);
 	}
 
 	// Plumb CAN devices to tx system

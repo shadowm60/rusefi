@@ -7,10 +7,8 @@
 
 #include "pch.h"
 
-#if EFI_PROD_CODE
 #include "smart_gpio.h"
 #include "hardware.h"
-#include "mpu_util.h"
 #include "gpio_ext.h"
 #include "drivers/gpio/tle6240.h"
 #include "drivers/gpio/mc33972.h"
@@ -19,6 +17,7 @@
 #include "drivers/gpio/drv8860.h"
 #include "drivers/gpio/l9779.h"
 #include "drivers/gpio/tle9104.h"
+#include "drivers/gpio/can_gpio.h"
 
 #if (BOARD_TLE6240_COUNT > 0)
 // todo: migrate to TS or board config
@@ -189,6 +188,10 @@ struct tle8888_config tle8888_cfg = {
 };
 #endif
 
+#if (BOARD_MC33810_COUNT > 0)
+static OutputPin mc33810Cs[C_MC33810_COUNT];
+#endif /* (BOARD_MC33810_COUNT > 0) */
+
 #if (BOARD_DRV8860_COUNT > 0)
 static OutputPin drv8860Cs;
 struct drv8860_config drv8860 = {
@@ -222,7 +225,7 @@ void initSmartGpio() {
 		tle6240.spi_bus = getSpiDevice(engineConfiguration->tle6240spiDevice);
 		int ret = tle6240_add(Gpio::TLE6240_PIN_1, 0, &tle6240);
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, ret == (int)Gpio::TLE6240_PIN_1, "tle6240");
+		criticalAssertVoid(ret == (int)Gpio::TLE6240_PIN_1, "tle6240");
 	}
 #endif /* (BOARD_TLE6240_COUNT > 0) */
 
@@ -235,7 +238,7 @@ void initSmartGpio() {
 		// todo: propogate 'basePinOffset' parameter
 		int ret = mc33972_add(Gpio::MC33972_PIN_1, 0, &mc33972);
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, ret == (int)Gpio::MC33972_PIN_1, "mc33972");
+		criticalAssertVoid(ret == (int)Gpio::MC33972_PIN_1, "mc33972");
 	}
 #endif /* (BOARD_MC33972_COUNT > 0) */
 
@@ -248,7 +251,7 @@ void initSmartGpio() {
 		// todo: propogate 'basePinOffset' parameter
 		int ret = l9779_add(Gpio::L9779_IGN_1, 0, &l9779_cfg);
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, ret == (int)Gpio::L9779_IGN_1, "l9779");
+		criticalAssertVoid(ret == (int)Gpio::L9779_IGN_1, "l9779");
 	}
 #endif /* (BOARD_L9779_COUNT > 0) */
 
@@ -265,7 +268,7 @@ void initSmartGpio() {
 		/* spi_bus == null checked in _add function */
 		int ret = tle8888_add(Gpio::TLE8888_PIN_1, 0, &tle8888_cfg);
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, ret == (int)Gpio::TLE8888_PIN_1, "tle8888");
+		criticalAssertVoid(ret == (int)Gpio::TLE8888_PIN_1, "tle8888");
 	}
 #endif /* (BOARD_TLE8888_COUNT > 0) */
 
@@ -276,9 +279,13 @@ void initSmartGpio() {
 		drv8860.spi_bus = getSpiDevice(engineConfiguration->drv8860spiDevice);
 		int ret = drv8860_add(Gpio::DRV8860_PIN_1, 0, &drv8860);
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, ret == (int)Gpio::DRV8860_PIN_1, "drv8860");
+		criticalAssertVoid(ret == (int)Gpio::DRV8860_PIN_1, "drv8860");
 	}
 #endif /* (BOARD_DRV8860_COUNT > 0) */
+
+#if EFI_CAN_GPIO
+    initCanGpio();
+#endif // EFI_CAN_GPIO
 
 #if (BOARD_MC33810_COUNT > 0)
 	/* none of official boards has this IC */
@@ -293,6 +300,7 @@ void initSmartGpio() {
 }
 
 void tle8888startup() {
+#if (BOARD_TLE8888_COUNT > 0)
 	static efitick_t tle8888CrankingResetTime = 0;
 
 	if (engineConfiguration->useTLE8888_cranking_hack && engine->rpmCalculator.isCranking()) {
@@ -304,6 +312,7 @@ void tle8888startup() {
 			tle8888CrankingResetTime = nowNt;
 		}
 	}
+#endif /* BOARD_TLE8888_COUNT */
 }
 
 void stopSmartCsPins() {
@@ -317,10 +326,12 @@ void stopSmartCsPins() {
 	efiSetPadUnused(activeConfiguration.mc33972_cs);
 #endif /* BOARD_MC33972_COUNT */
 #if (BOARD_DRV8860_COUNT > 0)
-	efiSetPadUnused(activeConfiguration.drv8860_cs);
+
 #endif /* BOARD_DRV8860_COUNT */
 #if (BOARD_MC33810_COUNT > 0)
-	/* none of official boards has this IC */
+    for (size_t i = 0;i<C_MC33810_COUNT;i++) {
+        efiSetPadUnused(engineConfiguration->mc33810_cs[i]);
+	}
 #endif /* (BOARD_MC33810_COUNT > 0) */
 #if (BOARD_TLE9104_COUNT > 0)
 	// No official boards have this IC
@@ -330,30 +341,39 @@ void stopSmartCsPins() {
 void startSmartCsPins() {
 #if (BOARD_TLE8888_COUNT > 0)
 	tle8888Cs.initPin("tle8888 CS", engineConfiguration->tle8888_cs,
-				&engineConfiguration->tle8888_csPinMode);
+				engineConfiguration->tle8888_csPinMode);
 	tle8888Cs.setValue(true);
 #endif /* BOARD_TLE8888_COUNT */
 #if (BOARD_TLE6240_COUNT > 0)
+    // todo: any way to reduce copy-paste? some convention between pin property name and pin mode property name?
 	tle6240Cs.initPin("tle6240 CS", engineConfiguration->tle6240_cs,
-				&engineConfiguration->tle6240_csPinMode);
+				engineConfiguration->tle6240_csPinMode);
 	tle6240Cs.setValue(true);
 #endif /* BOARD_TLE6240_COUNT */
 #if (BOARD_MC33972_COUNT > 0)
+    // todo: any way to reduce copy-paste? some convention between pin property name and pin mode property name?
 	mc33972Cs.initPin("mc33972 CS", engineConfiguration->mc33972_cs,
-				&engineConfiguration->mc33972_csPinMode);
+				engineConfiguration->mc33972_csPinMode);
 	mc33972Cs.setValue(true);
 #endif /* BOARD_MC33972_COUNT */
 #if (BOARD_DRV8860_COUNT > 0)
+    // todo: any way to reduce copy-paste? some convention between pin property name and pin mode property name?
 	drv8860Cs.initPin("drv8860 CS", engineConfiguration->drv8860_cs,
-				&engineConfiguration->drv8860_csPinMode);
+				engineConfiguration->drv8860_csPinMode);
 	drv8860Cs.setValue(true);
 #endif /* BOARD_DRV8860_COUNT */
 #if (BOARD_MC33810_COUNT > 0)
-	/* none of official boards has this IC */
+    for (size_t i = 0;i<C_MC33810_COUNT;i++) {
+	    mc33810Cs[i].initPin("mc33810 CS", engineConfiguration->mc33810_cs[i],
+				engineConfiguration->mc33810_csPinMode);
+	    mc33810Cs[i].setValue(true);
+    }
 #endif /* (BOARD_MC33810_COUNT > 0) */
 #if (BOARD_TLE9104_COUNT > 0)
-	// No official boards have this IC
+    // todo: no official boards have this IC yet
+#endif
+#if (BOARD_L9779_COUNT > 0)
+    // todo: use existing l9779_cs and l9779_csPinMode settings
+    // todo: no official boards have this IC yet
 #endif
 }
-
-#endif /* EFI_PROD_CODE */

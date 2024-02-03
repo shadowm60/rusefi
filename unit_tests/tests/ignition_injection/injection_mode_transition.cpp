@@ -7,6 +7,8 @@
 
 #include "pch.h"
 
+using ::testing::_;
+
 static void doRevolution(EngineTestHelper& eth, int periodMs) {
 	float halfToothTime = (periodMs / 6.0f) / 2;
 
@@ -28,17 +30,17 @@ static void doRevolution(EngineTestHelper& eth, int periodMs) {
 
 // https://github.com/rusefi/rusefi/issues/1592
 TEST(fuelControl, transitionIssue1592) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engine->tdcMarkEnabled = false;
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth, IM_SEQUENTIAL);
 
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(500))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(500, _))
 		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
 
 	// This is easiest to trip on a wheel that requires sync
 	engineConfiguration->trigger.customTotalToothCount = 6;
 	engineConfiguration->trigger.customSkippedToothCount = 1;
-	eth.setTriggerType(TT_TOOTHED_WHEEL);
+	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
     setCamOperationMode();
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
 
@@ -54,8 +56,6 @@ TEST(fuelControl, transitionIssue1592) {
 
 	// Test the transition from batch cranking to sequential running
 	engineConfiguration->crankingInjectionMode = IM_BATCH;
-	engineConfiguration->twoWireBatchInjection = true;
-
 
 	// First sync point will schedule cranking pulse since we're in "faster spin up" mode
 	doRevolution(eth, 240);

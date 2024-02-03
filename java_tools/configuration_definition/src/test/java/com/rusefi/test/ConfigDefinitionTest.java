@@ -2,7 +2,8 @@ package com.rusefi.test;
 
 import com.rusefi.EnumsReader;
 import com.rusefi.VariableRegistry;
-import org.junit.Test;
+import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileReader;
@@ -12,16 +13,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class ConfigDefinitionTest {
-    private static final String FIRMWARE = "../../firmware";
+    public static final String FIRMWARE = "../../firmware";
 
     @Test
     public void testEnumIntoType() throws IOException {
         EnumsReader enumsReader = new EnumsReader();
         enumsReader.read(new FileReader(FIRMWARE + File.separator + "controllers/algo/engine_types.h"));
 
-        VariableRegistry variableRegistry = new VariableRegistry();
-
-        variableRegistry.readPrependValues(FIRMWARE + File.separator + "integration/rusefi_config.txt");
+        VariableRegistry variableRegistry = readRealConfig();
 
 
         String sb = variableRegistry.getEnumOptionsForTunerStudio(enumsReader, "engine_type_e");
@@ -29,5 +28,13 @@ public class ConfigDefinitionTest {
         System.out.println(sb);
         assertNotNull(sb);
         assertTrue("Seems too long" + sb, sb.length() < 100000);
+    }
+
+    @NotNull
+    public static VariableRegistry readRealConfig() throws IOException {
+        VariableRegistry variableRegistry = new VariableRegistry();
+
+        variableRegistry.readPrependValues(FIRMWARE + File.separator + "integration/rusefi_config.txt");
+        return variableRegistry;
     }
 }

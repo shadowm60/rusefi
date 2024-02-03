@@ -28,7 +28,7 @@ float getTachDuty() {
 
 static bool tachHasInit = false;
 
-void tachSignalCallback() {
+void tachUpdate() {
 	// Only do anything if tach enabled
 	if (!tachHasInit) {
 		return;
@@ -38,7 +38,7 @@ void tachSignalCallback() {
 	int periods = engineConfiguration->tachPulsePerRev;
 
 	if (periods == 0 || periods > 10) {
-		firmwareError(CUSTOM_ERR_6709, "Invalid tachometer pulse per rev: %d", periods);
+		firmwareError(ObdCode::CUSTOM_ERR_6709, "Invalid tachometer pulse per rev: %d", periods);
 		return;
 	}
 
@@ -60,12 +60,13 @@ void tachSignalCallback() {
 		tachFreq = NAN;
 	}
 	
-	tachControl.setSimplePwmDutyCycle(duty);	
+	tachControl.setSimplePwmDutyCycle(duty);
 	tachControl.setFrequency(tachFreq);
 }
 
 void initTachometer() {
 	tachHasInit = false;
+
 	if (!isBrainPinValid(engineConfiguration->tachOutputPin)) {
 		return;
 	}

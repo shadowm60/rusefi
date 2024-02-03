@@ -39,7 +39,7 @@ static CanTsListener listener;
 
 int CanStreamerState::sendFrame(const IsoTpFrameHeader & header, const uint8_t *data, int num, can_sysinterval_t timeout) {
 	int dlc = 8; // standard 8 bytes
-	CanTxMessage txmsg(CanCategory::SERIAL, CAN_ECU_SERIAL_TX_ID, dlc, false);
+	CanTxMessage txmsg(CanCategory::SERIAL, CAN_ECU_SERIAL_TX_ID, dlc, 0, false);
 	
 	// fill the frame data according to the CAN-TP protocol (ISO 15765-2)
 	txmsg[0] = (uint8_t)((header.frameType & 0xf) << 4);
@@ -211,7 +211,7 @@ int CanStreamerState::sendDataTimeout(const uint8_t *txbuf, int numBytes, can_sy
 #ifdef SERIAL_CAN_DEBUG
 			PRINT("*** ERROR: CAN Flow Control frame not received" PRINT_EOL);
 #endif /* SERIAL_CAN_DEBUG */
-			//warning(CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control frame not received");
+			//warning(ObdCode::CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control frame not received");
 			return 0;
 		}
 		receiveFrame(&rxmsg, nullptr, 0, timeout);
@@ -225,7 +225,7 @@ int CanStreamerState::sendDataTimeout(const uint8_t *txbuf, int numBytes, can_sy
 #ifdef SERIAL_CAN_DEBUG
 			efiPrintf("*** ERROR: CAN Flow Control mode not supported");
 #endif /* SERIAL_CAN_DEBUG */
-			//warning(CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control mode not supported");
+			//warning(ObdCode::CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control mode not supported");
 			return 0;
 		}
 		int blockSize = rxmsg.data8[1];
@@ -235,7 +235,7 @@ int CanStreamerState::sendDataTimeout(const uint8_t *txbuf, int numBytes, can_sy
 #ifdef SERIAL_CAN_DEBUG
 			efiPrintf("*** ERROR: CAN Flow Control fields not supported");
 #endif /* SERIAL_CAN_DEBUG */
-			//warning(CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control fields not supported");
+			//warning(ObdCode::CUSTOM_ERR_CAN_COMMUNICATION, "CAN Flow Control fields not supported");
 		}
 		break;
 	}
@@ -246,11 +246,10 @@ int CanStreamerState::sendDataTimeout(const uint8_t *txbuf, int numBytes, can_sy
 	while (numBytes > 0) {
 		int len = minI(numBytes, 7);
 		// send the consecutive frames
-		IsoTpFrameHeader header;
 		header.frameType = ISO_TP_FRAME_CONSECUTIVE;
 		header.index = ((idx++) & 0x0f);
 		header.numBytes = len;
-		int numSent = sendFrame(header, txbuf + offset, len, timeout);
+		numSent = sendFrame(header, txbuf + offset, len, timeout);
 		if (numSent < 1)
 			break;
 		totalNumSent += numSent;
@@ -316,7 +315,7 @@ can_msg_t CanStreamerState::streamAddToTxTimeout(size_t *np, const uint8_t *txbu
 can_msg_t CanStreamerState::streamFlushTx(can_sysinterval_t timeout) {
 	int numSent = sendDataTimeout((const uint8_t *)txFifoBuf.getElements(), txFifoBuf.getCount(), timeout);
 	if (numSent != txFifoBuf.getCount()) {
-		//warning(CUSTOM_ERR_CAN_COMMUNICATION, "CAN sendDataTimeout() problems");
+		//warning(ObdCode::CUSTOM_ERR_CAN_COMMUNICATION, "CAN sendDataTimeout() problems");
 	}
 	txFifoBuf.clear();
 	
@@ -324,31 +323,30 @@ can_msg_t CanStreamerState::streamFlushTx(can_sysinterval_t timeout) {
 }
 
 can_msg_t CanStreamerState::streamReceiveTimeout(size_t *np, uint8_t *rxbuf, can_sysinterval_t timeout) {
-	int i = 0;
-	size_t numBytes = *np;
+	size_t availableBufferSpace = *np;
 
 	// first, fill the data from the stored buffer (saved from the previous CAN frame)
-	i = getDataFromFifo(rxbuf, numBytes);
+	int receivedSoFar = getDataFromFifo(rxbuf, availableBufferSpace);
 
 	// if even more data is needed, then we receive more CAN frames
-	while (numBytes > 0) {
+	while (availableBufferSpace > 0) {
 		CANRxFrame rxmsg;
 		if (streamer->receive(CAN_ANY_MAILBOX, &rxmsg, timeout) == CAN_MSG_OK) {
-			int numReceived = receiveFrame(&rxmsg, rxbuf + i, numBytes, timeout);
+			int numReceived = receiveFrame(&rxmsg, rxbuf + receivedSoFar, availableBufferSpace, timeout);
 
 			if (numReceived < 1)
 				break;
-			numBytes -= numReceived;
-			i += numReceived;
+			availableBufferSpace -= numReceived;
+			receivedSoFar += numReceived;
 		} else {
 			break;
 		}
 	}
-	*np -= numBytes;
+	*np -= availableBufferSpace;
 
 #ifdef SERIAL_CAN_DEBUG
-	efiPrintf("* ret: %d %d (%d)", i, *np, numBytes);
-	for (int j = 0; j < i; j++) {
+	efiPrintf("* ret: %d %d (%d)", i, *np, availableBufferSpace);
+	for (int j = 0; j < receivedSoFar; j++) {
 		efiPrintf("* [%d]: %02x", j, rxbuf[j]);
 	}
 #endif /* SERIAL_CAN_DEBUG */
@@ -368,7 +366,7 @@ void CanTsListener::decodeFrame(const CANRxFrame& frame, efitick_t /*nowNt*/) {
 		PRINT("*** INFO: CanTsListener decodeFrame %d" PRINT_EOL, isoTpPacketCounter++);
 	}
 	if (!rxFifo.put(msg)) {
-		warning(CUSTOM_ERR_CAN_COMMUNICATION, "CAN sendDataTimeout() problems");
+		warning(ObdCode::CUSTOM_ERR_CAN_COMMUNICATION, "CAN sendDataTimeout() problems");
 	}
 }
 
@@ -405,6 +403,9 @@ msg_t canStreamFlushTx(sysinterval_t timeout) {
 	return state.streamFlushTx(timeout);
 }
 
+	// np uses in/out parameter approach. Yes ChibiOS does same but still evil!
+	// in entry: number of data frames to receive
+	// on exit the number of frames actually received
 msg_t canStreamReceiveTimeout(size_t *np, uint8_t *rxbuf, sysinterval_t timeout) {
 	return state.streamReceiveTimeout(np, rxbuf, timeout);
 }

@@ -110,7 +110,7 @@ const char* swapOutputBuffers(size_t* actualOutputBufferSize) {
 
 	// Check that the actual length of the buffer matches the expected length of how much we thought we wrote
 	if (*actualOutputBufferSize != expectedOutputSize) {
-		firmwareError(ERROR_LOGGING_SIZE_CALC, "lsize mismatch %d vs strlen %d", *actualOutputBufferSize, expectedOutputSize);
+		firmwareError(ObdCode::ERROR_LOGGING_SIZE_CALC, "lsize mismatch %d vs strlen %d", *actualOutputBufferSize, expectedOutputSize);
 
 		return nullptr;
 	}
@@ -127,7 +127,7 @@ static chibios_rt::Mailbox<LogLineBuffer*, lineBufferCount> freeBuffers;
 // filledBuffers contains a queue of buffers currently waiting to be written to the output buffer
 static chibios_rt::Mailbox<LogLineBuffer*, lineBufferCount> filledBuffers;
 
-class LoggingBufferFlusher : public ThreadController<256> {
+class LoggingBufferFlusher : public ThreadController<UTILITY_THREAD_STACK_SIZE> {
 public:
 	LoggingBufferFlusher() : ThreadController("log flush", PRIO_TEXT_LOG) { }
 

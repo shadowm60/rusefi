@@ -11,10 +11,16 @@
 
 #define EFI_GPIO_HARDWARE TRUE
 
+#ifndef SENT_CHANNELS_NUM
 #define SENT_CHANNELS_NUM 1
+#endif
 
 #ifndef EFI_BOOST_CONTROL
 #define EFI_BOOST_CONTROL TRUE
+#endif
+
+#ifndef EFI_DAC
+#define EFI_DAC FALSE
 #endif
 
 #ifndef EFI_LAUNCH_CONTROL
@@ -25,7 +31,29 @@
 #define EFI_ANTILAG_SYSTEM TRUE
 #endif
 
+#ifndef EFI_BACKUP_SRAM
+#define EFI_BACKUP_SRAM TRUE
+#endif
+
+#ifndef EFI_USE_OPENBLT
+#define EFI_USE_OPENBLT FALSE
+#endif
+
+#ifndef EFI_ETHERNET
+#define EFI_ETHERNET FALSE
+#endif
+
+#ifndef EFI_DFU_JUMP
+#define EFI_DFU_JUMP TRUE
+#endif
+
+#ifndef EFI_BOR_LEVEL
+#define EFI_BOR_LEVEL TRUE
+#endif
+
+#ifndef EFI_DYNO_VIEW
 #define EFI_DYNO_VIEW TRUE
+#endif
 
 #ifndef EFI_CDM_INTEGRATION
 #define EFI_CDM_INTEGRATION FALSE
@@ -35,7 +63,9 @@
 #define EFI_TOOTH_LOGGER TRUE
 #endif
 
+#ifndef EFI_TEXT_LOGGING
 #define EFI_TEXT_LOGGING TRUE
+#endif
 
 #define EFI_PWM_TESTER FALSE
 
@@ -49,8 +79,9 @@
 #define EFI_HPFP TRUE
 #endif
 
-#define EFI_ENABLE_CRITICAL_ENGINE_STOP TRUE
-#define EFI_ENABLE_ENGINE_WARNING TRUE
+#ifndef EFI_HD_ACR
+#define EFI_HD_ACR FALSE
+#endif
 
 #ifndef SC_BUFFER_SIZE
 #define SC_BUFFER_SIZE 4000
@@ -125,8 +156,8 @@
 #define EFI_ALTERNATOR_CONTROL TRUE
 #endif
 
-#ifndef EFI_AUX_PID
-#define EFI_AUX_PID TRUE
+#ifndef EFI_VVT_PID
+#define EFI_VVT_PID TRUE
 #endif
 
 #define EFI_SIGNAL_EXECUTOR_SLEEP FALSE
@@ -139,9 +170,14 @@
 
 #define TRIGGER_EXTREME_LOGGING FALSE
 
-#ifndef EFI_INTERNAL_FLASH
-#define EFI_INTERNAL_FLASH TRUE
+#ifndef EFI_STORAGE_INT_FLASH
+#define EFI_STORAGE_INT_FLASH   TRUE
 #endif
+
+#ifndef EFI_STORAGE_MFS
+#define EFI_STORAGE_MFS         FALSE
+#endif
+
 
 /**
  * Usually you need shaft position input, but maybe you do not need it?
@@ -152,14 +188,19 @@
 
 /**
  * Maybe we are just sniffing what's going on?
+ * EFI_ENGINE_CONTROL is covering injectors and spark control
  */
+#ifndef EFI_ENGINE_CONTROL
 #define EFI_ENGINE_CONTROL TRUE
+#endif
 
 /**
  * MCP42010 digital potentiometer support. This could be useful if you are stimulating some
  * stock ECU
  */
+#ifndef EFI_POTENTIOMETER
 #define EFI_POTENTIOMETER FALSE
+#endif
 
 #ifndef BOARD_TLE6240_COUNT
 #define BOARD_TLE6240_COUNT         0
@@ -170,11 +211,11 @@
 #endif
 
 #ifndef BOARD_TLE8888_COUNT
-#define BOARD_TLE8888_COUNT 	1
+#define BOARD_TLE8888_COUNT 	0
 #endif
 
 #ifndef BOARD_L9779_COUNT
-#define BOARD_L9779_COUNT 	1
+#define BOARD_L9779_COUNT 	0
 #endif
 
 #ifndef BOARD_DRV8860_COUNT
@@ -192,7 +233,7 @@
 #define EFI_ANALOG_SENSORS TRUE
 
 #ifndef EFI_MAX_31855
-#define EFI_MAX_31855 TRUE
+#define EFI_MAX_31855 FALSE
 #endif
 
 #define EFI_MCP_3208 FALSE
@@ -202,12 +243,8 @@
 #define EFI_HIP_9011 FALSE
 #endif
 
-#ifndef EFI_CJ125
-#define EFI_CJ125 TRUE
-#endif
-
-#if !defined(EFI_MEMS)
- #define EFI_MEMS FALSE
+#if !defined(EFI_ONBOARD_MEMS)
+ #define EFI_ONBOARD_MEMS FALSE
 #endif
 
 #ifndef EFI_INTERNAL_ADC
@@ -216,14 +253,17 @@
 
 #define EFI_USE_FAST_ADC TRUE
 
-#define EFI_NARROW_EGO_AVERAGING TRUE
-
 #ifndef EFI_CAN_SUPPORT
 #define EFI_CAN_SUPPORT TRUE
 #endif
 
-#ifndef EFI_CAN_SERIAL
+#if !defined(EFI_CAN_SERIAL) && EFI_CAN_SUPPORT
 #define EFI_CAN_SERIAL TRUE
+#endif
+
+#if !defined(EFI_CAN_GPIO) && EFI_CAN_SUPPORT
+// see CAN_PIN_0
+#define EFI_CAN_GPIO TRUE
 #endif
 
 #define EFI_WIDEBAND_FIRMWARE_UPDATE TRUE
@@ -232,19 +272,13 @@
 #define EFI_AUX_SERIAL TRUE
 #endif
 
-#ifndef EFI_HD44780_LCD
-#define EFI_HD44780_LCD TRUE
-#endif
-
-#ifndef EFI_LCD
-#define EFI_LCD TRUE
-#endif
-
 #ifndef EFI_IDLE_CONTROL
 #define EFI_IDLE_CONTROL TRUE
 #endif
 
+#ifndef EFI_IDLE_PID_CIC
 #define EFI_IDLE_PID_CIC TRUE
+#endif
 
 /**
  * Control the main power relay based on measured ignition voltage (Vbatt)
@@ -253,16 +287,12 @@
 #define EFI_MAIN_RELAY_CONTROL FALSE
 #endif
 
-#ifndef EFI_PWM
-#define EFI_PWM TRUE
-#endif
-
 #ifndef EFI_VEHICLE_SPEED
 #define EFI_VEHICLE_SPEED TRUE
 #endif
 
 #ifndef EFI_TCU
-#define EFI_TCU TRUE
+#define EFI_TCU FALSE
 #endif
 
 #ifndef EFI_ENGINE_EMULATOR
@@ -292,7 +322,9 @@
 #define EFI_CONSOLE_USB_DEVICE SDU1
 
 #if defined(EFI_HAS_EXT_SDRAM)
+    #ifndef ENABLE_PERF_TRACE
     #define ENABLE_PERF_TRACE TRUE
+    #endif // ENABLE_PERF_TRACE
     #define LUA_USER_HEAP (1 * 1024 * 1024)
 #elif defined(EFI_IS_F42x)
     // F42x has more memory, so we can:
@@ -303,14 +335,22 @@
 
 	#define LUA_USER_HEAP 25000
 #else
+    #ifndef ENABLE_PERF_TRACE
 	// small memory F40x can't fit perf trace
 	#define ENABLE_PERF_TRACE FALSE
+    #endif // ENABLE_PERF_TRACE
 
+	#ifndef LUA_USER_HEAP
 	#define LUA_USER_HEAP 25000
+	#endif
 #endif
 
 #ifndef EFI_LUA
 #define EFI_LUA TRUE
+#endif
+
+#ifndef EFI_LUA_LOOKUP
+#define EFI_LUA_LOOKUP TRUE
 #endif
 
 #ifndef EFI_ENGINE_SNIFFER
@@ -318,38 +358,44 @@
 #endif
 
 #define EFI_HISTOGRAMS FALSE
-#define EFI_SENSOR_CHART TRUE
 
-#if defined __GNUC__
+#ifndef EFI_SENSOR_CHART
+#define EFI_SENSOR_CHART TRUE
+#endif
+
+#ifndef EFI_PERF_METRICS
 #define EFI_PERF_METRICS FALSE
+#endif
+
+#ifndef DL_OUTPUT_BUFFER
 #define DL_OUTPUT_BUFFER 6500
-#else
-#define EFI_PERF_METRICS FALSE
-#define DL_OUTPUT_BUFFER 8000
 #endif
 
 /**
  * Do we need GPS logic?
  */
+#ifndef EFI_UART_GPS
 #define EFI_UART_GPS FALSE
+#endif
 
+#ifndef EFI_ELECTRONIC_THROTTLE_BODY
 #define EFI_ELECTRONIC_THROTTLE_BODY TRUE
-//#define EFI_ELECTRONIC_THROTTLE_BODY FALSE
+#endif
 
 /**
  * Do we need Malfunction Indicator blinking logic?
  */
 #ifndef EFI_MALFUNCTION_INDICATOR
 #define EFI_MALFUNCTION_INDICATOR TRUE
-//#define EFI_MALFUNCTION_INDICATOR FALSE
 #endif
 
 #ifndef CONSOLE_MAX_ACTIONS
 #define CONSOLE_MAX_ACTIONS 180
 #endif
 
+#ifndef EFI_MAP_AVERAGING
 #define EFI_MAP_AVERAGING TRUE
-//#define EFI_MAP_AVERAGING FALSE
+#endif
 
 // todo: most of this should become configurable
 
@@ -394,12 +440,6 @@
 #define EFI_USE_UART_DMA TRUE
 #endif
 
-#ifndef TS_PRIMARY_PORT
-#define TS_PRIMARY_PORT UARTD3
-#endif
-
-#undef TS_SECONDARY_PORT
-
 #define AUX_SERIAL_DEVICE (&SD6)
 
 #ifndef EFI_CONSOLE_TX_BRAIN_PIN
@@ -424,35 +464,12 @@
 #ifndef LED_CRITICAL_ERROR_BRAIN_PIN
 #define LED_CRITICAL_ERROR_BRAIN_PIN Gpio::D14
 #endif
-#ifndef LED_ERROR_BRAIN_PIN_MODE
-#define LED_ERROR_BRAIN_PIN_MODE DEFAULT_OUTPUT
-#endif
 
 // USART1 -> check defined STM32_SERIAL_USE_USART1
 // For GPS we have USART1. We can start with PB7 USART1_RX and PB6 USART1_TX
 #define GPS_SERIAL_DEVICE &SD1
 #define GPS_SERIAL_SPEED 38400
 
-#ifndef CONFIG_RESET_SWITCH_PORT
-// looks like this feature is not extremely popular, we can try living without it now :)
-//#define CONFIG_RESET_SWITCH_PORT GPIOD
-#endif
-
-#ifndef CONFIG_RESET_SWITCH_PIN
-#define CONFIG_RESET_SWITCH_PIN 6
-#endif
-
-#ifndef EFI_STORAGE_INT_FLASH
-#define EFI_STORAGE_INT_FLASH   TRUE
-#endif
-
-#ifndef EFI_STORAGE_EXT_SNOR
-#define EFI_STORAGE_EXT_SNOR    FALSE
-#endif
-
 #ifndef EFI_SENT_SUPPORT
 #define EFI_SENT_SUPPORT        FALSE
 #endif
-
-// killing joystick for now due to Unable to change broken settings #3227
-#define EFI_JOYSTICK FALSE

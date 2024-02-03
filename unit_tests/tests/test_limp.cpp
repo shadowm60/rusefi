@@ -1,5 +1,6 @@
 #include "pch.h"
 
+#include "fuel_math.h"
 #include "limp_manager.h"
 
 TEST(limp, testFatalError) {
@@ -21,9 +22,11 @@ TEST(limp, testFatalError) {
 }
 
 TEST(limp, revLimit) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->rpmHardLimit = 2500;
+	engineConfiguration->cutFuelOnHardLimit = true;
+	engineConfiguration->cutSparkOnHardLimit = true;
 
 	LimpManager dut;
 
@@ -44,9 +47,11 @@ TEST(limp, revLimit) {
 }
 
 TEST(limp, revLimitCltBased) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->rpmHardLimit = 2500;
+	engineConfiguration->cutFuelOnHardLimit = true;
+	engineConfiguration->cutSparkOnHardLimit = true;
 
 	// Configure CLT-based rev limit curve
 	engineConfiguration->useCltBasedRpmLimit = true;
@@ -93,11 +98,87 @@ TEST(limp, revLimitCltBased) {
 	EXPECT_TRUE(dut.allowInjection());
 }
 
+TEST(limp, revHardLimitHyst) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	engineConfiguration->rpmHardLimit = 2500;
+	engineConfiguration->rpmHardLimitHyst = 200;
+	engineConfiguration->cutSparkOnHardLimit = true;
+
+	LimpManager dut;
+
+	// Under rev limit, inj/ign allowed
+	dut.updateState(2500, 0);
+	EXPECT_TRUE(dut.allowIgnition());
+	EXPECT_TRUE(dut.allowInjection());
+
+	// Over rev limit, no injection or ignition
+	dut.updateState(2501, 0);
+	EXPECT_FALSE(dut.allowIgnition());
+	EXPECT_FALSE(dut.allowInjection());
+
+	// Now set back inside the limit window - still not allowed
+	dut.updateState(2300, 0);
+	EXPECT_FALSE(dut.allowIgnition());
+	EXPECT_FALSE(dut.allowInjection());
+
+	// Now recover back to under lower limit
+	dut.updateState(2299, 0);
+	EXPECT_TRUE(dut.allowIgnition());
+	EXPECT_TRUE(dut.allowInjection());
+}
+
+TEST(limp, revSoftLimit) {
+	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
+
+	engineConfiguration->rpmHardLimit = 2500;
+	engineConfiguration->rpmHardLimitHyst = 200;
+	engineConfiguration->rpmSoftLimitTimingRetard = 10; // 10 deg
+	engineConfiguration->rpmSoftLimitFuelAdded = 20;	// 20%
+	engineConfiguration->cutSparkOnHardLimit = true;
+
+	eth.engine.updateSlowSensors();
+	Sensor::setMockValue(SensorType::Clt, 36.605f);
+	Sensor::setMockValue(SensorType::Iat, 30.0f);
+
+	// this is 5ms base fuel with some default CLT/IAT corrections
+	static const float baseFuel = 5.0f;
+	static const float normalRunningFuel = 5.3679f;
+
+	// Under rev limit, no inj/ign corrections
+	Sensor::setMockValue(SensorType::Rpm, 2300);
+	eth.engine.periodicFastCallback();
+
+	EXPECT_FLOAT_EQ(0, getLimpManager()->getLimitingTimingRetard());
+	EXPECT_FLOAT_EQ((float)eth.engine.ignitionState.correctedIgnitionAdvance - (float)eth.engine.ignitionState.baseIgnitionAdvance, 0);
+	EXPECT_FLOAT_EQ(1, getLimpManager()->getLimitingFuelCorrection());
+	// this is normal injection mode, no limiting fuel corrections
+	ASSERT_NEAR(normalRunningFuel, getRunningFuel(baseFuel), EPS4D) << "base fuel";
+
+	// For upper rev limit, we expect maximum inj/ign corrections
+	Sensor::setMockValue(SensorType::Rpm, 2500);
+	eth.engine.periodicFastCallback();
+
+	EXPECT_FLOAT_EQ(10, getLimpManager()->getLimitingTimingRetard());	// 10 deg
+	EXPECT_FLOAT_EQ((float)eth.engine.ignitionState.correctedIgnitionAdvance - (float)eth.engine.ignitionState.baseIgnitionAdvance, -10.0f);
+	EXPECT_FLOAT_EQ(1.2f, getLimpManager()->getLimitingFuelCorrection());	// 20%
+	ASSERT_NEAR(normalRunningFuel * 1.2f, getRunningFuel(baseFuel), EPS4D) << "base fuel";	// 20%
+
+	// In the middle of the limit window, we expect 50% interpolated inj/ign corrections
+	Sensor::setMockValue(SensorType::Rpm, 2400);
+	eth.engine.periodicFastCallback();
+	EXPECT_FLOAT_EQ(5, getLimpManager()->getLimitingTimingRetard());	// 5 deg
+	EXPECT_FLOAT_EQ((float)eth.engine.ignitionState.correctedIgnitionAdvance - (float)eth.engine.ignitionState.baseIgnitionAdvance, -5.0f);
+	EXPECT_FLOAT_EQ(1.1f, getLimpManager()->getLimitingFuelCorrection());	// 10%
+	ASSERT_NEAR(normalRunningFuel * 1.1f, getRunningFuel(baseFuel), EPS4D) << "base fuel";	// 10%
+}
+
 TEST(limp, boostCut) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Cut above 100kPa
 	engineConfiguration->boostCutPressure = 100;
+	engineConfiguration->boostCutPressureHyst = 20;
 
 	LimpManager dut;
 
@@ -131,7 +212,7 @@ TEST(limp, boostCut) {
 extern int timeNowUs;
 
 TEST(limp, oilPressureFailureCase) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->minOilPressureAfterStart = 200;
 
 	LimpManager dut;
@@ -164,7 +245,7 @@ TEST(limp, oilPressureFailureCase) {
 }
 
 TEST(limp, oilPressureSuccessCase) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->minOilPressureAfterStart = 200;
 
 	LimpManager dut;

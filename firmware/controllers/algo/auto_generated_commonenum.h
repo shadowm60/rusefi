@@ -1,4 +1,4 @@
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum2string.jar tool on Sun Sep 11 07:52:24 UTC 2022
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Wed Jan 03 19:47:48 UTC 2024
 // see also gen_config_and_enums.bat
 
 
@@ -6,16 +6,20 @@
 #include "rusefi_enums.h"
 #pragma once
 #if __cplusplus
+const char *getCanGpioType(CanGpioType value);
+#endif //__cplusplus
+#if __cplusplus
 const char *getGearControllerMode(GearControllerMode value);
 #endif //__cplusplus
 #if __cplusplus
 const char *getInjectionTimingMode(InjectionTimingMode value);
 #endif //__cplusplus
 const char *getInjectorNonlinearMode(InjectorNonlinearMode value);
-const char *getPidAutoTune_AutoTunerState(PidAutoTune_AutoTunerState value);
-const char *getPidAutoTune_Peak(PidAutoTune_Peak value);
 #if __cplusplus
 const char *getSelectedGear(SelectedGear value);
+#endif //__cplusplus
+#if __cplusplus
+const char *getSentEtbType(SentEtbType value);
 #endif //__cplusplus
 #if __cplusplus
 const char *getTransmissionControllerMode(TransmissionControllerMode value);
@@ -26,6 +30,9 @@ const char *getTriggerWheel(TriggerWheel value);
 #if __cplusplus
 const char *getTsCalMode(TsCalMode value);
 #endif //__cplusplus
+#if __cplusplus
+const char *getUiMode(UiMode value);
+#endif //__cplusplus
 const char *getAir_pressure_sensor_type_e(air_pressure_sensor_type_e value);
 const char *getAntiLagActivationMode_e(antiLagActivationMode_e value);
 const char *getBoostType_e(boostType_e value);
@@ -33,10 +40,11 @@ const char *getBrain_pin_diag_e(brain_pin_diag_e value);
 const char *getCan_baudrate_e(can_baudrate_e value);
 const char *getCan_nbc_e(can_nbc_e value);
 const char *getCan_vss_nbc_e(can_vss_nbc_e value);
+const char *getDc_function_e(dc_function_e value);
 const char *getDisplay_mode_e(display_mode_e value);
 const char *getEgo_sensor_e(ego_sensor_e value);
 const char *getEngine_load_mode_e(engine_load_mode_e value);
-const char *getEtb_function_e(etb_function_e value);
+const char *getFuel_pressure_sensor_mode_e(fuel_pressure_sensor_mode_e value);
 const char *getGear_e(gear_e value);
 const char *getGppwm_channel_e(gppwm_channel_e value);
 const char *getGppwm_compare_mode_e(gppwm_compare_mode_e value);
@@ -51,6 +59,7 @@ const char *getInjector_pressure_type_e(injector_pressure_type_e value);
 const char *getLaunchActivationMode_e(launchActivationMode_e value);
 const char *getLoad_override_e(load_override_e value);
 const char *getMaf_sensor_type_e(maf_sensor_type_e value);
+const char *getMc33810maxDwellTimer_e(mc33810maxDwellTimer_e value);
 const char *getOperation_mode_e(operation_mode_e value);
 const char *getPin_input_mode_e(pin_input_mode_e value);
 const char *getPin_output_mode_e(pin_output_mode_e value);

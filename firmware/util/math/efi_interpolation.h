@@ -24,18 +24,20 @@
 
 int findIndex(const float array[], int size, float value);
 int findIndex2(const float array[], unsigned size, float value);
+float interpolateClampedWithValidation(float x1, float y1, float x2, float y2, float x);
 float interpolateClamped(float x1, float y1, float x2, float y2, float x);
 float interpolateMsg(const char *msg, float x1, float y1, float x2, float y2, float x);
 
 // _technically_ and _theoretically_ we can support flat line for both bins and values but I am not sure if
 // such a rare case is something we want to support
+// see also: setLinearCurve
 template<typename TValue, int TSize>
 void ensureArrayIsAscending(const char* msg, const TValue (&values)[TSize]) {
 	for (size_t i = 0; i < TSize - 1; i++) {
 		float cur = values[i];
 		float next = values[i + 1];
 		if (next <= cur) {
-			firmwareError(CUSTOM_ERR_AXIS_ORDER, "Invalid table axis (must be ascending!): %s %f %f at %d", msg, cur, next, i);
+			firmwareError(ObdCode::CUSTOM_ERR_AXIS_ORDER, "Invalid table axis (must be ascending!): %s %f %f at %d", msg, cur, next, i);
 		}
 	}
 }
@@ -55,10 +57,10 @@ void ensureArrayIsAscendingOrDefault(const char* msg, const TValue (&values)[TSi
  * See also ensureArrayIsAscending
  */
 template<typename kType>
-int findIndexMsgExt(const char *msg, const kType array[], int size, kType value) {
+int findIndexMsg(const char *msg, const kType array[], int size, kType value) {
 	float fvalue = (float)value;
 	if (cisnan(fvalue)) {
-		firmwareError(ERROR_NAN_FIND_INDEX, "NaN in findIndex%s", msg);
+		firmwareError(ObdCode::ERROR_NAN_FIND_INDEX, "NaN in findIndex%s", msg);
 		return 0;
 	}
 
@@ -74,7 +76,7 @@ int findIndexMsgExt(const char *msg, const kType array[], int size, kType value)
 #if 0
 		// that's an assertion to make sure we do not loop here
 		size--;
-		efiAssert(CUSTOM_ERR_ASSERT, size > 0, "Unexpected state in binary search", 0);
+		efiAssert(ObdCode::CUSTOM_ERR_ASSERT, size > 0, "Unexpected state in binary search", 0);
 #endif
 
 		// todo: compare current implementation with
@@ -89,9 +91,9 @@ int findIndexMsgExt(const char *msg, const kType array[], int size, kType value)
 
 		if (middle != 0 && array[middle - 1] > array[middle]) {
 #if EFI_UNIT_TEST
-			firmwareError(CUSTOM_ERR_6610, "%s: out of order %.2f %.2f", msg, array[middle - 1], array[middle]);
+			firmwareError(ObdCode::CUSTOM_ERR_6610, "%s: out of order %.2f %.2f", msg, array[middle - 1], array[middle]);
 #else
-			warning(CUSTOM_ERR_OUT_OF_ORDER, "%s: out of order %.2f %.2f", msg, array[middle - 1], array[middle]);
+			warning(ObdCode::CUSTOM_ERR_OUT_OF_ORDER, "%s: out of order %.2f %.2f", msg, array[middle - 1], array[middle]);
 
 #endif /* EFI_UNIT_TEST */
 		}
@@ -107,8 +109,6 @@ int findIndexMsgExt(const char *msg, const kType array[], int size, kType value)
 
 	return middle;
 }
-
-#define findIndexMsg(msg, array, size, value) findIndexMsgExt(msg, array, size, value)
 
 /**
  * Sets specified value for specified key in a correction curve

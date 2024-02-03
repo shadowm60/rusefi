@@ -5,7 +5,7 @@
 
 # Compiler options here.
 ifeq ($(USE_OPT),)
-  USE_OPT = -O2 -ggdb -fomit-frame-pointer -falign-functions=16
+  USE_OPT = -O0 -g -ggdb -fomit-frame-pointer -falign-functions=16
 endif
 
 # C specific options here (added to USE_OPT).
@@ -90,7 +90,7 @@ PROJECT = ch
 MCU  = cortex-m3
 
 # Imported source files and paths.
-CHIBIOS = ../../firmware/chibios
+CHIBIOS = ../../firmware/ChibiOS
 CONFDIR  := ./cfg
 BUILDDIR := ./build
 DEPDIR   := ./.dep
@@ -116,6 +116,7 @@ include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
 # Auto-build files in ./source recursively.
 include $(CHIBIOS)/tools/mk/autobuild.mk
 # Other files (optional).
+include $(CHIBIOS)/os/hal/lib/complex/mfs/hal_mfs.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 
 # Define linker script file here
@@ -131,6 +132,7 @@ CPPSRC = $(ALLCPPSRC) \
         main.cpp \
 	spi.cpp \
 	can.cpp \
+	persistence.cpp \
 	uart.cpp
 
 # List ASM source files here.

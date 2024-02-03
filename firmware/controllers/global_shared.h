@@ -27,11 +27,11 @@
 
 #include "global.h"
 
-#define EXPECTED_REMAINING_STACK 128
-
 /*
  * Stack debugging
  */
 EXTERNC int getRemainingStack(thread_t *otp);
 int CountFreeStackSpace(const void* wabase);
-void validateStack(const char*msg, obd_code_e code, int stackUnusedSize);
+
+#define assertStackVoid(message, code, desiredAvailableStack) { if (getCurrentRemainingStack() < desiredAvailableStack) { firmwareError(code, "stack: %s", message); return; } }
+#define assertStack(message, code, desiredAvailableStack, result) { if (getCurrentRemainingStack() < desiredAvailableStack) { firmwareError(code, "stack: %s", message); return result; } }

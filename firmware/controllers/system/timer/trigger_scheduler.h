@@ -1,24 +1,31 @@
 #pragma once
 
+// TriggerScheduler here is an intermediate tooth-based scheduler working on top of time-base scheduler
+// *kludge*: individual event for *Trigger*Scheduler is called *Angle*BasedEvent. Shall we rename to ToothSchedule and ToothBasedEvent?
 class TriggerScheduler : public EngineModule {
 public:
-	void schedule(AngleBasedEvent* event, angle_t angle, action_s action);
+    // *kludge* we have three methods with *schedule* in the name meaning three different things
+    // this method just places event into the collection of tooth-based events
+	void schedule(const char *msg, AngleBasedEvent* event, angle_t angle, action_s action);
 
-	bool scheduleOrQueue(AngleBasedEvent *event,
+    // 'schedule' means 'delegates to time-based scheduler' and 'queue' here matches the 'schedule' method above
+	bool scheduleOrQueue(const char *msg, AngleBasedEvent *event,
 			     efitick_t edgeTimestamp,
 			     angle_t angle,
 			     action_s action,
 				 float currentPhase, float nextPhase);
 
+    // scheduleForActualTimeBasedExecution using underlying time-base scheduler
 	void scheduleEventsUntilNextTriggerTooth(int rpm,
 						 efitick_t edgeTimestamp,
 						 float currentPhase, float nextPhase);
 
-	// For unit tests
+#if EFI_UNIT_TEST
 	AngleBasedEvent * getElementAtIndexForUnitTest(int index);
+#endif // EFI_UNIT_TEST
 
 private:
-	void schedule(AngleBasedEvent* event, action_s action);
+	void schedule(const char *msg, AngleBasedEvent* event, action_s action);
 
 	bool assertNotInList(AngleBasedEvent *head, AngleBasedEvent *element);
 

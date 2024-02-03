@@ -29,7 +29,7 @@ extern "C" int _gettimeofday(timeval* tv, void* tzvp) {
 #if EFI_RTC
 void initRtc() {
 	efiPrintf("initRtc()");
-	printDateTime(); // this would test RTC, see 'rtcWorks' variable, see #311
+	printDateTime(); // this would test RTC, see #311
 }
 
 static const char * const monthAbbrs[] = {
@@ -91,7 +91,7 @@ RTCDateTime convertRtcDateTimeFromEfi(efidatetime_t const * const dateTime) {
 
 static void put2(int offset, char *lcd_str, int value) {
 	static char buff[_MAX_FILLER];
-	efiAssertVoid(CUSTOM_ERR_6666, value >=0 && value <100, "value");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6666, value >=0 && value <100, "value");
 	itoa10(buff, value);
 	if (value < 10) {
 		lcd_str[offset] = '0';

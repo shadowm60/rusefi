@@ -17,9 +17,23 @@ void setAltIFactor(float p);
 void setAltDFactor(float p);
 void showAltInfo(void);
 
-class AlternatorController : public EngineModule {
+class AlternatorController : public EngineModule, public ClosedLoopController<float, percent_t> {
 public:
+	void init();
+	void pidReset();
+
+	// EngineModule implementation
 	void onFastCallback() override;
+	void onConfigurationChange(engine_configuration_s const * previousConfiguration) override;
+
+	// ClosedLoopController implementation
+	expected<float> getSetpoint() override;
+	expected<float> observePlant() override;
+	expected<percent_t> getOpenLoop(float setpoint) override;
+	expected<percent_t> getClosedLoop(float targetVoltage, float vBattVoltage) override;
+	void setOutput(expected<percent_t> outputValue) override;
+
+private:
+	Pid alternatorPid;
 };
 
-void onConfigurationChangeAlternatorCallback(engine_configuration_s *previousConfiguration);

@@ -1,7 +1,7 @@
 #include "pch.h"
 
 float GetGearRatioFor(float revPerKm, float axle, float kph, float rpm) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->driveWheelRevPerKm = revPerKm;
 	engineConfiguration->finalGearRatio = axle;
@@ -9,9 +9,9 @@ float GetGearRatioFor(float revPerKm, float axle, float kph, float rpm) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, kph);
 	Sensor::setMockValue(SensorType::Rpm, rpm);
 
-	GearDetector dut;
-	dut.onSlowCallback();
+	engine->periodicSlowCallback();
 
+	auto& dut = engine->module<GearDetector>().unmock();
 	return dut.getGearboxRatio();
 }
 
@@ -29,7 +29,7 @@ TEST(GearDetector, ComputeGearRatio) {
 
 
 TEST(GearDetector, GetRpmInGear) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->driveWheelRevPerKm = 507;
 	engineConfiguration->finalGearRatio = 4.10f;
@@ -42,7 +42,7 @@ TEST(GearDetector, GetRpmInGear) {
 	engineConfiguration->gearRatio[3] = 1.00f;
 	engineConfiguration->gearRatio[4] = 0.72f;
 
-	GearDetector dut;
+	auto& dut = engine->module<GearDetector>().unmock();
 
 	Sensor::setMockValue(SensorType::VehicleSpeed, 29.45f / 0.6214f);
 	EXPECT_NEAR(5500, dut.getRpmInGear(1), 1);
@@ -68,8 +68,8 @@ TEST(GearDetector, GetRpmInGear) {
 }
 
 TEST(GearDetector, DetermineGearSingleSpeed) {
-	EngineTestHelper eth(TEST_ENGINE);
-	GearDetector dut;
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& dut = engine->module<GearDetector>().unmock();
 
 	engineConfiguration->totalGearsCount = 1;
 	engineConfiguration->gearRatio[0] = 2;
@@ -92,8 +92,8 @@ TEST(GearDetector, DetermineGearSingleSpeed) {
 }
 
 TEST(GearDetector, DetermineGear5Speed) {
-	EngineTestHelper eth(TEST_ENGINE);
-	GearDetector dut;
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& dut = engine->module<GearDetector>().unmock();
 
 	engineConfiguration->totalGearsCount = 5;
 	engineConfiguration->gearRatio[0] = 3.35;
@@ -135,9 +135,37 @@ TEST(GearDetector, DetermineGear5Speed) {
 	EXPECT_EQ(0, dut.determineGearFromRatio(0.1));
 }
 
+TEST(GearDetector, MiataNb6Speed) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& dut = engine->module<GearDetector>().unmock();
+
+	engineConfiguration->totalGearsCount = 6;
+	engineConfiguration->gearRatio[0] = 3.76;
+	engineConfiguration->gearRatio[1] = 2.27;
+	engineConfiguration->gearRatio[2] = 1.65;
+	engineConfiguration->gearRatio[3] = 1.26;
+	engineConfiguration->gearRatio[4] = 1.00;
+	engineConfiguration->gearRatio[5] = 0.84;
+	engineConfiguration->gearRatio[6] = 0.84;
+	engineConfiguration->gearRatio[7] = 0.84;
+
+	dut.onConfigurationChange(nullptr);
+
+	EXPECT_EQ(0, dut.determineGearFromRatio(5.85));
+	EXPECT_EQ(1, dut.determineGearFromRatio(5.51));
+
+	// Check exactly on gears
+	EXPECT_EQ(1, dut.determineGearFromRatio(3.76));
+	EXPECT_EQ(2, dut.determineGearFromRatio(2.27));
+	EXPECT_EQ(3, dut.determineGearFromRatio(1.65));
+	EXPECT_EQ(4, dut.determineGearFromRatio(1.26));
+	EXPECT_EQ(5, dut.determineGearFromRatio(1.00));
+	EXPECT_EQ(6, dut.determineGearFromRatio(0.84));
+}
+
 TEST(GearDetector, DetermineGear8Speed) {
-	EngineTestHelper eth(TEST_ENGINE);
-	GearDetector dut;
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& dut = engine->module<GearDetector>().unmock();
 
 	// ZF 8HP 70
 	engineConfiguration->totalGearsCount = 8;
@@ -175,8 +203,8 @@ TEST(GearDetector, DetermineGear8Speed) {
 }
 
 TEST(GearDetector, ParameterValidation) {
-	EngineTestHelper eth(TEST_ENGINE);
-	GearDetector dut;
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	auto& dut = engine->module<GearDetector>().unmock();
 
 	// Defaults should work
 	EXPECT_NO_FATAL_ERROR(dut.onConfigurationChange(nullptr));

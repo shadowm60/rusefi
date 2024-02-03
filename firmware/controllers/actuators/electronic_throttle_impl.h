@@ -27,14 +27,13 @@
 
 class EtbController : public IEtbController, public electronic_throttle_s {
 public:
-	bool init(etb_function_e function, DcMotor *motor, pid_s *pidParameters, const ValueProvider3D* pedalMap, bool initializeThrottles) override;
+	bool init(dc_function_e function, DcMotor *motor, pid_s *pidParameters, const ValueProvider3D* pedalMap, bool initializeThrottles) override;
 	void setIdlePosition(percent_t pos) override;
 	void setWastegatePosition(percent_t pos) override;
 	void reset() override;
 
 	// Update the controller's state: read sensors, send output, etc
 	void update() override;
-	expected<percent_t> getOutput() override;
 
 	// Called when the configuration may have changed.  Controller will
 	// reset if necessary.
@@ -44,7 +43,7 @@ public:
 	void showStatus();
 
 	// Helpers for individual parts of throttle control
-	expected<percent_t> observePlant() const override;
+	expected<percent_t> observePlant() override;
 
 	expected<percent_t> getSetpoint() override;
 	expected<percent_t> getSetpointEtb();
@@ -57,8 +56,10 @@ public:
 
 	void setOutput(expected<percent_t> outputValue) override;
 
+	void checkOutput(percent_t output);
+
 	// Used to inspect the internal PID controller's state
-	const pid_state_s* getPidState() const override { return &m_pid; };
+	const pid_state_s& getPidState() const override { return m_pid; };
 
 	// Use the throttle to automatically calibrate the relevant throttle position sensor(s).
 	void autoCalibrateTps() override;
@@ -81,11 +82,11 @@ protected:
 	bool hadTpsError = false;
 	bool hadPpsError = false;
 
-	etb_function_e getFunction() const { return m_function; }
+	dc_function_e getFunction() const { return m_function; }
 	DcMotor* getMotor() { return m_motor; }
 
 private:
-	etb_function_e m_function = ETB_None;
+	dc_function_e m_function = DC_None;
 	SensorType m_positionSensor = SensorType::Invalid;
 	DcMotor *m_motor = nullptr;
 	Pid m_pid;
@@ -93,16 +94,25 @@ private:
 	// todo: rename to m_targetErrorAccumulator
 	ErrorAccumulator m_errorAccumulator;
 
+	/**
+	 * @return true if OK, false if should be disabled
+	 */
+	bool checkStatus();
+	bool isEtbMode() {
+		return m_function == DC_Throttle1 || m_function == DC_Throttle2;
+	}
+
 	ExpAverage m_dutyRocAverage;
 	ExpAverage m_dutyAverage;
+
+	Timer m_jamDetectTimer;
 
 	// Pedal -> target map
 	const ValueProvider3D* m_pedalMap = nullptr;
 
 	float m_idlePosition = 0;
-	float m_wastegatePosition = 0;
 
-	// This is set if automatic PID cal shoudl be run
+	// This is set if automatic PID cal should be run
 	bool m_isAutotune = false;
 
 	// Autotune helpers

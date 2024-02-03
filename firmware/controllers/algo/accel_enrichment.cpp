@@ -186,10 +186,6 @@ void TpsAccelEnrichment::onNewValue(float currentValue) {
 
 	// TODO: can deltaTps actually be negative? Will this ever trigger?
 	isBelowDecelThreshold = deltaTps < -engineConfiguration->tpsDecelEnleanmentThreshold;
-
-	engine->outputChannels.tpsAccelActive = isAboveAccelThreshold;
-	engine->outputChannels.tpsAccelFrom = tpsFrom;
-	engine->outputChannels.tpsAccelTo = tpsTo;
 }
 
 TpsAccelEnrichment::TpsAccelEnrichment() {
@@ -223,7 +219,7 @@ void setTpsDecelMult(float value) {
 
 void setTpsAccelLen(int length) {
 	if (length < 1) {
-		efiPrintf("Length should be positive");
+		efiPrintf("setTpsAccelLen: Length should be positive [%d]", length);
 		return;
 	}
 	engine->tpsAccelEnrichment.setLength(length);

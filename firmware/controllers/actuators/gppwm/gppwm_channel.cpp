@@ -4,12 +4,14 @@
 #include "gppwm_channel.h"
 
 #include "table_helper.h"
-#include "expected.h"
+#include <rusefi/expected.h>
 
 expected<float> readGppwmChannel(gppwm_channel_e channel) {
 	switch (channel) {
 	case GPPWM_Zero:
 		return 0;
+	case GPPWM_Rpm:
+		return Sensor::get(SensorType::Rpm);
 	case GPPWM_Tps:
 		return Sensor::get(SensorType::Tps1);
 	case GPPWM_Map:
@@ -64,6 +66,14 @@ expected<float> readGppwmChannel(gppwm_channel_e channel) {
 		return (float)engine->outputChannels.gppwmOutput[2];
 	case GPPWM_GppwmOutput4:
 		return (float)engine->outputChannels.gppwmOutput[3];
+	case GPPWM_DetectedGear:
+#if EFI_VEHICLE_SPEED
+		return Sensor::get(SensorType::DetectedGear);
+#else
+    	return 0;
+#endif // EFI_VEHICLE_SPEED
+	case GPPWM_BaroPressure:
+		return Sensor::get(SensorType::BarometricPressure);
 	}
 
 	return unexpected;
@@ -76,14 +86,14 @@ float GppwmChannel::setOutput(float result) {
 	}
 
 	if (m_usePwm) {
-		efiAssert(OBD_PCM_Processor_Fault, m_usePwm, "m_usePwm null", 0);
+		efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_usePwm, "m_usePwm null", 0);
 		m_pwm->setSimplePwmDutyCycle(clampF(0, result / 100.0f, 1));
 
 		return result;
 	} else {
-		efiAssert(OBD_PCM_Processor_Fault, m_output, "m_output null", 0);
+		efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_output, "m_output null", 0);
 		if (m_config->offBelowDuty > m_config->onAboveDuty) {
-			firmwareError(CUSTOM_ERR_6122, "You can't have off below %d greater than on above %d",
+			firmwareError(ObdCode::CUSTOM_ERR_6122, "You can't have off below %d greater than on above %d",
 					m_config->offBelowDuty,
 					m_config->onAboveDuty);
 		}
@@ -101,39 +111,43 @@ float GppwmChannel::setOutput(float result) {
 	}
 }
 
-void GppwmChannel::init(bool usePwm, IPwm* pwm, OutputPin* outputPin, const ValueProvider3D* table, const gppwm_channel* config) {
+void GppwmChannel::init(bool usePwm, IPwm* pwm, OutputPin* outputPin, const ValueProvider3D* table, const gppwm_channel* p_config) {
 	m_usePwm = usePwm;
 	m_pwm = pwm;
 	m_output = outputPin;
 	m_table = table;
-	m_config = config;
+	m_config = p_config;
 }
 
-percent_t GppwmChannel::getOutput() const {
-	expected<float> loadAxisValue = readGppwmChannel(m_config->loadAxis);
+GppwmResult GppwmChannel::getOutput() const {
+	expected<float> xAxisValue = readGppwmChannel(m_config->rpmAxis);
+	expected<float> yAxisValue = readGppwmChannel(m_config->loadAxis);
+
+	GppwmResult result	{ (float)m_config->dutyIfError, xAxisValue.value_or(0), yAxisValue.value_or(0) };
 
 	// If we couldn't get load axis value, fall back on error value
-	if (!loadAxisValue) {
-		return m_config->dutyIfError;
+	if (!xAxisValue || !yAxisValue) {
+		return result;
 	}
 
-	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	float resultVal = m_table->getValue(xAxisValue.Value, yAxisValue.Value);
 
-	float result = m_table->getValue(rpm, loadAxisValue.Value);
-
-	if (cisnan(result)) {
-		return m_config->dutyIfError;
+	if (cisnan(result.Result)) {
+		return result;
 	}
 
+	result.Result = resultVal;
 	return result;
 }
 
-float GppwmChannel::update() {
+GppwmResult GppwmChannel::update() {
 	// Without a config, nothing to do.
 	if (!m_config) {
-		return 0;
+		return {};
 	}
 
-	float output = getOutput();
-	return setOutput(output);
+	auto output = getOutput();
+	output.Result = setOutput(output.Result);
+
+	return output;
 }

@@ -18,18 +18,6 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[1] = Gpio::G8;
 	engineConfiguration->injectionPins[2] = Gpio::D11;
 	engineConfiguration->injectionPins[3] = Gpio::D10;
-
-	//engineConfiguration->injectionPins[4] = Gpio::D9;
-	//engineConfiguration->injectionPins[5] = Gpio::F12;
-	//engineConfiguration->injectionPins[6] = Gpio::F13;
-	//engineConfiguration->injectionPins[7] = Gpio::F14;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 }
 
 static void setIgnitionPins() {
@@ -37,32 +25,6 @@ static void setIgnitionPins() {
 	engineConfiguration->ignitionPins[1] = Gpio::Unassigned ; // Gpio::E4
 	engineConfiguration->ignitionPins[2] = Gpio::E5; // 3I - IGN_2 (2&3)
 	engineConfiguration->ignitionPins[3] = Gpio::Unassigned; // Gpio::E3
-
-	//engineConfiguration->ignitionPins[4] = Gpio::E2;
-	//engineConfiguration->ignitionPins[5] = Gpio::I5;
-	//engineConfiguration->ignitionPins[6] = Gpio::I6;
-	//engineConfiguration->ignitionPins[7] = Gpio::I7;
-	
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_5; // 4T
-
-	engineConfiguration->adcVcc = 3.29f;
 }
 
 static void setupDefaultSensorInputs() {
@@ -84,9 +46,10 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
+#include "hellen_leds_176.cpp"
+
 void setBoardConfigOverrides() {
-	setHellen176LedPins();
-	setupVbatt();
+	setHellenVbatt();
 
 	if (engine->engineState.hellenBoardId == -1) {
 		// Rev a-d use SPI3 for SD card
@@ -97,13 +60,12 @@ void setBoardConfigOverrides() {
 	}
 
     // NB2 still uses L6205PD
-	engineConfiguration->etbIo[0].directionPin1 = H144_OUT_PWM3; // ETB+
-	engineConfiguration->etbIo[0].directionPin2 = H144_OUT_PWM4; // ETB-
-	engineConfiguration->etbIo[0].controlPin = H144_OUT_PWM2; // ETB_EN
+	engineConfiguration->etbIo[0].directionPin1 = Gpio::H144_OUT_PWM3; // ETB+
+	engineConfiguration->etbIo[0].directionPin2 = Gpio::H144_OUT_PWM4; // ETB-
+	engineConfiguration->etbIo[0].controlPin = Gpio::H144_OUT_PWM2; // ETB_EN
 	engineConfiguration->etb_use_two_wires = true;
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 
 	setHellenCan();
 }
@@ -113,13 +75,11 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-
-	engineConfiguration->isSdCardEnabled = true;
 
 	engineConfiguration->enableSoftwareKnock = true;
 
@@ -127,8 +87,8 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->acSwitch = Gpio::B0;
 	engineConfiguration->acSwitchMode = PI_PULLUP;
 
-	engineConfiguration->vehicleSpeedSensorInputPin = H144_IN_VSS;
-	engineConfiguration->clutchDownPin = H144_IN_RES3;
+	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
+	engineConfiguration->clutchDownPin = Gpio::H144_IN_RES3;
 	engineConfiguration->clutchDownPinInverted = true;
 
 	engineConfiguration->fuelPumpPin = Gpio::G2;	// OUT_IO9
@@ -146,12 +106,12 @@ void setBoardDefaultConfiguration() {
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
+
+
 
 	hellenWbo();
 }

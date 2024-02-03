@@ -29,45 +29,94 @@ constexpr float convertToGramsPerSecond(float ccPerMinute) {
 	return ccPerMinute * (fuelDensity / 60.f);
 }
 
-float InjectorModel::getBaseFlowRate() const {
+float InjectorModelWithConfig::getBaseFlowRate() const {
 	if (engineConfiguration->injectorFlowAsMassFlow) {
-		return engineConfiguration->injector.flow;
+		return m_cfg->flow;
 	} else {
-		return convertToGramsPerSecond(engineConfiguration->injector.flow);
+		return convertToGramsPerSecond(m_cfg->flow);
 	}
 }
 
-float InjectorModel::getSmallPulseFlowRate() const {
+float InjectorModelPrimary::getSmallPulseFlowRate() const {
 	return engineConfiguration->fordInjectorSmallPulseSlope;
 }
 
-float InjectorModel::getSmallPulseBreakPoint() const {
+float InjectorModelPrimary::getSmallPulseBreakPoint() const {
 	// convert milligrams -> grams
 	return 0.001f * engineConfiguration->fordInjectorSmallPulseBreakPoint;
 }
 
-InjectorNonlinearMode InjectorModel::getNonlinearMode() const {
+InjectorNonlinearMode InjectorModelPrimary::getNonlinearMode() const {
 	return engineConfiguration->injectorNonlinearMode;
 }
 
-expected<float> InjectorModel::getAbsoluteRailPressure() const {
+float InjectorModelSecondary::getSmallPulseFlowRate() const {
+	// not supported on second bank
+	return 0;
+}
+
+float InjectorModelSecondary::getSmallPulseBreakPoint() const {
+	// not supported on second bank
+	return 0;
+}
+
+InjectorNonlinearMode InjectorModelSecondary::getNonlinearMode() const {
+	// nonlinear not supported on second bank
+	return InjectorNonlinearMode::INJ_None;
+}
+
+expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
+	auto map = Sensor::get(SensorType::Map);
+	auto baro = Sensor::get(SensorType::BarometricPressure);
+
+	float baroKpa = baro.Value;
+	if (!baro || baro.Value > 120 || baro.Value < 50) {
+		baroKpa = 101.325f;
+	}
+
 	switch (engineConfiguration->injectorCompensationMode) {
 		case ICM_FixedRailPressure:
 			// Add barometric pressure, as "fixed" really means "fixed pressure above atmosphere"
-			return engineConfiguration->fuelReferencePressure + Sensor::get(SensorType::BarometricPressure).value_or(101.325f);
-		case ICM_SensedRailPressure:
+			return
+				  engineConfiguration->fuelReferencePressure
+				+ baroKpa
+				- map.value_or(101.325);
+		case ICM_SensedRailPressure: {
 			if (!Sensor::hasSensor(SensorType::FuelPressureInjector)) {
-				firmwareError(OBD_PCM_Processor_Fault, "Fuel pressure compensation is set to use a pressure sensor, but none is configured.");
+				criticalError("Fuel pressure compensation is set to use a pressure sensor, but none is configured.");
 				return unexpected;
 			}
 
+			auto fps = Sensor::get(SensorType::FuelPressureInjector);
+
 			// TODO: what happens when the sensor fails?
-			return Sensor::get(SensorType::FuelPressureInjector);
-		default: return unexpected;
+			if (!fps) {
+				return unexpected;
+			}
+
+			switch (engineConfiguration->fuelPressureSensorMode) {
+				case FPM_Differential:
+					// This sensor directly measures delta-P, no math needed!
+					return fps.Value;
+				case FPM_Gauge:
+					if (!map) {
+						return unexpected;
+					}
+
+					return fps.Value + baroKpa - map.Value;
+				case FPM_Absolute:
+				default:
+					if (!map) {
+						return unexpected;
+					}
+
+					return fps.Value - map.Value;
+			}
+		} default: return unexpected;
 	}
 }
 
-float InjectorModel::getInjectorFlowRatio() {
+float InjectorModelWithConfig::getInjectorFlowRatio() {
 	// Compensation disabled, use reference flow.
 	if (engineConfiguration->injectorCompensationMode == ICM_None) {
 		return 1.0f;
@@ -77,26 +126,19 @@ float InjectorModel::getInjectorFlowRatio() {
 
 	if (referencePressure < 50) {
 		// impossibly low fuel ref pressure
-		firmwareError(OBD_PCM_Processor_Fault, "Impossible fuel reference pressure: %f", referencePressure);
+		criticalError("Impossible fuel reference pressure: %f", referencePressure);
 
 		return 1.0f;
 	}
 
-	expected<float> absRailPressure = getAbsoluteRailPressure();
+	expected<float> diffPressure = getFuelDifferentialPressure();
 
 	// If sensor failed, best we can do is disable correction
-	if (!absRailPressure) {
+	if (!diffPressure) {
 		return 1.0f;
 	}
 
-	auto map = Sensor::get(SensorType::Map);
-
-	// Map has failed, assume nominal pressure
-	if (!map) {
-		return 1.0f;
-	}
-
-	pressureDelta = absRailPressure.Value - map.Value;
+	pressureDelta = diffPressure.Value;
 
 	// Somehow pressure delta is less than 0, assume failed sensor and return default flow
 	if (pressureDelta <= 0) {
@@ -111,11 +153,11 @@ float InjectorModel::getInjectorFlowRatio() {
 	return flowRatio;
 }
 
-float InjectorModel::getDeadtime() const {
+float InjectorModelWithConfig::getDeadtime() const {
 	return interpolate2d(
 		Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE),
-		engineConfiguration->injector.battLagCorrBins,
-		engineConfiguration->injector.battLagCorr
+		m_cfg->battLagCorrBins,
+		m_cfg->battLagCorr
 	);
 }
 
@@ -175,4 +217,20 @@ float InjectorModelBase::correctInjectionPolynomial(float baseDuration) const {
 	}
 
 	return baseDuration + adder;
+}
+
+InjectorModelWithConfig::InjectorModelWithConfig(const injector_s* const cfg)
+	: m_cfg(cfg)
+{
+}
+
+InjectorModelPrimary::InjectorModelPrimary()
+	: InjectorModelWithConfig(&engineConfiguration->injector)
+{
+}
+
+// TODO: actual separate config for second bank!
+InjectorModelSecondary::InjectorModelSecondary()
+	: InjectorModelWithConfig(&engineConfiguration->injectorSecondary)
+{
 }

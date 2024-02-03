@@ -6,7 +6,7 @@
  * @author andreika <prometheus.pcb@gmail.com>
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
- 
+
 #include "pch.h"
 #include "trigger_input_adc.h"
 
@@ -16,7 +16,9 @@
 #define DELTA_THRESHOLD_CNT_LOW (GPT_FREQ_FAST / GPT_PERIOD_FAST / 32)		// ~1/32 second?
 #define DELTA_THRESHOLD_CNT_HIGH (GPT_FREQ_FAST / GPT_PERIOD_FAST / 4)		// ~1/4 second?
 
+#if HAL_USE_ADC || EFI_UNIT_TEST
 #define triggerVoltsToAdcDivided(volts) (voltsToAdc(volts) / trigAdcState.triggerInputDividerCoefficient)
+#endif // HAL_USE_ADC || EFI_UNIT_TEST
 
 // hardware-dependent part
 #if (EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || defined(__DOXYGEN__)
@@ -71,7 +73,7 @@ void setTriggerAdcMode(triggerAdcMode_t adcMode) {
 	trigAdcState.curAdcMode = adcMode;
 	trigAdcState.modeSwitchCnt++;
 
-	palSetPadMode(triggerInputPort, triggerInputPin, 
+	palSetPadMode(triggerInputPort, triggerInputPin,
 		(adcMode == TRIGGER_ADC_ADC) ? PAL_MODE_INPUT_ANALOG : PAL_MODE_EXTINT);
 }
 
@@ -118,9 +120,9 @@ int adcTriggerTurnOnInputPin(const char *msg, int index, bool isTriggerShaft) {
 
 	ioline_t pal_line = PAL_LINE(triggerInputPort, triggerInputPin);
 	efiPrintf("turnOnTriggerInputPin %s l=%d", hwPortname(brainPin), pal_line);
-	
+
 	efiExtiEnablePin(msg, brainPin, PAL_EVENT_MODE_BOTH_EDGES, isTriggerShaft ? shaft_callback : cam_callback, (void *)pal_line);
-	
+
 	// ADC mode is default, because we don't know if the wheel is already spinning
 	setTriggerAdcMode(TRIGGER_ADC_ADC);
 
@@ -154,9 +156,9 @@ adc_channel_e getAdcChannelForTrigger(void) {
 }
 
 void addAdcChannelForTrigger(void) {
-	adc_channel_e ch = getAdcChannelForTrigger();
-	if (isAdcChannelValid(ch)) {
-		addChannel("TRIG", ch, ADC_FAST);
+	adc_channel_e channel = getAdcChannelForTrigger();
+	if (isAdcChannelValid(channel)) {
+		addChannel("TRIG", channel, ADC_FAST);
 	}
 }
 
@@ -182,6 +184,7 @@ void TriggerAdcDetector::init() {
 
 	// todo: move some of these to config
 
+#if HAL_USE_ADC || EFI_UNIT_TEST
 	// 4.7k||5.1k + 4.7k
 	triggerInputDividerCoefficient = 1.52f;	// = analogInputDividerCoefficient
 
@@ -202,12 +205,13 @@ void TriggerAdcDetector::init() {
 	const triggerAdcSample_t adcDeltaThreshold = triggerVoltsToAdcDivided(0.25f);
 	adcDefaultThreshold = triggerVoltsToAdcDivided(2.5f);	// this corresponds to VREF1 on Hellen boards
 	adcMinThreshold = adcDefaultThreshold - adcDeltaThreshold;
-	adcMaxThreshold = adcDefaultThreshold - adcDeltaThreshold;
+	adcMaxThreshold = adcDefaultThreshold + adcDeltaThreshold;
 
 	// these thresholds allow to switch from ADC mode to EXTI mode, indicating the clamping of the signal
 	// they should exceed the MCU schmitt trigger thresholds (usually 0.3*Vdd and 0.7*Vdd)
 	switchingThresholdLow = triggerVoltsToAdcDivided(1.0f);  // = 0.2*Vdd (<0.3*Vdd)
 	switchingThresholdHigh = triggerVoltsToAdcDivided(4.0f); // = 0.8*Vdd (>0.7*Vdd)
+#endif // HAL_USE_ADC || EFI_UNIT_TEST
 
 	modeSwitchCnt = 0;
 
@@ -218,6 +222,7 @@ void TriggerAdcDetector::init() {
 void TriggerAdcDetector::reset() {
 	switchingCnt = 0;
 	switchingTeethCnt = 0;
+#if HAL_USE_ADC || EFI_UNIT_TEST
 	// when the strong signal becomes weak, we want to ignore the increased noise
 	// so we create a dead-zone between the pos. and neg. thresholds
 	zeroThreshold = minDeltaThresholdWeakSignal / 2;
@@ -228,22 +233,25 @@ void TriggerAdcDetector::reset() {
 	isSignalWeak = true;
 	integralSum = 0;
 	transitionCooldownCnt = 0;
-	prevValue = 0;	// not set
-	prevStamp = 0;
 	minDeltaThresholdCntPos = 0;
 	minDeltaThresholdCntNeg = 0;
+#endif // HAL_USE_ADC || EFI_UNIT_TEST
+
+	prevValue = 0;	// not set
+	prevStamp = 0;
 }
 
 void TriggerAdcDetector::digitalCallback(efitick_t stamp, bool isPrimary, bool rise) {
-#if ! EFI_SIMULATOR
+#if !EFI_SIMULATOR && EFI_SHAFT_POSITION_INPUT
 	if (curAdcMode != TRIGGER_ADC_EXTI) {
 		return;
 	}
 
-#if EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
-	onTriggerChanged(stamp, isPrimary, rise);
-#endif // EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
+	UNUSED(isPrimary);
 
+	onTriggerChanged(stamp, isPrimary, rise);
+
+#if (HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || EFI_UNIT_TEST
 	if ((stamp - prevStamp) > minDeltaTimeForStableAdcDetectionNt) {
 		switchingCnt++;
 	} else {
@@ -258,18 +266,17 @@ void TriggerAdcDetector::digitalCallback(efitick_t stamp, bool isPrimary, bool r
 		if (switchingTeethCnt++ > 3) {
 			switchingTeethCnt = 0;
 			prevValue = rise ? 1: -1;
-#if EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
 			setTriggerAdcMode(TRIGGER_ADC_ADC);
-#endif // EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
 		}
 	}
+#endif // (HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || EFI_UNIT_TEST
 
 	prevStamp = stamp;
-#endif // ! EFI_SIMULATOR
+#endif // !EFI_SIMULATOR && EFI_SHAFT_POSITION_INPUT
 }
 
 void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t value) {
-#if ! EFI_SIMULATOR
+#if ! EFI_SIMULATOR && ((HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || EFI_UNIT_TEST)
 	if (curAdcMode != TRIGGER_ADC_ADC) {
 		return;
 	}
@@ -314,16 +321,16 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 			// reset to the weak signal mode
 			reset();
 			return;
-		} 
+		}
 	}
 
 	// the threshold should always correspond to the averaged signal.
 	integralSum += delta;
 	// we need some limits for the integral sum
-	// we use a simple I-regulator to move the threshold 
+	// we use a simple I-regulator to move the threshold
 	adcThreshold += (float)integralSum * triggerAdcITerm;
 	// limit the threshold for safety
-	adcThreshold = maxF(minF(adcThreshold, adcMaxThreshold), adcMinThreshold);	
+	adcThreshold = maxF(minF(adcThreshold, adcMaxThreshold), adcMinThreshold);
 
 	// now to the transition part... First, we need a cooldown to pre-filter the transition noise
 	if (transitionCooldownCnt-- < 0)
@@ -339,20 +346,6 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 		}
 	}
 
-	// detect the edge
-	int transition = 0;
-	if (delta > zeroThreshold && prevValue == -1)	{
-		// a rising transition found!
-		transition = 1;
-	} 
-	else if (delta <= -zeroThreshold && prevValue == 1) {
-		// a falling transition found!
-		transition = -1;
-	}
-	else {
-		return; // both are positive/negative/zero: not interested!
-	}
-
  	if (isSignalWeak) {
 		 if (minDeltaThresholdCntPos >= DELTA_THRESHOLD_CNT_LOW && minDeltaThresholdCntNeg >= DELTA_THRESHOLD_CNT_LOW) {
 			// ok, now we have a legit strong signal, let's restore the threshold
@@ -366,9 +359,21 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 	}
 
 	if (transitionCooldownCnt <= 0) {
-#if EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
+		// detect the edge
+		int transition = 0;
+		if (delta > zeroThreshold && prevValue == -1)	{
+			// a rising transition found!
+			transition = 1;
+		}
+		else if (delta <= -zeroThreshold && prevValue == 1) {
+			// a falling transition found!
+			transition = -1;
+		}
+		else {
+			return; // both are positive/negative/zero: not interested!
+		}
+
 		onTriggerChanged(stamp - stampCorrectionForAdc, true, transition == 1);
-#endif // EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
 		// let's skip some nearest possible measurements:
 		// the transition cannot be SO fast, but the jitter can!
 		transitionCooldownCnt = transitionCooldown;
@@ -383,16 +388,19 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 			triggerAdcITerm = maxF(triggerAdcITerm, triggerAdcITermMin);
 		}
 #endif // 0
+
+		prevValue = transition;
 	}
 
+#ifdef EFI_SHAFT_POSITION_INPUT
 	if (switchingCnt >= analogToDigitalTransitionCnt) {
 		switchingCnt = 0;
 		// we need at least 3 high-signal teeth to be certain!
 		if (switchingTeethCnt++ > 3) {
 			switchingTeethCnt = 0;
-#if EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
+
 			setTriggerAdcMode(TRIGGER_ADC_EXTI);
-#endif // EFI_SHAFT_POSITION_INPUT && HAL_TRIGGER_USE_ADC && HAL_USE_ADC
+
 			// we don't want to loose the signal on return
 			minDeltaThresholdCntPos = DELTA_THRESHOLD_CNT_HIGH;
 			minDeltaThresholdCntNeg = DELTA_THRESHOLD_CNT_HIGH;
@@ -406,13 +414,24 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 			return;
 		}
 	} else {
-		// we don't see "big teeth" anymore 
+		// we don't see "big teeth" anymore
 		switchingTeethCnt = 0;
 	}
-	
-	prevValue = transition;
+#endif // EFI_SHAFT_POSITION_INPUT
+
 	prevStamp = stamp;
-#endif // ! EFI_SIMULATOR
+#endif // ! EFI_SIMULATOR && ((HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || EFI_UNIT_TEST)
+}
+
+void TriggerAdcDetector::setWeakSignal(bool isWeak) {
+#if HAL_USE_ADC || EFI_UNIT_TEST
+	isSignalWeak = isWeak;
+	if (!isSignalWeak) {
+		minDeltaThresholdCntPos = minDeltaThresholdCntNeg = DELTA_THRESHOLD_CNT_LOW;
+	} else {
+		minDeltaThresholdCntPos = minDeltaThresholdCntNeg = 0;
+	}
+#endif // HAL_USE_ADC || EFI_UNIT_TEST
 }
 
 triggerAdcMode_t getTriggerAdcMode(void) {

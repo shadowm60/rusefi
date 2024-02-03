@@ -8,6 +8,24 @@
 
 typedef void (*schfunc_t)(void *);
 
+template<class To, class From>
+std::enable_if_t<
+    sizeof(To) == sizeof(From) &&
+    std::is_trivially_copyable_v<From> &&
+    std::is_trivially_copyable_v<To>,
+    To>
+// constexpr support needs compiler magic
+bit_cast(const From& src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v<To>,
+        "This implementation additionally requires "
+        "destination type to be trivially constructible");
+ 
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+}
+
 class action_s {
 public:
 	// Default constructor constructs null action (ie, implicit bool conversion returns false)
@@ -15,12 +33,14 @@ public:
 
 	// Allow implicit conversion from schfunc_t to action_s
 	action_s(schfunc_t callback) : action_s(callback, nullptr) { }
-	action_s(schfunc_t callback, void *param) : callback(callback), param(param) { }
+	action_s(schfunc_t callback, void *param) : m_callback(callback), m_param(param) { }
 
 	// Allow any function that takes a single pointer parameter, so long as param is also of the same pointer type.
 	// This constructor means you shouldn't ever have to cast to schfunc_t on your own.
 	template <typename TArg>
-	action_s(void (*callback)(TArg*), TArg* param) : callback((schfunc_t)callback), param(param) { }
+	action_s(void (*callback)(TArg*), TArg* param) : m_callback((schfunc_t)callback), m_param(param) { }
+	template <typename TArg>
+	action_s(void (*callback)(TArg), TArg param) : m_callback(bit_cast<schfunc_t>(callback)), m_param(reinterpret_cast<void*>(param)) { }
 
 	void execute();
 	schfunc_t getCallback() const;
@@ -28,12 +48,12 @@ public:
 
 	// Actions with a callback set are truthy, all others are falsy
 	operator bool() const {
-		return callback != nullptr;
+		return m_callback != nullptr;
 	}
 
 private:
-	schfunc_t callback = nullptr;
-	void *param = nullptr;
+	schfunc_t m_callback = nullptr;
+	void *m_param = nullptr;
 };
 
 /**

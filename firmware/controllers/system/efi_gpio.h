@@ -15,17 +15,13 @@
 #include "injection_gpio.h"
 
 void initPrimaryPins();
-void initOutputPins();
+void initMiscOutputPins();
 
 #if EFI_GPIO_HARDWARE
 void turnAllPinsOff(void);
 #else /* EFI_GPIO_HARDWARE */
 #define turnAllPinsOff() {}
 #endif /* EFI_GPIO_HARDWARE */
-
-
-#ifdef __cplusplus
-
 
 class IgnitionOutputPin : public NamedOutputPin {
 public:
@@ -44,19 +40,25 @@ public:
 class RegisteredOutputPin : public virtual OutputPin {
 public:
 	RegisteredOutputPin(const char *registrationName, size_t pinOffset, size_t pinModeOffset);
+	RegisteredOutputPin(const char *registrationName, size_t pinOffset);
 	void init();
 	void unregister();
 	RegisteredOutputPin* const next;
-	const char *registrationName;
+	const char* getRegistrationName() const {
+		return registrationName;
+	}
 private:
+	const char* const registrationName;
 	const uint16_t m_pinOffset;
+	const bool m_hasPinMode;
 	const uint16_t m_pinModeOffset;
 	bool isPinConfigurationChanged();
 };
 
 class RegisteredNamedOutputPin : public RegisteredOutputPin, public NamedOutputPin {
 public:
-		RegisteredNamedOutputPin(const char *name, size_t pinOffset, size_t pinModeOffset);
+	RegisteredNamedOutputPin(const char* name, size_t pinOffset, size_t pinModeOffset);
+	RegisteredNamedOutputPin(const char* name, size_t pinOffset);
 };
 
 class EnginePins {
@@ -67,6 +69,8 @@ public:
 	static void debug();
 	bool stopPins();
 	void unregisterPins();
+	OutputPin *getOutputPinForBenchMode(bench_mode_e idx);
+
 	RegisteredOutputPin mainRelay;
 	/**
 	 * High Pressure Fuel Pump valve control
@@ -83,6 +87,11 @@ public:
 	// see acRelayPin
 	RegisteredOutputPin acRelay;
 	RegisteredOutputPin fuelPumpRelay;
+#if EFI_HD_ACR
+	RegisteredNamedOutputPin harleyAcr;
+	RegisteredOutputPin harleyAcr2;
+#endif // EFI_HD_ACR
+	// todo: shall we rename this to narrowBandO2heater or even remove the whole questionable feature?
 	OutputPin o2heater;
 	OutputPin luaOutputPins[LUA_PWM_COUNT];
 
@@ -104,13 +113,15 @@ public:
 	 */
 	RegisteredOutputPin checkEnginePin;
 
-	RegisteredNamedOutputPin tachOut;
-
+	RegisteredOutputPin tachOut;
 	RegisteredOutputPin triggerDecoderErrorPin;
+	RegisteredOutputPin speedoOut;
+
 	OutputPin sdCsPin;
 	OutputPin accelerometerCs;
 
 	InjectorOutputPin injectors[MAX_CYLINDER_COUNT];
+	InjectorOutputPin injectorsStage2[MAX_CYLINDER_COUNT];
 	IgnitionOutputPin coils[MAX_CYLINDER_COUNT];
 	IgnitionOutputPin trailingCoils[MAX_CYLINDER_COUNT];
 	NamedOutputPin auxValve[AUX_DIGITAL_VALVE_COUNT];
@@ -130,8 +141,6 @@ private:
 	void stopAuxValves();
 };
 
-#endif /* __cplusplus */
-
 /**
  * it's a macro to be sure that stack is not used
  * @return 0 for OM_DEFAULT and OM_OPENDRAIN
@@ -150,8 +159,9 @@ private:
 
 #if EFI_GPIO_HARDWARE
 
-EXTERNC ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin);
-EXTERNC ioportid_t getHwPort(const char *msg, brain_pin_e brainPin);
+ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin);
+ioportid_t getHwPort(const char *msg, brain_pin_e brainPin);
+ioportid_t * getGpioPorts();
 const char *portname(ioportid_t GPIOx);
 
 #endif /* EFI_GPIO_HARDWARE */
@@ -160,3 +170,7 @@ void printSpiConfig(const char *msg, spi_device_e device);
 brain_pin_e parseBrainPin(const char *str);
 
 extern EnginePins enginePins;
+
+#ifndef LED_PIN_MODE
+#define LED_PIN_MODE OM_DEFAULT
+#endif /* LED_PIN_MODE */

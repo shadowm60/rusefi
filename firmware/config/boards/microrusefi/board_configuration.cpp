@@ -26,38 +26,27 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[1] = MRE_INJ_2;
 	engineConfiguration->injectionPins[2] = MRE_INJ_3;
 	engineConfiguration->injectionPins[3] = MRE_INJ_4;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 }
 
 static void setIgnitionPins() {
-	// todo: I wonder if these are not right in light of the network rename and the +12 VP issue?
 	engineConfiguration->ignitionPins[0] = Gpio::D4;
 	engineConfiguration->ignitionPins[1] = Gpio::D3;
 	engineConfiguration->ignitionPins[2] = Gpio::D2;
 	engineConfiguration->ignitionPins[3] = Gpio::D1;
-
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
 }
 
-static void setLedPins() {
-#ifdef EFI_COMMUNICATION_PIN
-	engineConfiguration->communicationLedPin = EFI_COMMUNICATION_PIN;
-#else
-	engineConfiguration->communicationLedPin = Gpio::E2; // d23 = blue
-#endif /* EFI_COMMUNICATION_PIN */
-	engineConfiguration->runningLedPin = Gpio::E4;		// d22 = green
-	engineConfiguration->warningLedPin = Gpio::E1;		// d27 = orange or yellow
+Gpio getCommsLedPin() {
+	return Gpio::E2; // d23 = blue
+}
+
+Gpio getRunningLedPin() {
+	// D22 = green
+	return Gpio::E4;
+}
+
+Gpio getWarningLedPin() {
+	// D27 = orange or yellow
+	return Gpio::E1;
 }
 
 static void setupVbatt() {
@@ -109,8 +98,6 @@ static void setupEtb() {
 	engineConfiguration->etbIo[0].directionPin1 = Gpio::A8;
 	// Disable pin
 	engineConfiguration->etbIo[0].disablePin = Gpio::C8;
-	// Unused
-	engineConfiguration->etbIo[0].directionPin2 = Gpio::Unassigned;
 
 	// we only have pwm/dir, no dira/dirb
 	engineConfiguration->etb_use_two_wires = false;
@@ -138,8 +125,8 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->iat.adcChannel = MRE_IN_IAT;
 
-	setCommonNTCSensor(&engineConfiguration->auxTempSensor1, 2700);
-	setCommonNTCSensor(&engineConfiguration->auxTempSensor2, 2700);
+	setCommonNTCSensor(&engineConfiguration->auxTempSensor1, MRE_DEFAULT_AT_PULLUP);
+	setCommonNTCSensor(&engineConfiguration->auxTempSensor2, MRE_DEFAULT_AT_PULLUP);
 
 #if HW_CHECK_MODE
 	engineConfiguration->auxTempSensor1.adcChannel = EFI_ADC_2;
@@ -148,7 +135,6 @@ static void setupDefaultSensorInputs() {
 }
 
 void setBoardConfigOverrides() {
-	setLedPins();
 	setupVbatt();
 	setupTle8888();
 	setupEtb();
@@ -177,7 +163,7 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
@@ -188,17 +174,17 @@ void setBoardDefaultConfiguration() {
 	// todo: maybe even set EFI_MAIN_RELAY_CONTROL to FALSE for MRE configuration
 	// TLE8888 half bridges (pushpull, lowside, or high-low)  TLE8888_IN11 / TLE8888_OUT21
 	// Gpio::TLE8888_PIN_21: "35 - GP Out 1"
-	engineConfiguration->fuelPumpPin = Gpio::TLE8888_PIN_21;
+	engineConfiguration->fuelPumpPin = MRE_GPOUT_1;
 
 //	engineConfiguration->isSdCardEnabled = true;
 
 	// TLE8888 high current low side: VVT2 IN9 / OUT5
 	// Gpio::E10: "3 - Lowside 2"
-	engineConfiguration->idle.solenoidPin = Gpio::TLE8888_PIN_5;
+	engineConfiguration->idle.solenoidPin = MRE_LS_2;
 
 
 	// Gpio::TLE8888_PIN_22: "34 - GP Out 2"
-	engineConfiguration->fanPin = Gpio::TLE8888_PIN_22;
+	engineConfiguration->fanPin = MRE_GPOUT_2;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
@@ -211,18 +197,49 @@ void setBoardDefaultConfiguration() {
 	// Don't enable expansion header SPI by default
 	engineConfiguration->is_enabled_spi_3 = false;
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 }
 
+static Gpio MRE_OUTPUTS[] = {
+MRE_INJ_1,
+MRE_INJ_2,
+MRE_INJ_3,
+MRE_INJ_4,
+MRE_LS_1,
+};
+
+static Gpio M111_OUTPUTS[] = {
+MRE_INJ_1, // green
+MRE_INJ_2, // white
+MRE_INJ_3, // blue
+MRE_INJ_4, //
+#if HW_MICRO_RUSEFI
+MRE_AV9_REUSE, // brown boost control
+MRE_LS_1, // VVT
+MRE_LS_2, // SC clutch
+//MRE_GPOUT_3, // SC Bypass
+#endif // HW_MICRO_RUSEFI
+};
+
 int getBoardMetaOutputsCount() {
+    if (engineConfiguration->engineType == engine_type_e::MRE_M111) {
+        return efi::size(M111_OUTPUTS);
+    }
     return efi::size(MRE_OUTPUTS);
 }
 
 Gpio* getBoardMetaOutputs() {
+    if (engineConfiguration->engineType == engine_type_e::MRE_M111) {
+        return M111_OUTPUTS;
+    }
     return MRE_OUTPUTS;
+}
+
+int getBoardMetaDcOutputsCount() {
+    return 1;
 }

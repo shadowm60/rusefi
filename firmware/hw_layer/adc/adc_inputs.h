@@ -15,6 +15,8 @@
 #define SLOW_ADC_RATE 500
 #endif
 
+float getAnalogInputDividerCoefficient(adc_channel_e);
+
 static inline bool isAdcChannelValid(adc_channel_e hwChannel) {
 	if (hwChannel <= EFI_ADC_NONE) {
 		return false;
@@ -30,6 +32,17 @@ static inline bool isAdcChannelValid(adc_channel_e hwChannel) {
 	}
 }
 
+#if !defined(GPT_FREQ_FAST) || !defined(GPT_PERIOD_FAST)
+/**
+ * 8000 RPM is 133Hz
+ * If we want to sample MAP once per 5 degrees we need 133Hz * (360 / 5) = 9576Hz of fast ADC
+ */
+// todo: migrate to continuous ADC mode? probably not - we cannot afford the callback in
+// todo: continuous mode. todo: look into our options
+#define GPT_FREQ_FAST 100000   /* PWM clock frequency. I wonder what does this setting mean?  */
+#define GPT_PERIOD_FAST 10  /* PWM period (in PWM ticks).    */
+#endif /* GPT_FREQ_FAST GPT_PERIOD_FAST */
+
 #if HAL_USE_ADC
 
 typedef enum {
@@ -40,15 +53,6 @@ typedef enum {
 
 adc_channel_mode_e getAdcMode(adc_channel_e hwChannel);
 void initAdcInputs();
-
-// deprecated - migrate to 'getAdcChannelBrainPin'
-int getAdcChannelPin(adc_channel_e hwChannel);
-
-// deprecated - migrate to 'getAdcChannelBrainPin'
-ioportid_t getAdcChannelPort(const char *msg, adc_channel_e hwChannel);
-
-adc_channel_e getAdcChannel(brain_pin_e pin);
-brain_pin_e getAdcChannelBrainPin(const char *msg, adc_channel_e hwChannel);
 
 // wait until at least 1 slowADC sampling is complete
 void waitForSlowAdc(uint32_t lastAdcCounter = 0);
@@ -66,18 +70,7 @@ void removeChannel(const char *name, adc_channel_e setting);
 
 #define getAdcValue(msg, hwChannel) getInternalAdcValue(msg, hwChannel)
 
-#define adcToVoltsDivided(adc) (adcToVolts(adc) * engineConfiguration->analogInputDividerCoefficient)
-
-#if !defined(GPT_FREQ_FAST) || !defined(GPT_PERIOD_FAST)
-/**
- * 8000 RPM is 133Hz
- * If we want to sample MAP once per 5 degrees we need 133Hz * (360 / 5) = 9576Hz of fast ADC
- */
-// todo: migrate to continuous ADC mode? probably not - we cannot afford the callback in
-// todo: continuous mode. todo: look into our options
-#define GPT_FREQ_FAST 100000   /* PWM clock frequency. I wonder what does this setting mean?  */
-#define GPT_PERIOD_FAST 10  /* PWM period (in PWM ticks).    */
-#endif /* GPT_FREQ_FAST GPT_PERIOD_FAST */
+#define adcToVoltsDivided(adc, hwChannel) (adcToVolts(adc) * getAnalogInputDividerCoefficient(hwChannel))
 
 // This callback is called by the ADC driver when a new fast ADC sample is ready
 void onFastAdcComplete(adcsample_t* samples);

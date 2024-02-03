@@ -131,25 +131,18 @@ void configureBarra3plus1cam(TriggerWaveform *s) {
 	// long = 120 deg
 
 	{
-		int offset = 120;
+		int offset = 60;
+		int w = 5;
 
-		s->addEventAngle(offset + 2 * 0 - 10, TriggerValue::RISE);
-		s->addEventAngle(offset + 2 * 0 +  0, TriggerValue::FALL);
+		s->addToothRiseFall(offset, w);
 
 		// short gap 60 deg
-
-		s->addEventAngle(offset + 2 * 60 - 10, TriggerValue::RISE);
-		s->addEventAngle(offset + 2 * 60 +  0, TriggerValue::FALL);
+		s->addToothRiseFall(offset + 60, w);
 
 		// long gap 120 deg
-
-		s->addEventAngle(offset + 2 * 180 - 10, TriggerValue::RISE);
-		s->addEventAngle(offset + 2 * 180 +  0, TriggerValue::FALL);
-
+		s->addToothRiseFall(offset + 180, w);
 		// long gap 120 deg
-
-		s->addEventAngle(offset + 2 * 300 - 10, TriggerValue::RISE);
-		s->addEventAngle(offset + 2 * 300 +  0, TriggerValue::FALL);
+		s->addToothRiseFall(offset + 300, w);
 
 		// short gap, 60 deg back to zero/720
 	}
@@ -177,4 +170,28 @@ void configureBenelli(TriggerWaveform *s) {
 		angle += magic / 2;
 		s->addEvent360(angle, TriggerValue::FALL);
 	}
+}
+
+void configure60degSingleTooth(TriggerWaveform *s) {
+	/** @todo 
+	 * My approach was to utilize ::Both especially for single
+	 * tooth and manual kikstarter, to be ready on both sides of blind. 
+	 * But unfortuneally, my experiments show me the Trigger can't 
+	 * become syncronized by 'last' and folowed 'first' events only. 
+	 * Also I observe phase-aligment mehanism is trying to consume a 
+	 * longer side of trigger as latest before TDC.
+	 * I wish to setup SyncEdge::Both for my TT_60DEG_TOOTH after 
+	 * this case of scenario become work well. For now, ::Rise work 
+	 * well for my 60 degree trigger and both edges phase sync work 
+	 * as mush as expected for my engine startup. */
+
+	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::Rise);
+
+	s->addEvent360(300, TriggerValue::RISE);
+	s->addEvent360(360, TriggerValue::FALL);
+
+	s->tdcPosition = 60;
+	
+	s->isSynchronizationNeeded = false;
+	s->useOnlyPrimaryForSync = true;
 }

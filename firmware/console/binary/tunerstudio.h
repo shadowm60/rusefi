@@ -28,16 +28,19 @@ extern tunerstudio_counters_s tsState;
 
 void tunerStudioDebug(TsChannelBase* tsChannel, const char *msg);
 void tunerStudioError(TsChannelBase* tsChannel, const char *msg);
+void sendErrorCode(TsChannelBase *tsChannel, uint8_t code);
 
 uint8_t* getWorkingPageAddr();
+
+void requestBurn();
+// Lua script might want to know how long since last TS request to see if unit is being actively monitored
+int getSecondsSinceChannelsRequest();
 
 #if EFI_TUNER_STUDIO
 #include "thread_controller.h"
 #include "thread_priority.h"
 
 void updateTunerStudioState();
-
-void requestBurn(void);
 
 void startTunerStudioConnectivity(void);
 
@@ -47,7 +50,7 @@ typedef struct {
 } TunerStudioWriteChunkRequest;
 
 #if EFI_PROD_CODE || EFI_SIMULATOR
-#define CONNECTIVITY_THREAD_STACK (2 * UTILITY_THREAD_STACK_SIZE)
+#define CONNECTIVITY_THREAD_STACK (3 * UTILITY_THREAD_STACK_SIZE)
 
 class TunerstudioThread : public ThreadController<CONNECTIVITY_THREAD_STACK> {
 public:

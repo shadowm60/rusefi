@@ -32,10 +32,17 @@ public:
 	 */
 	virtual float get() const = 0;
 
-	virtual void disable() = 0;
+	virtual void disable(const char *msg) = 0;
 	virtual void enable() = 0;
 
 	virtual bool isOpenDirection() const = 0;
+
+	const char* msg() const {
+		return m_msg;
+	}
+
+protected:
+	const char* m_msg = nullptr;
 };
 
 struct IPwm;
@@ -94,7 +101,7 @@ public:
 	bool isOpenDirection() const override;
 
 	void enable() override;
-	void disable() override;
+	void disable(const char *msg) override;
 
 	void setType(ControlType type) { m_type = type; }
 };

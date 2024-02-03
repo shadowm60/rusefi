@@ -105,7 +105,7 @@ float getMcuTemperature() {
 	if (degrees > 150.0f || degrees < -50.0f) {
 /*
  * we have a sporadic issue with this check todo https://github.com/rusefi/rusefi/issues/2552
-		firmwareError(OBD_PCM_Processor_Fault, "Invalid CPU temperature measured %f", degrees);
+		criticalError("Invalid CPU temperature measured %f", degrees);
  */
 	}
 
@@ -158,7 +158,7 @@ static constexpr ADCConversionGroup convGroupSlow = {
 
 static NO_CACHE adcsample_t slowSampleBuffer[SLOW_ADC_OVERSAMPLE * adcChannelCount];
 
-bool readBatch(adcsample_t* convertedSamples, size_t start) {
+static bool readBatch(adcsample_t* convertedSamples, size_t start) {
 	msg_t result = adcConvert(&ADCD1, &convGroupSlow, slowSampleBuffer, SLOW_ADC_OVERSAMPLE);
 
 	// If something went wrong - try again later
@@ -188,10 +188,10 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 	result &= readBatch(convertedSamples, 0);
 
 #ifdef ADC_MUX_PIN
-	muxControl.setValue(1);
+	muxControl.setValue(1, /*force*/true);
 	// read the second batch, starting where we left off
 	result &= readBatch(convertedSamples, adcChannelCount);
-	muxControl.setValue(0);
+	muxControl.setValue(0, /*force*/true);
 #endif
 
 	return result;

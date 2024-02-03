@@ -23,11 +23,6 @@
 
 #include "pch.h"
 
-// dependency injection
-#include "engine_state.h"
-#include "rpm_calculator_api.h"
-// end of injection
-
 #if EFI_PRINTF_FUEL_DETAILS
 	bool printFuelDebug = false;
 #endif // EFI_PRINTF_FUEL_DETAILS
@@ -41,7 +36,6 @@
 #include "cyclic_buffer.h"
 #include "fuel_math.h"
 #include "cdm_ion_sense.h"
-#include "tooth_logger.h"
 #include "local_version_holder.h"
 #include "event_queue.h"
 #include "injector_model.h"
@@ -54,25 +48,34 @@
 #include "backup_ram.h"
 
 void endSimultaneousInjection(InjectionEvent *event) {
-	event->isScheduled = false;
 	endSimultaneousInjectionOnlyTogglePins();
-	getFuelSchedule()->addFuelEventsForCylinder(event->ownIndex);
+	event->update();
 }
 
 void turnInjectionPinLow(InjectionEvent *event) {
 	efitick_t nowNt = getTimeNowNt();
 
-	event->isScheduled = false;
-	for (int i = 0;i<MAX_WIRES_COUNT;i++) {
+	for (size_t i = 0; i < efi::size(event->outputs); i++) {
 		InjectorOutputPin *output = event->outputs[i];
 		if (output) {
 			output->close(nowNt);
 		}
 	}
-	getFuelSchedule()->addFuelEventsForCylinder(event->ownIndex);
+	event->update();
 }
 
-void InjectionEvent::onTriggerTooth(int rpm, efitick_t nowNt, float currentPhase, float nextPhase) {
+static void turnInjectionPinLowStage2(InjectionEvent* event) {
+	efitick_t nowNt = getTimeNowNt();
+
+	for (size_t i = 0; i < efi::size(event->outputsStage2); i++) {
+		InjectorOutputPin *output = event->outputsStage2[i];
+		if (output) {
+			output->close(nowNt);
+		}
+	}
+}
+
+void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float nextPhase) {
 	auto eventAngle = injectionStartAngle;
 
 	// Determine whether our angle is going to happen before (or near) the next tooth
@@ -85,39 +88,51 @@ void InjectionEvent::onTriggerTooth(int rpm, efitick_t nowNt, float currentPhase
 
 	// Perform wall wetting adjustment on fuel mass, not duration, so that
 	// it's correct during fuel pressure (injector flow) or battery voltage (deadtime) transients
+	// TODO: is it correct to wall wet on both pulses?
 	injectionMassGrams = wallFuel.adjust(injectionMassGrams);
-	const floatms_t injectionDuration = engine->module<InjectorModel>()->getInjectionDuration(injectionMassGrams);
+
+	// Disable staging in simultaneous mode
+	float stage2Fraction = isSimultaneous ? 0 : getEngineState()->injectionStage2Fraction;
+
+	// Compute fraction of fuel on stage 2, remainder goes on stage 1
+	const float injectionMassStage2 = stage2Fraction * injectionMassGrams;
+	float injectionMassStage1 = injectionMassGrams - injectionMassStage2;
+
+#if EFI_VEHICLE_SPEED
+	{
+		// Log this fuel as consumed
+
+		bool isCranking = getEngineRotationState()->isCranking();
+		int numberOfInjections = isCranking ? getNumberOfInjections(engineConfiguration->crankingInjectionMode) : getNumberOfInjections(engineConfiguration->injectionMode);
+
+		float actualInjectedMass = numberOfInjections * (injectionMassStage1 + injectionMassStage2);
+
+		engine->module<TripOdometer>()->consumeFuel(actualInjectedMass, nowNt);
+	}
+#endif // EFI_VEHICLE_SPEED
+
+	const floatms_t injectionDurationStage1 = engine->module<InjectorModelPrimary>()->getInjectionDuration(injectionMassStage1);
+	const floatms_t injectionDurationStage2 = injectionMassStage2 > 0 ? engine->module<InjectorModelSecondary>()->getInjectionDuration(injectionMassStage2) : 0;
 
 #if EFI_PRINTF_FUEL_DETAILS
 	if (printFuelDebug) {
 		printf("fuel injectionDuration=%.2fms adjusted=%.2fms\n",
 				getEngineState()->injectionDuration,
-		  injectionDuration);
+		  injectionDurationStage1);
 	}
 #endif /*EFI_PRINTF_FUEL_DETAILS */
 
-	bool isCranking = getEngineRotationState()->isCranking();
-	/**
-	 * todo: pre-calculate 'numberOfInjections'
-	 * see also injectorDutyCycle
-	 */
-	int numberOfInjections = isCranking ? getNumberOfInjections(engineConfiguration->crankingInjectionMode) : getNumberOfInjections(engineConfiguration->injectionMode);
-	if (injectionDuration * numberOfInjections > getEngineCycleDuration(rpm)) {
-		warning(CUSTOM_TOO_LONG_FUEL_INJECTION, "Too long fuel injection %.2fms", injectionDuration);
-	}
-
-	getEngineState()->fuelConsumption.consumeFuel(injectionMassGrams * numberOfInjections, nowNt);
-
 	if (this->cylinderNumber == 0) {
-		engine->outputChannels.actualLastInjection = injectionDuration;
+		engine->outputChannels.actualLastInjection = injectionDurationStage1;
+		engine->outputChannels.actualLastInjectionStage2 = injectionDurationStage2;
 	}
 
-	if (cisnan(injectionDuration)) {
-		warning(CUSTOM_OBD_NAN_INJECTION, "NaN injection pulse");
+	if (cisnan(injectionDurationStage1) || cisnan(injectionDurationStage2)) {
+		warning(ObdCode::CUSTOM_OBD_NAN_INJECTION, "NaN injection pulse");
 		return;
 	}
-	if (injectionDuration < 0) {
-		warning(CUSTOM_OBD_NEG_INJECTION, "Negative injection pulse %.2f", injectionDuration);
+	if (injectionDurationStage1 < 0) {
+		warning(ObdCode::CUSTOM_OBD_NEG_INJECTION, "Negative injection pulse %.2f", injectionDurationStage1);
 		return;
 	}
 
@@ -125,85 +140,80 @@ void InjectionEvent::onTriggerTooth(int rpm, efitick_t nowNt, float currentPhase
 	// Durations under 50us-ish aren't safe for the scheduler
 	// as their order may be swapped, resulting in a stuck open injector
 	// see https://github.com/rusefi/rusefi/pull/596 for more details
-	if (injectionDuration < 0.050f)
+	if (injectionDurationStage1 < 0.050f)
 	{
 		return;
 	}
 
-	floatus_t durationUs = MS2US(injectionDuration);
+	floatus_t durationUsStage1 = MS2US(injectionDurationStage1);
+	floatus_t durationUsStage2 = MS2US(injectionDurationStage2);
 
-
-	// we are ignoring low RPM in order not to handle "engine was stopped to engine now running" transition
-/*
- * Wall Wetting would totally skip fuel on sudden deceleration a
-	if (rpm > 2 * engineConfiguration->cranking.rpm) {
-		const char *outputName = outputs[0]->name;
-		if (engine->prevOutputName == outputName
-				&& engineConfiguration->injectionMode != IM_SIMULTANEOUS
-				&& engineConfiguration->injectionMode != IM_SINGLE_POINT) {
-			warning(CUSTOM_OBD_SKIPPED_FUEL, "looks like skipped fuel event revCounter=%d %s", getRevolutionCounter(), outputName);
-		}
-		engine->prevOutputName = outputName;
-	}
-*/
+	// Only bother with the second stage if it's long enough to be relevant
+	bool hasStage2Injection = durationUsStage2 > 50;
 
 #if EFI_PRINTF_FUEL_DETAILS
 	if (printFuelDebug) {
 		InjectorOutputPin *output = outputs[0];
-		printf("handleFuelInjectionEvent fuelout %s injection_duration %dus engineCycleDuration=%.1fms\t\n", output->name, (int)durationUs,
+		printf("handleFuelInjectionEvent fuelout %s injection_duration %dus engineCycleDuration=%.1fms\t\n", output->getName(), (int)durationUsStage1,
 				(int)MS2US(getCrankshaftRevolutionTimeMs(Sensor::getOrZero(SensorType::Rpm))) / 1000.0);
 	}
 #endif /*EFI_PRINTF_FUEL_DETAILS */
 
-if (isScheduled) {
-#if EFI_PRINTF_FUEL_DETAILS
-		if (printFuelDebug) {
-			InjectorOutputPin *output = outputs[0];
-			printf("handleFuelInjectionEvent still used %s now=%.1fms\r\n", output->name, (int)getTimeNowUs() / 1000.0);
-		}
-#endif /*EFI_PRINTF_FUEL_DETAILS */
-		return; // this InjectionEvent is still needed for an extremely long injection scheduled previously
-	}
-
-	isScheduled = true;
-
-	action_s startAction, endAction;
+	action_s startAction, endActionStage1, endActionStage2;
 	// We use different callbacks based on whether we're running sequential mode or not - everything else is the same
 	if (isSimultaneous) {
 		startAction = startSimultaneousInjection;
-		endAction = { &endSimultaneousInjection, this };
+		endActionStage1 = { &endSimultaneousInjection, this };
 	} else {
+		uintptr_t startActionPtr = reinterpret_cast<uintptr_t>(this);
+
+		if (hasStage2Injection) {
+			// Set the low bit in the arg if there's a secondary injection to start too
+			startActionPtr |= 1;
+		}
+
 		// sequential or batch
-		startAction = { &turnInjectionPinHigh, this };
-		endAction = { &turnInjectionPinLow, this };
+		startAction = { &turnInjectionPinHigh, startActionPtr };
+		endActionStage1 = { &turnInjectionPinLow, this };
+		endActionStage2 = { &turnInjectionPinLowStage2, this };
 	}
 
+	// Correctly wrap injection start angle
 	float angleFromNow = eventAngle - currentPhase;
 	if (angleFromNow < 0) {
 		angleFromNow += getEngineState()->engineCycle;
 	}
 
+	// Schedule opening (stage 1 + stage 2 open together)
 	efitick_t startTime = scheduleByAngle(nullptr, nowNt, angleFromNow, startAction);
-	efitick_t turnOffTime = startTime + US2NT((int)durationUs);
-	getExecutorInterface()->scheduleByTimestampNt("inj", nullptr, turnOffTime, endAction);
+
+	// Schedule closing stage 1
+	efitick_t turnOffTimeStage1 = startTime + US2NT((int)durationUsStage1);
+	getExecutorInterface()->scheduleByTimestampNt("inj", nullptr, turnOffTimeStage1, endActionStage1);
+
+	// Schedule closing stage 2 (if applicable)
+	if (hasStage2Injection && endActionStage2) {
+		efitick_t turnOffTimeStage2 = startTime + US2NT((int)durationUsStage2);
+		getExecutorInterface()->scheduleByTimestampNt("inj stage 2", nullptr, turnOffTimeStage2, endActionStage2);
+	}
 
 #if EFI_UNIT_TEST
-		printf("scheduling injection angle=%.2f/delay=%.2f injectionDuration=%.2f\r\n", angleFromNow, NT2US(startTime - nowNt), injectionDuration);
+	printf("scheduling injection angle=%.2f/delay=%d injectionDuration=%d %d\r\n", angleFromNow, (int)NT2US(startTime - nowNt), (int)durationUsStage1, (int)durationUsStage2);
 #endif
 #if EFI_DEFAILED_LOGGING
 	efiPrintf("handleFuel pin=%s eventIndex %d duration=%.2fms %d", outputs[0]->name,
 			injEventIndex,
-			injectionDuration,
+			injectionDurationStage1,
 			getRevolutionCounter());
 	efiPrintf("handleFuel pin=%s delay=%.2f %d", outputs[0]->name, NT2US(startTime - nowNt),
 			getRevolutionCounter());
 #endif /* EFI_DEFAILED_LOGGING */
 }
 
-static void handleFuel(int rpm, efitick_t nowNt, float currentPhase, float nextPhase) {
+static void handleFuel(efitick_t nowNt, float currentPhase, float nextPhase) {
 	ScopePerf perf(PE::HandleFuel);
-	
-	efiAssertVoid(CUSTOM_STACK_6627, getCurrentRemainingStack() > 128, "lowstck#3");
+
+	efiAssertVoid(ObdCode::CUSTOM_STACK_6627, hasLotsOfRemainingStack(), "lowstck#3");
 
 	LimpState limitedFuelState = getLimpManager()->allowInjection();
 
@@ -214,10 +224,8 @@ static void handleFuel(int rpm, efitick_t nowNt, float currentPhase, float nextP
 		return;
 	}
 
-	/**
-	 * Injection events are defined by addFuelEvents() according to selected
-	 * fueling strategy
-	 */
+	// This is called in the fast callback already, but since we may have just achieved engine sync (and RPM)
+	// for the first time, force update the schedule so that we can inject immediately if necessary
 	FuelSchedule *fs = getFuelSchedule();
 	if (!fs->isReady) {
 		fs->addFuelEvents();
@@ -229,7 +237,7 @@ static void handleFuel(int rpm, efitick_t nowNt, float currentPhase, float nextP
 	}
 #endif /* FUEL_MATH_EXTREME_LOGGING */
 
-	fs->onTriggerTooth(rpm, nowNt, currentPhase, nextPhase);
+	fs->onTriggerTooth(nowNt, currentPhase, nextPhase);
 }
 
 /**
@@ -243,7 +251,6 @@ void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_
 	if (hasFirmwareError()) {
 		/**
 		 * In case on a major error we should not process any more events.
-		 * TODO: add 'pin shutdown' invocation somewhere - coils might be still open here!
 		 */
 		return;
 	}
@@ -254,16 +261,14 @@ void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_
 		// this happens while we just start cranking
 
 		// todo: check for 'trigger->is_synchnonized?'
-		// TODO: add 'pin shutdown' invocation somewhere - coils might be still open here!
 		return;
 	}
 	if (rpm == NOISY_RPM) {
-		warning(OBD_Crankshaft_Position_Sensor_A_Circuit_Malfunction, "noisy trigger");
-		// TODO: add 'pin shutdown' invocation somewhere - coils might be still open here!
+		warning(ObdCode::OBD_Crankshaft_Position_Sensor_A_Circuit_Malfunction, "noisy trigger");
 		return;
 	}
 
-	
+
 	if (trgEventIndex == 0) {
 
 		if (getTriggerCentral()->checkIfTriggerConfigChanged()) {
@@ -281,7 +286,7 @@ void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_
 	 * For fuel we schedule start of injection based on trigger angle, and then inject for
 	 * specified duration of time
 	 */
-	handleFuel(rpm, edgeTimestamp, currentPhase, nextPhase);
+	handleFuel(edgeTimestamp, currentPhase, nextPhase);
 
 	engine->module<TriggerScheduler>()->scheduleEventsUntilNextTriggerTooth(
 		rpm, edgeTimestamp, currentPhase, nextPhase);

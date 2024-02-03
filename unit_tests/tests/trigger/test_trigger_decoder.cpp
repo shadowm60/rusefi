@@ -23,8 +23,6 @@
 using ::testing::_;
 
 extern WarningCodeState unitTestWarningCodeState;
-extern bool printTriggerDebug;
-extern float actualSynchGap;
 
 extern "C" {
 void sendOutConfirmation(char *value, int i);
@@ -46,31 +44,16 @@ static int getTriggerZeroEventIndex(engine_type_e engineType) {
 }
 
 TEST(trigger, testSkipped2_0) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	// for this test we need a trigger with isSynchronizationNeeded=true
 	engineConfiguration->trigger.customTotalToothCount = 2;
 	engineConfiguration->trigger.customSkippedToothCount = 0;
-	eth.setTriggerType(TT_TOOTHED_WHEEL);
+	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
 	ASSERT_EQ( 0,  round(Sensor::getOrZero(SensorType::Rpm))) << "testNoStartUpWarnings RPM";
 }
 
-static void testDodgeNeonDecoder() {
-	printf("*************************************************** testDodgeNeonDecoder95\r\n");
-
-	ASSERT_EQ( 8,  getTriggerZeroEventIndex(DODGE_NEON_1995)) << "DODGE_NEON_1995: trigger zero index";
-
-	EngineTestHelper eth(DODGE_NEON_1995);
-
-	TriggerWaveform * shape = &eth.engine.triggerCentral.triggerShape;
-	ASSERT_EQ(8, shape->getTriggerWaveformSynchPointIndex());
-
-	TriggerDecoderBase state("test");
-
-	ASSERT_FALSE(state.getShaftSynchronized()) << "1 shaft_is_synchronized";
-}
-
 TEST(trigger, testSomethingWeird) {
-	EngineTestHelper eth(FORD_INLINE_6_1995);
+	EngineTestHelper eth(engine_type_e::FORD_INLINE_6_1995);
 
 	TriggerDecoderBase state_("test");
 	TriggerDecoderBase *sta = &state_;
@@ -97,10 +80,12 @@ TEST(trigger, testSomethingWeird) {
 }
 
 TEST(trigger, test1995FordInline6TriggerDecoder) {
-	ASSERT_EQ( 0,  getTriggerZeroEventIndex(FORD_INLINE_6_1995)) << "triggerIndex ";
+	ASSERT_EQ( 0,  getTriggerZeroEventIndex(engine_type_e::FORD_INLINE_6_1995)) << "triggerIndex ";
 
-	EngineTestHelper eth(FORD_INLINE_6_1995);
+	EngineTestHelper eth(engine_type_e::FORD_INLINE_6_1995);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
+
+	engineConfiguration->minimumIgnitionTiming = -15;
 	setWholeTimingTable(-13);
 
 	Sensor::setMockValue(SensorType::Iat, 49.579071f);
@@ -120,14 +105,16 @@ TEST(trigger, test1995FordInline6TriggerDecoder) {
 	IgnitionEventList *ecl = &engine->ignitionEvents;
 	ASSERT_EQ(true,  ecl->isReady) << "ford inline ignition events size";
 
-	EXPECT_NEAR(ecl->elements[0].dwellAngle, 7.960f, 1e-3);
-	EXPECT_NEAR(ecl->elements[5].dwellAngle, 607.960f, 1e-3);
+	EXPECT_NEAR(ecl->elements[0].dwellAngle, 8.960f, 1e-3);
+	EXPECT_NEAR(ecl->elements[0].sparkAngle, 14.96f, 1e-3);
+	EXPECT_NEAR(ecl->elements[5].dwellAngle, 608.960f, 1e-3);
+	EXPECT_NEAR(ecl->elements[5].sparkAngle, 614.960f, 1e-3);
 
 	ASSERT_FLOAT_EQ(0.5, engine->ignitionState.getSparkDwell(2000)) << "running dwell";
 }
 
 TEST(misc, testGetCoilDutyCycleIssue977) {
-	EngineTestHelper eth(FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
 
 	int rpm = 2000;
 	engine->rpmCalculator.setRpmValue(rpm);
@@ -139,9 +126,9 @@ TEST(misc, testGetCoilDutyCycleIssue977) {
 TEST(misc, testFordAspire) {
 	printf("*************************************************** testFordAspire\r\n");
 
-	ASSERT_EQ( 4,  getTriggerZeroEventIndex(FORD_ASPIRE_1996)) << "getTriggerZeroEventIndex";
+	ASSERT_EQ( 4,  getTriggerZeroEventIndex(engine_type_e::FORD_ASPIRE_1996)) << "getTriggerZeroEventIndex";
 
-	EngineTestHelper eth(FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
 
 	ASSERT_EQ( 4,  getTriggerCentral()->triggerShape.getTriggerWaveformSynchPointIndex()) << "getTriggerWaveformSynchPointIndex";
 
@@ -156,10 +143,11 @@ TEST(misc, testFordAspire) {
 
 }
 
+extern TriggerDecoderBase initState;
+
 static void testTriggerDecoder2(const char *msg, engine_type_e type, int synchPointIndex, float channel1duty, float channel2duty, float expectedGapRatio = NAN) {
 	printf("====================================================================================== testTriggerDecoder2 msg=%s\r\n", msg);
 
-	actualSynchGap = 0; // global variables are bad, let's at least reset state
 	// Some configs use aux valves, which requires this sensor
 	std::unordered_map<SensorType, float> sensorVals = {{SensorType::DriverThrottleIntent, 0}};
 	EngineTestHelper eth(type, sensorVals);
@@ -168,9 +156,9 @@ static void testTriggerDecoder2(const char *msg, engine_type_e type, int synchPo
 
 	ASSERT_FALSE(t->shapeDefinitionError) << "isError";
 
-	assertEqualsM("synchPointIndex", synchPointIndex, t->getTriggerWaveformSynchPointIndex());
+	ASSERT_EQ(synchPointIndex, t->getTriggerWaveformSynchPointIndex()) << "synchPointIndex " << msg;
 	if (!cisnan(expectedGapRatio)) {
-		assertEqualsM2("actual gap ratio", expectedGapRatio, actualSynchGap, 0.001);
+		assertEqualsM2("actual gap ratio", expectedGapRatio, initState.triggerSyncGapRatio, 0.001);
     }
 }
 
@@ -185,7 +173,7 @@ static void assertREqualsM(const char *msg, void *expected, void *actual) {
 extern bool_t debugSignalExecutor;
 
 TEST(misc, testRpmCalculator) {
-	EngineTestHelper eth(FORD_INLINE_6_1995);
+	EngineTestHelper eth(engine_type_e::FORD_INLINE_6_1995);
 
 	setTable(config->injectionPhase, -180.0f);
 
@@ -194,7 +182,7 @@ TEST(misc, testRpmCalculator) {
 	// These tests were written when the default target AFR was 14.0, so replicate that
 	engineConfiguration->stoichRatioPrimary = 14;
 
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
 
 	IgnitionEventList *ilist = &engine->ignitionEvents;
@@ -202,8 +190,9 @@ TEST(misc, testRpmCalculator) {
 
 	ASSERT_EQ( 720,  engine->engineState.engineCycle) << "engineCycle";
 
-	efiAssertVoid(CUSTOM_ERR_6670, engineConfiguration!=NULL, "null config in engine");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6670, engineConfiguration!=NULL, "null config in engine");
 
+	engineConfiguration->minimumIgnitionTiming = -15;
 	setWholeTimingTable(-13);
 
 	engineConfiguration->trigger.customTotalToothCount = 8;
@@ -248,11 +237,12 @@ TEST(misc, testRpmCalculator) {
 	eth.firePrimaryTriggerRise();
 	ASSERT_EQ(1500, Sensor::getOrZero(SensorType::Rpm));
 
-	assertEqualsM("dwell", 4.5, engine->engineState.dwellAngle);
+	assertEqualsM("dwell", 4.5, engine->ignitionState.dwellAngle);
 	assertEqualsM("fuel #2", 4.5450, engine->engineState.injectionDuration);
 	assertEqualsM("one degree", 111.1111, engine->rpmCalculator.oneDegreeUs);
 	ASSERT_EQ( 1,  ilist->isReady) << "size #2";
 	EXPECT_NEAR(ilist->elements[0].dwellAngle, 8.5f, 1e-3);
+	EXPECT_NEAR(ilist->elements[0].sparkAngle, 13.0f, 1e-3);
 
 	ASSERT_EQ( 0,  eth.engine.triggerCentral.triggerState.getCurrentIndex()) << "index #2";
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size/2";
@@ -297,7 +287,7 @@ TEST(misc, testRpmCalculator) {
 	eth.fireRise(5);
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size 4.3";
 
-	assertEqualsM("dwell", 4.5, eth.engine.engineState.dwellAngle);
+	assertEqualsM("dwell", 4.5, eth.engine.ignitionState.dwellAngle);
 	assertEqualsM("fuel #3", 4.5450, eth.engine.engineState.injectionDuration);
 	ASSERT_EQ(1500, Sensor::getOrZero(SensorType::Rpm));
 
@@ -332,7 +322,7 @@ TEST(misc, testRpmCalculator) {
 }
 
 TEST(trigger, testAnotherTriggerDecoder) {
-	testTriggerDecoder2("Miata 2003", FRANKENSO_MAZDA_MIATA_2003, 3, 0.38888889, 0.0);
+	testTriggerDecoder2("Miata 2003", engine_type_e::FRANKENSO_MAZDA_MIATA_2003, 3, 0.38888889, 0.0);
 }
 
 TEST(trigger, testTriggerDecoder) {
@@ -354,50 +344,32 @@ TEST(trigger, testTriggerDecoder) {
 	}
 
 	printf("====================================================================================== testTriggerDecoder part 2\r\n");
-	testDodgeNeonDecoder();
-	testTriggerDecoder2("Dodge Neon 1995", DODGE_NEON_1995, 8, 0.4931, 0.2070);
+	testTriggerDecoder2("Dodge Neon 1995", engine_type_e::DODGE_NEON_1995, 0, 0.4931, 0.2070);
 
-	testTriggerDecoder2("ford aspire", FORD_ASPIRE_1996, 4, 0.0000, 0.5);
+	testTriggerDecoder2("ford aspire", engine_type_e::FORD_ASPIRE_1996, 4, 0.0000, 0.5);
 
-	testTriggerDecoder2("dodge ram", DODGE_RAM, 16, 0.5000, 0.06);
+	testTriggerDecoder2("dodge ram", engine_type_e::DODGE_RAM, 16, 0.5000, 0.06);
 
-	testTriggerDecoder2("Miata NB2", HELLEN_NB2, 3, 0.3888888955, 0);
+	testTriggerDecoder2("Miata NB2", engine_type_e::HELLEN_NB2, 3, 0.3888888955, 0);
 
 	printf("====================================================================================== testTriggerDecoder part 3\r\n");
 
-	testTriggerDecoder2("test 2/1 both", TEST_ISSUE_366_BOTH, 0, 0.2500, 0.0);
-	testTriggerDecoder2("test 2/1 rise", TEST_ISSUE_366_RISE, 0, 0.0000, 0.0);
+	testTriggerDecoder2("test 2/1 both", engine_type_e::TEST_ISSUE_366_BOTH, 0, 0.2500, 0.0);
+	testTriggerDecoder2("test 2/1 rise", engine_type_e::TEST_ISSUE_366_RISE, 0, 0.0000, 0.0);
 
-	testTriggerDecoder2("test engine", TEST_ENGINE, 0, 0.7500, 0.2500);
-	testTriggerDecoder2("testGY6_139QMB", GY6_139QMB, 0, 0.4375, 0.0);
-	testTriggerDecoder2("testSubary", SUBARU_2003_WRX, 0, 0.4000, 0.0);
+	testTriggerDecoder2("test engine", engine_type_e::TEST_ENGINE, 0, 0.7500, 0.2500);
+	testTriggerDecoder2("testGY6_139QMB", engine_type_e::GY6_139QMB, 0, 0.4375, 0.0);
 
-	testTriggerDecoder2("testFordEscortGt", FORD_ESCORT_GT, 0, 0.8096, 0.3844);
+	testTriggerDecoder2("testFordEscortGt", engine_type_e::FORD_ESCORT_GT, 0, 0.8096, 0.3844);
 
-	testTriggerDecoder2("NISSAN_PRIMERA", NISSAN_PRIMERA, 2, 0.9611, 0.0);
+	testTriggerDecoder2("NISSAN_PRIMERA", engine_type_e::NISSAN_PRIMERA, 2, 0.9611, 0.0);
 
-	testTriggerDecoder2("test1+1", DEFAULT_FRANKENSO, 0, 0.7500, 0.2500);
+	testTriggerDecoder2("test1+1", engine_type_e::DEFAULT_FRANKENSO, 0, 0.7500, 0.2500);
 
-	testTriggerDecoder2("testCitroen", CITROEN_TU3JP, 0, 0.4833, 0);
-
-	testTriggerDecoder2("testMitsu", MITSU_4G93, 0, 0.3553, 0.3752);
-	{
-		EngineTestHelper eth(MITSU_4G93);
-
-
-		eth.persistentConfig.engineConfiguration.sensorChartMode = SC_DETAILED_RPM;
-		applyNonPersistentConfiguration();
-
-	}
-	testTriggerDecoder2("miata 1990", MRE_MIATA_NA6_VAF, 4, 1 - 0.7015, 1 - 0.3890);
-	testTriggerDecoder2("citroen", CITROEN_TU3JP, 0, 0.4833, 0.0, 2.9994);
-
-	testTriggerDecoder2("CAMARO_4", CAMARO_4, 40, 0.5, 0);
-
-	testTriggerDecoder2("neon NGC4", DODGE_NEON_2003_CRANK, 6, 0.5000, 0.0, CHRYSLER_NGC4_GAP);
+	testTriggerDecoder2("neon NGC4", engine_type_e::DODGE_NEON_2003_CRANK, 6, 0.5000, 0.0, CHRYSLER_NGC4_GAP);
 
 	{
-		EngineTestHelper eth(DODGE_NEON_2003_CRANK);
+		EngineTestHelper eth(engine_type_e::DODGE_NEON_2003_CRANK);
 
 		printf("!!!!!!!!!!!!!!!!!! Now trying with only rising edges !!!!!!!!!!!!!!!!!\r\n");
 
@@ -406,9 +378,9 @@ TEST(trigger, testTriggerDecoder) {
 
 	}
 
-	testTriggerDecoder2("sachs", SACHS, 0, 0.4800, 0.000);
+	testTriggerDecoder2("sachs", engine_type_e::SACHS, 0, 0.4800, 0.000);
 
-	testTriggerDecoder2("vw ABA", VW_ABA, 0, 0.51666, 0.0);
+	testTriggerDecoder2("vw ABA", engine_type_e::VW_ABA, 0, 0.51666, 0.0);
 }
 
 static void assertInjectionEventBase(const char *msg, InjectionEvent *ev, int injectorIndex, int eventIndex, angle_t angleOffset) {
@@ -433,11 +405,10 @@ static void assertInjectionEventBatch(const char *msg, InjectionEvent *ev, int i
 
 static void setTestBug299(EngineTestHelper *eth) {
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(eth);
-	EXPECT_CALL(*eth->mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth->mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{0.1008001f, 50.0f}));
 
 	Engine *engine = &eth->engine;
-	
 
 
 	eth->assertRpm(0, "RPM=0");
@@ -460,18 +431,18 @@ static void setTestBug299(EngineTestHelper *eth) {
 	// inj #1 |........|.......#|........|.......#|
 	ASSERT_EQ( 4,  engine->executor.size()) << "qs#00";
 	ASSERT_EQ( 3,  getRevolutionCounter()) << "rev cnt#3";
-	eth->assertInjectorUpEvent("setTestBug299: 1@0", 0, MS2US(8.5), 0);
-	eth->assertInjectorDownEvent("@1", 1, MS2US(10), 0);
-	eth->assertInjectorUpEvent("1@2", 2, MS2US(18.5), 1);
-	eth->assertInjectorDownEvent("1@3", 3, MS2US(20), 1);
+	eth->assertInjectorUpEvent("setTestBug299: 1@0", 0, MS2US(8.5), 2);
+	eth->assertInjectorDownEvent("@1", 1, MS2US(10), 2);
+	eth->assertInjectorUpEvent("1@2", 2, MS2US(18.5), 3);
+	eth->assertInjectorDownEvent("1@3", 3, MS2US(20), 3);
 	ASSERT_EQ( 0,  eth->executeActions()) << "exec#0";
 
 	FuelSchedule * t = &engine->injectionEvents;
 
-	assertInjectionEvent("#0", &t->elements[0], 0, 1, 153 + 360);
-	assertInjectionEvent("#1_i_@", &t->elements[1], 1, 1, 333 + 360);
-	assertInjectionEvent("#2@", &t->elements[2], 0, 0, 153);
-	assertInjectionEvent("inj#3@", &t->elements[3], 1, 0, 153 + 180);
+	assertInjectionEventBatch("#0", &t->elements[0],     0, 3, 1, 153 + 360);
+	assertInjectionEventBatch("#1_i_@", &t->elements[1], 2, 1, 1, 333 + 360);
+	assertInjectionEventBatch("#2@", &t->elements[2],    3, 0, 0, 153);
+	assertInjectionEventBatch("inj#3@", &t->elements[3], 1, 2, 0, 153 + 180);
 
 	/**
 	 * Trigger down - no new events, executing some
@@ -483,10 +454,10 @@ static void setTestBug299(EngineTestHelper *eth) {
 	// inj #1 |........|.......#|........|.......#|
 	ASSERT_EQ( 8,  engine->executor.size()) << "qs#0";
 	ASSERT_EQ( 3,  getRevolutionCounter()) << "rev cnt#3";
-	eth->assertInjectorUpEvent("02@0", 0, MS2US(-11.5), 0);
-	eth->assertInjectorDownEvent("@1", 1, MS2US(-10), 0);
-	eth->assertInjectorUpEvent("@2", 2, MS2US(-1.5), 1);
-	eth->assertInjectorDownEvent("02@3", 3, MS2US(0), 1);
+	eth->assertInjectorUpEvent("02@0", 0, MS2US(-11.5), 2);
+	eth->assertInjectorDownEvent("@1", 1, MS2US(-10), 2);
+	eth->assertInjectorUpEvent("@2", 2, MS2US(-1.5), 3);
+	eth->assertInjectorDownEvent("02@3", 3, MS2US(0), 3);
 	eth->assertInjectorUpEvent("02@4", 4, MS2US(8.5), 0);
 	eth->assertInjectorDownEvent("@5", 5, MS2US(10), 0);
 	eth->assertInjectorUpEvent("02@6", 6, MS2US(18.5), 1);
@@ -510,10 +481,10 @@ static void setTestBug299(EngineTestHelper *eth) {
 	// time...|-20.....|-10.....|0.......|10......|20
 	// inj #0 |.......#|........|.......#|........|
 	// inj #1 |........|.......#|........|.......#|
-	eth->assertInjectorUpEvent("2@0", 0, MS2US(8.5), 0);
-	eth->assertInjectorDownEvent("@1", 1, MS2US(10), 0);
-	eth->assertInjectorUpEvent("@2", 2, MS2US(18.5), 1);
-	eth->assertInjectorDownEvent("2@3", 3, MS2US(20), 1);
+	eth->assertInjectorUpEvent("2@0", 0, MS2US(8.5), 2);
+	eth->assertInjectorDownEvent("@1", 1, MS2US(10), 2);
+	eth->assertInjectorUpEvent("@2", 2, MS2US(18.5), 3);
+	eth->assertInjectorDownEvent("2@3", 3, MS2US(20), 3);
 	ASSERT_EQ( 0,  eth->executeActions()) << "exec#2";
 
 
@@ -533,9 +504,9 @@ static void setTestBug299(EngineTestHelper *eth) {
 	ASSERT_EQ( 0,  eth->executeActions()) << "exec#3";
 
 
-	ASSERT_EQ( 1,  engine->engineState.running.intakeTemperatureCoefficient) << "iatC";
-	ASSERT_EQ( 1,  engine->engineState.running.coolantTemperatureCoefficient) << "cltC";
-	ASSERT_EQ( 0,  engine->module<InjectorModel>()->getDeadtime()) << "lag";
+	ASSERT_EQ( 1,  engine->fuelComputer.running.intakeTemperatureCoefficient) << "iatC";
+	ASSERT_EQ( 1,  engine->fuelComputer.running.coolantTemperatureCoefficient) << "cltC";
+	ASSERT_EQ( 0,  engine->module<InjectorModelPrimary>()->getDeadtime()) << "lag";
 
 	ASSERT_EQ( 3000,  round(Sensor::getOrZero(SensorType::Rpm))) << "setTestBug299: RPM";
 
@@ -543,9 +514,10 @@ static void setTestBug299(EngineTestHelper *eth) {
 	assertEqualsM("duty for maf=0", 7.5, getInjectorDutyCycle(round(Sensor::getOrZero(SensorType::Rpm))));
 }
 
-static void assertInjectors(const char *msg, int value0, int value1) {
-	EXPECT_EQ(value0, enginePins.injectors[0].currentLogicValue);
-	EXPECT_EQ(value1, enginePins.injectors[1].currentLogicValue);
+#define assertInjectors(msg, value0, value1) \
+{ \
+	EXPECT_EQ(value0, enginePins.injectors[0].currentLogicValue) << msg; \
+	EXPECT_EQ(value1, enginePins.injectors[1].currentLogicValue) << msg; \
 }
 
 static void setArray(float* p, size_t count, float value) {
@@ -557,7 +529,7 @@ static void setArray(float* p, size_t count, float value) {
 void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 	printf("*************************************************** testFuelSchedulerBug299 small to medium\r\n");
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engine->tdcMarkEnabled = false;
@@ -574,7 +546,7 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 	// Injection duration of 12.5ms
 	MockInjectorModel2 im;
 	EXPECT_CALL(im, getInjectionDuration(_)).WillRepeatedly(Return(12.5f));
-	engine->module<InjectorModel>().set(&im);
+	engine->module<InjectorModelPrimary>().set(&im);
 
 	assertEqualsM("duty for maf=3", 62.5, getInjectorDutyCycle(round(Sensor::getOrZero(SensorType::Rpm))));
 
@@ -637,10 +609,10 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 
 	t = &engine->injectionEvents;
 
-	assertInjectionEvent("#0", &t->elements[0], 0, 0, 315);
-	assertInjectionEvent("#1__", &t->elements[1], 1, 1, 495);
-	assertInjectionEvent("inj#2", &t->elements[2], 0, 0, 153);
-	assertInjectionEvent("inj#3", &t->elements[3], 1, 0, 333);
+	assertInjectionEventBatch("#0",    &t->elements[0], 0, 3, 0, 315);
+	assertInjectionEventBatch("#1__",  &t->elements[1], 2, 1, 1, 495);
+	assertInjectionEventBatch("inj#2", &t->elements[2], 3, 0, 0, 153);
+	assertInjectionEventBatch("inj#3", &t->elements[3], 1, 2, 0, 333);
 
 	eth.moveTimeForwardUs(MS2US(20));
 	ASSERT_EQ( 5,  engine->executor.size()) << "qs#02";
@@ -709,10 +681,10 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 	eth.firePrimaryTriggerRise();
 	ASSERT_EQ( 5,  engine->executor.size()) << "Queue.size#03";
 
-	eth.assertInjectorUpEvent("07@0", 0, MS2US(7.5), 1);
-	eth.assertInjectorDownEvent("07@1", 1, MS2US(10), 0);
+	eth.assertInjectorUpEvent("07@0", 0, MS2US(7.5), 3);
+	eth.assertInjectorDownEvent("07@1", 1, MS2US(10), 2);
 	eth.assertInjectorUpEvent("07@2", 2, MS2US(17.5), 0);
-	eth.assertInjectorDownEvent("07@3", 3, MS2US(20), 1);
+	eth.assertInjectorDownEvent("07@3", 3, MS2US(20), 3);
 	eth.assertInjectorDownEvent("07@4", 4, MS2US(30), 0);
 //	assertInjectorDownEvent("07@5", 5, MS2US(30), 0);
 //	assertInjectorUpEvent("07@6", 6, MS2US(37.5), 0);
@@ -725,22 +697,22 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 
 	t = &engine->injectionEvents;
 
-	assertInjectionEvent("#0#", &t->elements[0], 0, 0, 135 + 180);
-	assertInjectionEvent("#1#", &t->elements[1], 1, 1, 135 + 360);
-	assertInjectionEvent("#2#", &t->elements[2], 0, 1, 135 + 540);
-	assertInjectionEvent("#3#", &t->elements[3], 1, 0, 135);
+	assertInjectionEventBatch("#0#", &t->elements[0], 0, 3, 0, 135 + 180);
+	assertInjectionEventBatch("#1#", &t->elements[1], 2, 1, 1, 135 + 360);
+	assertInjectionEventBatch("#2#", &t->elements[2], 3, 0, 1, 135 + 540);
+	assertInjectionEventBatch("#3#", &t->elements[3], 1, 2, 0, 135);
 
 	engine->engineState.injectionDuration = 17.5;
 	// Injection duration of 17.5ms
 	MockInjectorModel2 im2;
 	EXPECT_CALL(im2, getInjectionDuration(_)).WillRepeatedly(Return(17.5f));
-	engine->module<InjectorModel>().set(&im2);
+	engine->module<InjectorModelPrimary>().set(&im2);
 
 	// duty cycle above 75% is a special use-case because 'special' fuel event overlappes the next normal event in batch mode
 	assertEqualsM("duty for maf=3", 87.5, getInjectorDutyCycle(round(Sensor::getOrZero(SensorType::Rpm))));
 
 
-	assertInjectionEvent("#03", &t->elements[0], 0, 0, 315);
+	assertInjectionEventBatch("#03", &t->elements[0], 0, 3, 0, 315);
 
 
 	ASSERT_EQ( 1,  enginePins.injectors[0].currentLogicValue) << "inj#0";
@@ -757,7 +729,7 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 
 	eth.executeActions();
 	eth.fireRise(20);
-	ASSERT_EQ( 7,  engine->executor.size()) << "Queue.size#05";
+	ASSERT_EQ(9,  engine->executor.size()) << "Queue.size#05";
 	eth.executeActions();
 
 
@@ -770,13 +742,13 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 
 	t = &engine->injectionEvents;
 
-	assertInjectionEvent("#00", &t->elements[0], 0, 0, 225); // 87.5 duty cycle
-	assertInjectionEvent("#10", &t->elements[1], 1, 1, 45  + 360);
-	assertInjectionEvent("#20", &t->elements[2], 0, 1, 225 + 360);
-	assertInjectionEvent("#30", &t->elements[3], 1, 0, 45);
+	assertInjectionEventBatch("#00", &t->elements[0], 0, 3, 0, 225); // 87.5 duty cycle
+	assertInjectionEventBatch("#10", &t->elements[1], 2, 1, 1, 45  + 360);
+	assertInjectionEventBatch("#20", &t->elements[2], 3, 0, 1, 225 + 360);
+	assertInjectionEventBatch("#30", &t->elements[3], 1, 2, 0, 45);
 
 	 // todo: what's what? a mix of new something and old something?
-	ASSERT_EQ( 4,  engine->executor.size()) << "qs#5";
+	ASSERT_EQ(6,  engine->executor.size()) << "qs#5";
 //	assertInjectorDownEvent("8@0", 0, MS2US(5.0), 1);
 //	assertInjectorUpEvent("8@1", 1, MS2US(7.5), 1);
 //	assertInjectorDownEvent("8@2", 2, MS2US(15.0), 0);
@@ -789,9 +761,6 @@ void doTestFuelSchedulerBug299smallAndMedium(int startUpDelayMs) {
 ////	assertInjectorDownEvent("8@9", 9, MS2US(55), 0);
 
 	ASSERT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testFuelSchedulerBug299smallAndMedium";
-/*
-	ASSERT_EQ(CUSTOM_OBD_SKIPPED_FUEL, unitTestWarningCodeState.recentWarnings.get(0).Code);
-*/
 }
 
 void setInjectionMode(int value) {
@@ -805,14 +774,13 @@ TEST(big, testFuelSchedulerBug299smallAndMedium) {
 }
 
 TEST(big, testTwoWireBatch) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
 
 	engineConfiguration->injectionMode = IM_BATCH;
-	engineConfiguration->twoWireBatchInjection = true;
 
 	eth.fireTriggerEventsWithDuration(20);
 	// still no RPM since need to cycles measure cycle duration
@@ -832,11 +800,10 @@ TEST(big, testTwoWireBatch) {
 	assertInjectionEventBatch("inj#3@", &t->elements[3],	1, 2, 0, 153 + 180);	// Cyl 2 and 3
 }
 
-
 TEST(big, testSequential) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
 
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
@@ -861,8 +828,66 @@ TEST(big, testSequential) {
 	assertInjectionEvent("inj#3@", &t->elements[3],	1, 0, 126 + 180);	// Cyl 2
 }
 
+TEST(big, testBatch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	setTable(config->injectionPhase, -180.0f);
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
+		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
+
+	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
+
+	engineConfiguration->injectionMode = IM_BATCH;
+
+	eth.fireTriggerEventsWithDuration(20);
+	// still no RPM since need to cycles measure cycle duration
+	eth.fireTriggerEventsWithDuration(20);
+	eth.executeActions();
+
+	/**
+	 * Trigger up - scheduling fuel for full engine cycle
+	 */
+	eth.fireRise(20);
+
+	FuelSchedule * t = &engine->injectionEvents;
+
+	assertInjectionEventBatch("#0",		&t->elements[0], 0, 3, 1, 153 + 360);	// Cyl 1 + 4
+	assertInjectionEventBatch("#1_i_@",	&t->elements[1], 2, 1, 1, 153 + 540);	// Cyl 3 + 2
+	assertInjectionEventBatch("#2@",	&t->elements[2], 3, 0, 0, 153);			// Cyl 4 + 1
+	assertInjectionEventBatch("inj#3@",	&t->elements[3], 1, 2, 0, 153 + 180);	// Cyl 2 + 3
+}
+
+TEST(big, testSinglePoint) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->hpfpCamLobes = 0;
+	setTable(config->injectionPhase, -180.0f);
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
+		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
+
+	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
+
+	engineConfiguration->injectionMode = IM_SINGLE_POINT;
+
+	eth.fireTriggerEventsWithDuration(20);
+	// still no RPM since need to cycles measure cycle duration
+	eth.fireTriggerEventsWithDuration(20);
+	eth.executeActions();
+
+	/**
+	 * Trigger up - scheduling fuel for full engine cycle
+	 */
+	eth.fireRise(20);
+
+	FuelSchedule * t = &engine->injectionEvents;
+
+	assertInjectionEvent("#0",		&t->elements[0], 0, 1, 126 + 360);	// Cyl 1
+	assertInjectionEvent("#1_i_@",	&t->elements[1], 0, 1, 126 + 540);	// Cyl 3
+	assertInjectionEvent("#2@",		&t->elements[2], 0, 0, 126);		// Cyl 4
+	assertInjectionEvent("inj#3@",	&t->elements[3], 0, 0, 126 + 180);	// Cyl 2
+}
+
 TEST(big, testFuelSchedulerBug299smallAndLarge) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->hpfpCamLobes = 0;
 	setTable(config->injectionPhase, -180.0f);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engine->tdcMarkEnabled = false;
@@ -875,7 +900,7 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	// Injection duration of 17.5ms
 	MockInjectorModel2 im;
 	EXPECT_CALL(im, getInjectionDuration(_)).WillRepeatedly(Return(17.5f));
-	engine->module<InjectorModel>().set(&im);
+	engine->module<InjectorModelPrimary>().set(&im);
 
 	assertEqualsM("Lduty for maf=3", 87.5, getInjectorDutyCycle(round(Sensor::getOrZero(SensorType::Rpm))));
 
@@ -893,12 +918,12 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	// inj #0 |########|########|########|.....###|########|........|........|
 	// inj #1 |..######|########|....####|########|........|........|........|
 	ASSERT_EQ( 6,  engine->executor.size()) << "Lqs#4";
-	eth.assertInjectorUpEvent("L04@0", 0, MS2US(8.5), 0);
+	eth.assertInjectorUpEvent("L04@0", 0, MS2US(8.5), 2);
 	eth.assertInjectorUpEvent("L04@1", 1, MS2US(12.5), 0);
 	// special overlapping injection is merged with one of the scheduled injections
-	eth.assertInjectorUpEvent("L04@2", 2, MS2US(18.5), 1);
+	eth.assertInjectorUpEvent("L04@2", 2, MS2US(18.5), 3);
 
-	eth.assertInjectorDownEvent("L04@3", 3, MS2US(26), 0);
+	eth.assertInjectorDownEvent("L04@3", 3, MS2US(26), 2);
 	eth.assertInjectorDownEvent("L04@4", 4, MS2US(30), 0);
 
 //	assertInjectorDownEvent("L04@5", 5, MS2US(30), 0);
@@ -919,11 +944,11 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	eth.fireFall(20);
 
 	ASSERT_EQ( 6,  engine->executor.size()) << "Lqs#04";
-	eth.assertInjectorUpEvent("L015@0", 0, MS2US(-1.5), 1);
+	eth.assertInjectorUpEvent("L015@0", 0, MS2US(-1.5), 3);
 	eth.assertInjectorUpEvent("L015@1", 1, MS2US(2.5), 1);
-	eth.assertInjectorDownEvent("L015@2", 2, MS2US(6), 0);
+	eth.assertInjectorDownEvent("L015@2", 2, MS2US(6), 2);
 	eth.assertInjectorDownEvent("L015@3", 3, MS2US(10), 0);
-	eth.assertInjectorDownEvent("L015@4", 4, MS2US(16), 1);
+	eth.assertInjectorDownEvent("L015@4", 4, MS2US(16), 3);
 //todo	assertInjectorDownEvent("L015@5", 5, MS2US(30), 0);
 
 
@@ -942,7 +967,7 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	engine->engineState.injectionDuration = 2.0f;
 	MockInjectorModel2 im2;
 	EXPECT_CALL(im2, getInjectionDuration(_)).WillRepeatedly(Return(2.0f));
-	engine->module<InjectorModel>().set(&im2);
+	engine->module<InjectorModelPrimary>().set(&im2);
 
 	ASSERT_EQ( 10,  getInjectorDutyCycle(round(Sensor::getOrZero(SensorType::Rpm)))) << "Lduty for maf=3";
 
@@ -965,38 +990,35 @@ TEST(big, testFuelSchedulerBug299smallAndLarge) {
 	eth.firePrimaryTriggerRise();
 
 	ASSERT_EQ( 4,  engine->executor.size()) << "Lqs#5";
-	eth.assertInjectorUpEvent("L05@0", 0, MS2US(8), 0);
-	eth.assertInjectorDownEvent("L05@1", 1, MS2US(10), 0);
-	eth.assertInjectorUpEvent("L05@2", 2, MS2US(18), 1);
-	eth.assertInjectorDownEvent("L05@3", 3, MS2US(20), 1);
+	eth.assertInjectorUpEvent("L05@0", 0, MS2US(8), 2);
+	eth.assertInjectorDownEvent("L05@1", 1, MS2US(10), 2);
+	eth.assertInjectorUpEvent("L05@2", 2, MS2US(18), 3);
+	eth.assertInjectorDownEvent("L05@3", 3, MS2US(20), 3);
 
 	eth.moveTimeForwardUs(MS2US(20));
 	eth.executeActions();
 	ASSERT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testFuelSchedulerBug299smallAndLarge";
-	/*
-	ASSERT_EQ(CUSTOM_OBD_SKIPPED_FUEL, unitTestWarningCodeState.recentWarnings.get(0).Code);
-*/
 }
 
 TEST(big, testSparkReverseOrderBug319) {
 	printf("*************************************************** testSparkReverseOrderBug319 small to medium\r\n");
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engine->tdcMarkEnabled = false;
 
 	engineConfiguration->isInjectionEnabled = false;
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
 
 	setConstantDwell(45);
 
-	engine->triggerCentral.syncAndReport(1, 0);
+	engine->triggerCentral.syncAndReport(2, 0);
 
 	// this is needed to update injectorLag
 	engine->updateSlowSensors();
 
-	eth.setTriggerType(TT_ONE);
+	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 	eth.engine.periodicFastCallback();
 
 	setWholeTimingTable(0);
@@ -1004,7 +1026,7 @@ TEST(big, testSparkReverseOrderBug319) {
 	eth.fireRise(20);
 	eth.fireFall(20);
 
-	engine->triggerCentral.syncAndReport(1, 0);
+	engine->triggerCentral.syncAndReport(2, 0);
 
 	eth.executeActions();
 
@@ -1079,14 +1101,14 @@ TEST(big, testSparkReverseOrderBug319) {
 	eth.executeActions();
 	ASSERT_EQ( 0,  enginePins.coils[3].outOfOrder) << "out-of-order #8";
 	ASSERT_EQ( 2,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#SparkReverseOrderBug319";
-	ASSERT_EQ(CUSTOM_DWELL_TOO_LONG, unitTestWarningCodeState.recentWarnings.get(0).Code) << "warning @0";
-	ASSERT_EQ(CUSTOM_OUT_OF_ORDER_COIL, unitTestWarningCodeState.recentWarnings.get(1).Code);
+	ASSERT_EQ(ObdCode::CUSTOM_DWELL_TOO_LONG, unitTestWarningCodeState.recentWarnings.get(0).Code) << "warning @0";
+	ASSERT_EQ(ObdCode::CUSTOM_OUT_OF_ORDER_COIL, unitTestWarningCodeState.recentWarnings.get(1).Code);
 }
 
 TEST(big, testMissedSpark299) {
 	printf("*************************************************** testMissedSpark299\r\n");
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK;
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
 	engineConfiguration->isIgnitionEnabled = true;

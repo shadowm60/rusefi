@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "timer.h"
+#include <rusefi/timer.h>
 #include "launch_control_state_generated.h"
 
 void initLaunchControl();
@@ -39,6 +39,7 @@ private:
  */
 class SoftSparkLimiter {
 public:
+    SoftSparkLimiter(bool allowHardCut);
 	/**
 	 * targetSkipRatio of '0' means 'do not skip', would always return false
 	 */
@@ -46,6 +47,7 @@ public:
 
 	bool shouldSkip();
 private:
+    bool allowHardCut;
 	bool wasJustSkipped = false;
 	float targetSkipRatio = 0;
 };

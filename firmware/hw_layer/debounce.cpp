@@ -29,14 +29,13 @@ void ButtonDebounce::init (efitimems_t threshold, brain_pin_e &pin, pin_input_mo
         s_firstDebounce = this;
     }
     m_threshold = MS2NT(threshold);
-    timeLast = 0;
     m_pin = &pin;
     m_mode = &mode;
     startConfiguration();
     isInstanceRegisteredInGlobalList = true;
 }
 
-void ButtonDebounce::stopConfigurationList () {
+void ButtonDebounce::stopConfigurationList() {
     ButtonDebounce *listItem = s_firstDebounce;
     while (listItem != nullptr) {
         listItem->stopConfiguration();
@@ -44,7 +43,7 @@ void ButtonDebounce::stopConfigurationList () {
     }
 }
 
-void ButtonDebounce::startConfigurationList () {
+void ButtonDebounce::startConfigurationList() {
     ButtonDebounce *listItem = s_firstDebounce;
     while (listItem != nullptr) {
         listItem->startConfiguration();
@@ -52,7 +51,7 @@ void ButtonDebounce::startConfigurationList () {
     }
 }
 
-void ButtonDebounce::stopConfiguration () {
+void ButtonDebounce::stopConfiguration() {
     // If the configuration has changed
 #if ! EFI_ACTIVE_CONFIGURATION_IN_FLASH
     if (*m_pin != active_pin || *m_mode != active_mode) {
@@ -66,7 +65,7 @@ void ButtonDebounce::stopConfiguration () {
     }
 }
 
-void ButtonDebounce::startConfiguration () {
+void ButtonDebounce::startConfiguration() {
 #if EFI_PROD_CODE
     if (needsPinInitialization) {
         efiSetPadMode(m_name, *m_pin, getInputMode(*m_mode));
@@ -81,35 +80,47 @@ void ButtonDebounce::startConfiguration () {
 @returns true if the button is pressed, and will not return true again within the set timeout
 */
 bool ButtonDebounce::readPinEvent() {
-    storedValue = false;
-    return readPinState();
+    storedValue = readPinState2(false);
+    return storedValue;
 }
 
-bool ButtonDebounce::readPinState() {
+bool ButtonDebounce::getPhysicalState() {
+#if EFI_PROD_CODE || EFI_UNIT_TEST
+    return efiReadPin(active_pin);
+#else
+    return false;
+#endif
+}
+
+bool ButtonDebounce::readPinState2(bool valueWithinThreshold) {
     if (!isBrainPinValid(*m_pin)) {
         return false;
     }
-    efitick_t timeNow = getTimeNowNt();
+    efitick_t timeNowNt = getTimeNowNt();
     // If it's been less than the threshold since we were last called
-    if ((timeNow - timeLast) < m_threshold) {
-        return storedValue;
+    if (timeLast.getElapsedNt(timeNowNt) < m_threshold) {
+        return valueWithinThreshold;
     }
+    bool value = getPhysicalState();
+//    efiPrintf("[debounce] %s value %d", m_name, value);
+    // Invert
+    if (active_mode == PI_PULLUP) {
+        value = !value;
+//        efiPrintf("[debounce] %s inverted %d", m_name, value);
+    }
+    if (value) {
+        timeLast.reset();
+    }
+    return value;
+}
+
+bool ButtonDebounce::readPinState() {
+    // code comment could be out of date:
     // storedValue is a class variable, so it needs to be reset.
     // We don't actually need it to be a class variable in this method,
     //  but when a method is implemented to actually get the pin's state,
     //  for example to implement long button presses, it will be needed.
-#if EFI_PROD_CODE || EFI_UNIT_TEST
-    storedValue = efiReadPin(active_pin);
-#else
-    storedValue = false;
-#endif
-    // Invert
-    if (active_mode == PI_PULLUP) {
-        storedValue = !storedValue;
-    }
-    if (storedValue) {
-        timeLast = timeNow;
-    }
+    storedValue = readPinState2(storedValue);
     return storedValue;
 }
 
@@ -118,7 +129,9 @@ void ButtonDebounce::debug() {
     while (listItem != nullptr) {
 #if EFI_PROD_CODE || EFI_UNIT_TEST
         efiPrintf("%s timeLast %d", listItem->m_name, listItem->timeLast);
-        efiPrintf("physical state %d value %d", efiReadPin(listItem->active_pin), listItem->storedValue);
+        efiPrintf("physical pin state %d", listItem->getPhysicalState());
+        efiPrintf("state %d", listItem->storedValue);
+        efiPrintf("mode %d", listItem->active_mode);
 #endif
 
         listItem = listItem->nextDebounce;

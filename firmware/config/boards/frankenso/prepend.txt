@@ -1,3 +1,0 @@
-#define show_microRusEFI_presets false
-#define show_microRusEFI_presets false
-

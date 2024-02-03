@@ -7,6 +7,8 @@
 
 #pragma once
 
+#define HAS_CAN_FRAME (EFI_SIMULATOR || HAL_USE_CAN || EFI_UNIT_TEST)
+
 #if EFI_UNIT_TEST || !EFI_CAN_SUPPORT
 #include "can_mocks.h"
 #endif // EFI_PROD_CODE
@@ -97,9 +99,12 @@ private:
 #ifdef STM32H7XX
 #define CAN_SID(f) ((f).std.SID)
 #define CAN_EID(f) ((f).ext.EID)
-#define CAN_ID(f) ((f).common.XTD ? CAN_EID(f) : CAN_SID(f))
+#define CAN_ISX(f) ((f).common.XTD)
 #else
 #define CAN_SID(f) ((f).SID)
 #define CAN_EID(f) ((f).EID)
-#define CAN_ID(f) ((f).IDE ? CAN_EID(f) : CAN_SID(f))
+#define CAN_ISX(f) ((f).IDE)
 #endif
+
+#define CAN_ID(f) (CAN_ISX(f) ? CAN_EID(f) : CAN_SID(f))
+

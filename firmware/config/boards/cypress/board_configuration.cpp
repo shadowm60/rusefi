@@ -10,6 +10,20 @@
 #include "pch.h"
 #include "trigger_input.h"
 
+Gpio getWarningLedPin() {
+	// this board has no warning led
+	return Gpio::Unassigned;
+}
+
+Gpio getRunningLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getCommsLedPin() {
+	// this board has no comms led
+	return Gpio::Unassigned;
+}
+
 void setBoardDefaultConfiguration() {
 	setCrankOperationMode();
 
@@ -17,8 +31,8 @@ void setBoardDefaultConfiguration() {
 
 	setAlgorithm(LM_SPEED_DENSITY);
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK;
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
@@ -26,7 +40,7 @@ void setBoardDefaultConfiguration() {
 
 	engineConfiguration->globalTriggerAngleOffset = 114;	// the end of 19th tooth?
 
-	engineConfiguration->specs.displacement = 1.645;
+	engineConfiguration->displacement = 1.645;
 	engineConfiguration->injector.flow = 200;
 	
 	engineConfiguration->cranking.baseFuel = 25;		// ???
@@ -49,11 +63,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->clt.config.resistance_2 = 5.0f;
 	engineConfiguration->clt.config.tempC_2 = 120.0f,
 	engineConfiguration->clt.config.bias_resistor = 3300;
-	
-	//engineConfiguration->canNbcType = CAN_BUS_NBC_BMW;
-	engineConfiguration->canNbcType = CAN_BUS_MAZDA_RX8;
-	engineConfiguration->canReadEnabled = true;
-	engineConfiguration->canWriteEnabled = false;
 
 	engineConfiguration->tpsMin = convertVoltageTo10bitADC(0.250);
 	engineConfiguration->tpsMax = convertVoltageTo10bitADC(4.538);
@@ -61,11 +70,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->tpsErrorDetectionTooHigh = 110; // 110% open
 
 	engineConfiguration->mapMinBufferLength = 4;
-
-	engineConfiguration->communicationLedPin = Gpio::Unassigned;//GPIOJ_0;
-	engineConfiguration->runningLedPin = Gpio::Unassigned;
-	engineConfiguration->warningLedPin = Gpio::Unassigned;
-	engineConfiguration->triggerErrorPin = Gpio::Unassigned;
 
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_13;
 	engineConfiguration->clt.adcChannel = EFI_ADC_26;
@@ -87,7 +91,7 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->tps2_2AdcChannel = EFI_ADC_NONE;
 	engineConfiguration->throttlePedalPositionSecondAdcChannel = EFI_ADC_NONE;
 	
-	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
+
 	engineConfiguration->hipOutputChannel = EFI_ADC_NONE;
 	engineConfiguration->fuelLevelSensor = EFI_ADC_NONE;
 	engineConfiguration->oilPressure.hwChannel = EFI_ADC_NONE;

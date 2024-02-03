@@ -1,13 +1,13 @@
 package com.rusefi.maintenance;
 
-import com.rusefi.ui.StatusConsumer;
+import com.rusefi.io.UpdateOperationCallbacks;
 
-import static com.rusefi.maintenance.DfuFlasher.detectPcan;
-import static com.rusefi.maintenance.DfuFlasher.detectStLink;
+import static com.rusefi.maintenance.MaintenanceUtil.detectPcan;
+import static com.rusefi.maintenance.StLinkFlasher.detectStLink;
 
 public class DfuFlasherSandbox {
     public static void main(String[] args) {
-        System.out.println("detectStLink " + detectStLink(StatusConsumer.VOID));
-        System.out.println("detectPcan " + detectPcan(StatusConsumer.VOID));
+        System.out.println("detectStLink " + detectStLink(UpdateOperationCallbacks.DUMMY));
+        System.out.println("detectPcan " + detectPcan(UpdateOperationCallbacks.DUMMY));
     }
 }

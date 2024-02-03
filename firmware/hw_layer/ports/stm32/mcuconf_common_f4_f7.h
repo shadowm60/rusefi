@@ -77,8 +77,12 @@
  * DAC driver system settings.
  */
 #define STM32_DAC_DUAL_MODE                 FALSE
+#ifndef STM32_DAC_USE_DAC1_CH1
 #define STM32_DAC_USE_DAC1_CH1              FALSE
+#endif
+#ifndef STM32_DAC_USE_DAC1_CH2
 #define STM32_DAC_USE_DAC1_CH2              FALSE
+#endif
 #define STM32_DAC_DAC1_CH1_IRQ_PRIORITY     PRECISE_SCHEDULING_TIMER_PRIORITY + 6
 #define STM32_DAC_DAC1_CH2_IRQ_PRIORITY     PRECISE_SCHEDULING_TIMER_PRIORITY + 6
 #define STM32_DAC_DAC1_CH1_DMA_PRIORITY     2
@@ -207,17 +211,30 @@
  * PWM driver system settings.
  */
 #define STM32_PWM_USE_ADVANCED              FALSE
-#define STM32_PWM_USE_TIM1                  FALSE
+#define STM32_PWM_USE_TIM1                  TRUE
 #define STM32_PWM_USE_TIM2                  FALSE
 
 #ifndef STM32_PWM_USE_TIM3
-#define STM32_PWM_USE_TIM3                  FALSE
+// Hellen often uses TIM3 for ETB
+#define STM32_PWM_USE_TIM3                  TRUE
 #endif
 
+#ifndef STM32_PWM_USE_TIM4
 #define STM32_PWM_USE_TIM4                  TRUE
+#endif
+
+#ifndef STM32_PWM_USE_TIM5
 #define STM32_PWM_USE_TIM5                  TRUE
+#endif
+
+#ifndef STM32_PWM_USE_TIM8
 #define STM32_PWM_USE_TIM8                  TRUE
+#endif
+
+#ifndef STM32_PWM_USE_TIM9
 #define STM32_PWM_USE_TIM9                  FALSE
+#endif
+
 #define STM32_PWM_TIM1_IRQ_PRIORITY         7
 #define STM32_PWM_TIM2_IRQ_PRIORITY         7
 #define STM32_PWM_TIM3_IRQ_PRIORITY         7
@@ -230,7 +247,7 @@
  * SERIAL driver system settings.
  */
 #ifndef STM32_SERIAL_USE_USART1
-#define STM32_SERIAL_USE_USART1             TRUE
+#define STM32_SERIAL_USE_USART1             FALSE
 #endif
 
 #ifndef STM32_SERIAL_USE_USART2
@@ -241,8 +258,13 @@
 #define STM32_SERIAL_USE_USART3             FALSE
 #endif
 
+#ifndef STM32_SERIAL_USE_UART4
 #define STM32_SERIAL_USE_UART4              FALSE
+#endif
+
+#ifndef STM32_SERIAL_USE_UART5
 #define STM32_SERIAL_USE_UART5              FALSE
+#endif
 
 #ifndef STM32_SERIAL_USE_USART6
 #define STM32_SERIAL_USE_USART6             TRUE
@@ -274,9 +296,18 @@
 #define STM32_SPI_USE_SPI3                  TRUE
 #endif
 
+#ifndef STM32_SPI_USE_SPI4
 #define STM32_SPI_USE_SPI4                  FALSE
+#endif
+
+#ifndef STM32_SPI_USE_SPI5
 #define STM32_SPI_USE_SPI5                  FALSE
+#endif
+
+#ifndef STM32_SPI_USE_SPI6
 #define STM32_SPI_USE_SPI6                  FALSE
+#endif
+
 #define STM32_SPI_SPI1_RX_DMA_STREAM        STM32_DMA_STREAM_ID(2, 0)
 #define STM32_SPI_SPI1_TX_DMA_STREAM        STM32_DMA_STREAM_ID(2, 3)
 #define STM32_SPI_SPI2_RX_DMA_STREAM        STM32_DMA_STREAM_ID(1, 3)
@@ -380,17 +411,21 @@
 /*
  * WDG driver system settings.
  */
-#define STM32_WDG_USE_IWDG                  FALSE
+#ifndef STM32_WDG_USE_IWDG
+#define STM32_WDG_USE_IWDG                  TRUE
+#endif
 
 /* Some boards need to know clock early on boot.
  * F429-Discovery board configures clock and then SDRAM early on boot */
 #ifndef STM32_HSECLK
-    // Pretend we have a 25MHz external crystal.  This value isn't actually used since we
-    // configure the PLL to start on the HSI oscillator, then compute HSE's speed at runtime
-    // and reconfigure the PLL appropriately.
-    #define STM32_HSECLK 25000000
+    // Some boards has no HSE oscillator at all and obviously disable HSE detections
+    #ifndef ENABLE_AUTO_DETECT_HSE
+        // Pretend we have a 25MHz external crystal.  This value isn't actually used since we
+        // configure the PLL to start on the HSI oscillator, then compute HSE's speed at runtime
+        // and reconfigure the PLL appropriately.
+        #define STM32_HSECLK 25000000
 
-    // After boot, we will detect the real frequency, and adjust the PLL M value to suit
-
-    #define ENABLE_AUTO_DETECT_HSE
+        // After boot, we will detect the real frequency, and adjust the PLL M value to suit
+        #define ENABLE_AUTO_DETECT_HSE TRUE
+    #endif
 #endif

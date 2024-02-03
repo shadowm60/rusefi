@@ -10,6 +10,20 @@
 #include "pch.h"
 #include "smart_gpio.h"
 #include "drivers/gpio/mc33810.h"
+#include "device_mpu_util.h"
+
+Gpio getCommsLedPin() {
+	return Gpio::G6;	/* LD1 - green */
+}
+
+Gpio getRunningLedPin() {
+	return Gpio::G8; /* LD3 - yellow */
+}
+
+Gpio getWarningLedPin() {
+	// this board has no warning led
+	return Gpio::Unassigned;
+}
 
 static void setSerialConfigurationOverrides() {
 	engineConfiguration->binarySerialTxPin = Gpio::E1;
@@ -23,7 +37,7 @@ static void setSerialConfigurationOverrides() {
 
 /**
  * @brief   Board-specific configuration defaults.
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setSerialConfigurationOverrides();
@@ -92,11 +106,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->idle.solenoidPin = Gpio::TLE6240_PIN_11;
 	engineConfiguration->secondSolenoidPin = Gpio::TLE6240_PIN_12;
 
-	engineConfiguration->communicationLedPin = Gpio::G6;	/* LD1 - green */
-	engineConfiguration->runningLedPin = Gpio::G8; /* LD3 - yellow */
-	engineConfiguration->warningLedPin = Gpio::Unassigned; 	/* LD3 - yellow*/
-	//engineConfiguration->unusedErrorPin = LED_ERROR_BRAIN_PIN;	/* LD2 - red */
-
 	/* IF you have BOTH camshaft position sensor and crankshaft position sensor
 	 * camshaft is always trigger#1 input and then crankshaft is trigger#2. */
 	engineConfiguration->triggerInputPins[0] = Gpio::H12;	/* cam */
@@ -142,13 +151,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->malfunctionIndicatorPinMode = OM_DEFAULT;
 
 	/* not used */
-	engineConfiguration->displayMode = DM_NONE;
-	engineConfiguration->HD44780_rs = Gpio::Unassigned;
-	engineConfiguration->HD44780_e = Gpio::Unassigned;
-	engineConfiguration->HD44780_db4 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db5 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db6 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db7 = Gpio::Unassigned;
 	engineConfiguration->digitalPotentiometerChipSelect[0] = Gpio::Unassigned;
 	engineConfiguration->digitalPotentiometerChipSelect[1] = Gpio::Unassigned;
 	engineConfiguration->digitalPotentiometerChipSelect[2] = Gpio::Unassigned;
@@ -213,10 +215,6 @@ void setBoardDefaultConfiguration() {
 
 	/* This board also has AC clutch output: */
 	engineConfiguration->acRelayPin = Gpio::TLE6240_PIN_15;
-	engineConfiguration->maxAcRpm = 3000;
-	engineConfiguration->acIdleRpmBump = 200;
-
-	engineConfiguration->isCJ125Enabled = false;
 
 	/* CAN */
 	engineConfiguration->canTxPin = Gpio::D1;
@@ -225,8 +223,6 @@ void setBoardDefaultConfiguration() {
 	/* not used pins with testpads */
 	engineConfiguration->triggerSimulatorPins[0] = Gpio::H2;
 	engineConfiguration->triggerSimulatorPins[1] = Gpio::H3;
-	engineConfiguration->triggerSimulatorPinModes[0] = OM_DEFAULT;
-	engineConfiguration->triggerSimulatorPinModes[1] = OM_DEFAULT;
 
 	if (engineConfiguration->fuelAlgorithm == LM_REAL_MAF)
 		setAlgorithm(LM_SPEED_DENSITY);
@@ -260,7 +256,7 @@ static const struct mc33810_config mc33810_odd = {
 		[1] = {.port = GPIOI, .pad = 5},	/* INJ 3 */
 		[2] = {.port = GPIOI, .pad = 4},	/* INJ 5 */
 		[3] = {.port = GPIOB, .pad = 9},	/* INJ 7 */
-		/* ignition pre-dirvers */
+		/* ignition pre-drivers */
 		[4] = {.port = GPIOB, .pad = 3},	/* IGN 4 */
 		[5] = {.port = GPIOB, .pad = 4},	/* IGN 3 */
 		[6] = {.port = GPIOB, .pad = 5},	/* IGN 7 */
@@ -279,7 +275,7 @@ static const struct mc33810_config mc33810_even = {
 		.ssport = GPIOF,
 		.sspad = 2,
 		.cr1 =
-			//SPI_CR1_16BIT_MODE |
+			SPI_CR1_16BIT_MODE |
 			SPI_CR1_SSM |
 			SPI_CR1_SSI |
 			((3 << SPI_CR1_BR_Pos) & SPI_CR1_BR) |	/* div = 16 */
@@ -287,8 +283,7 @@ static const struct mc33810_config mc33810_even = {
 			/* SPI_CR1_CPOL | */ // = 0
 			SPI_CR1_CPHA | // = 1
 			0,
-		.cr2 = //SPI_CR2_16BIT_MODE |
-			SPI_CR2_DS_3 | SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0
+		.cr2 = SPI_CR2_16BIT_MODE
 	},
 	.direct_io = {
 		/* injector drivers */
@@ -296,7 +291,7 @@ static const struct mc33810_config mc33810_even = {
 		[1] = {.port = GPIOE, .pad = 4},	/* INJ 4 */
 		[2] = {.port = GPIOE, .pad = 5},	/* INJ 6 */
 		[3] = {.port = GPIOE, .pad = 6},	/* INJ 8 */
-		/* ignition pre-dirvers */
+		/* ignition pre-drivers */
 		[4] = {.port = GPIOI, .pad = 9},	/* IGN 8 */
 		[5] = {.port = GPIOC, .pad = 15},	/* IGN 6 */
 		[6] = {.port = GPIOC, .pad = 14},	/* IGN 2 */
@@ -308,6 +303,7 @@ static const struct mc33810_config mc33810_even = {
 
 static void board_init_ext_gpios()
 {
+#ifndef EFI_BOOTLOADER
 	int ret;
 
 	ret = mc33810_add(Gpio::MC33810_0_OUT_0, 0, &mc33810_odd);
@@ -318,6 +314,7 @@ static void board_init_ext_gpios()
 	if (ret < 0) {
 		/* error */
 	}
+#endif // EFI_BOOTLOADER
 }
 
 /**

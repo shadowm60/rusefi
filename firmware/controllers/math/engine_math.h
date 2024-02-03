@@ -14,17 +14,6 @@ void setAlgorithm(engine_load_mode_e algo);
 void setFlatInjectorLag(float value);
 
 /**
- * See also wrapVvt
- * TODO: replace all usages of fixAngle with wrapAngle?
- * Should we make this a nice method instead of that off macro which changes parameter value?
- */
-#define fixAngle(angle, msg, code) wrapAngle2(angle, msg, code, getEngineState()->engineCycle)
-#define wrapAngle(angle, msg, code) fixAngle(angle, msg, code)
-
-// proper method avoids un-wrapped state of variables
-angle_t wrapAngleMethod(angle_t param, const char *msg, obd_code_e code);
-
-/**
  * @return time needed to rotate crankshaft by one degree, in milliseconds.
  * @deprecated use at least Us, maybe even Nt
  */
@@ -50,7 +39,6 @@ size_t getCylinderId(size_t index);
 size_t getNextFiringCylinderId(size_t prevCylinderId);
 
 void setTimingRpmBin(float from, float to);
-void setTimingLoadBin(float from, float to);
 
 void setSingleCoilDwell();
 
@@ -66,10 +54,13 @@ void setSingleCoilDwell();
  * Cylinder number is used for per-cylinder adjustment, if you have
  * an odd-fire engine (v-twin, V10, some v6, etc)
  */
-angle_t getCylinderAngle(uint8_t cylinderIndex, uint8_t cylinderNumber);
+angle_t getPerCylinderFiringOrderOffset(uint8_t cylinderIndex, uint8_t cylinderNumber);
 
 // Table blending helpers
 struct BlendResult {
+	// Input blend parameter (lookup to bias table)
+	float BlendParameter;
+
 	// Bias in percent (0-100%)
 	float Bias;
 

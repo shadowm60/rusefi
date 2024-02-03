@@ -10,37 +10,37 @@ using ::testing::InSequence;
 using ::testing::_;
 
 TEST(FuelMath, getStandardAirCharge) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Miata 1839cc 4cyl
-	engineConfiguration->specs.displacement = 1.839f;
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->displacement = 1.839f;
+	engineConfiguration->cylindersCount = 4;
 
 	EXPECT_FLOAT_EQ(0.5535934f, getStandardAirCharge());
 
 	// LS 5.3 liter v8
-	engineConfiguration->specs.displacement = 5.327f;
-	engineConfiguration->specs.cylindersCount = 8;
+	engineConfiguration->displacement = 5.327f;
+	engineConfiguration->cylindersCount = 8;
 
 	EXPECT_FLOAT_EQ(0.80179232f, getStandardAirCharge());
 
 	// Chainsaw - single cylinder 32cc
-	engineConfiguration->specs.displacement = 0.032f;
-	engineConfiguration->specs.cylindersCount = 1;
+	engineConfiguration->displacement = 0.032f;
+	engineConfiguration->cylindersCount = 1;
 	EXPECT_FLOAT_EQ(0.038531788f, getStandardAirCharge());
 
 	// Leopard 1 47.666 liter v12
-	engineConfiguration->specs.displacement = 47.666f;
-	engineConfiguration->specs.cylindersCount = 12;
+	engineConfiguration->displacement = 47.666f;
+	engineConfiguration->cylindersCount = 12;
 
 	EXPECT_FLOAT_EQ(4.782959f, getStandardAirCharge());
 }
 
 TEST(AirmassModes, AlphaNNormal) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	// 4 cylinder 4 liter = easy math
-	engineConfiguration->specs.displacement = 4.0f;
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->displacement = 4.0f;
+	engineConfiguration->cylindersCount = 4;
 
 	StrictMock<MockVp3d> veTable;
 
@@ -55,13 +55,13 @@ TEST(AirmassModes, AlphaNNormal) {
 	// Mass of 1 liter of air * VE
 	mass_t expectedAirmass = 1.2047f * 0.35f;
 
-	auto result = dut.getAirmass(1200);
+	auto result = dut.getAirmass(1200, false);
 	EXPECT_NEAR(result.CylinderAirmass, expectedAirmass, EPS4D);
 	EXPECT_NEAR(result.EngineLoadPercent, 0.71f, EPS4D);
 }
 
 TEST(AirmassModes, AlphaNFailedTps) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// Shouldn't get called
 	StrictMock<MockVp3d> veTable;
@@ -73,12 +73,12 @@ TEST(AirmassModes, AlphaNFailedTps) {
 	// Ensure that it's actually failed
 	ASSERT_FALSE(Sensor::get(SensorType::Tps1).Valid);
 
-	auto result = dut.getAirmass(1200);
+	auto result = dut.getAirmass(1200, false);
 	EXPECT_EQ(result.CylinderAirmass, 0);
 }
 
 TEST(AirmassModes, MafNormal) {
-	EngineTestHelper eth(FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
 	engineConfiguration->fuelAlgorithm = LM_REAL_MAF;
 	engineConfiguration->injector.flow = 200;
 
@@ -89,7 +89,7 @@ TEST(AirmassModes, MafNormal) {
 
 	MafAirmass dut(veTable);
 
-	auto airmass = dut.getAirmassImpl(200, 6000);
+	auto airmass = dut.getAirmassImpl(200, 6000, false);
 
 	// Check results
 	EXPECT_NEAR(0.277777f * 0.75f, airmass.CylinderAirmass, EPS4D);
@@ -111,25 +111,25 @@ TEST(AirmassModes, VeOverride) {
 	struct DummyAirmassModel : public AirmassVeModelBase {
 		DummyAirmassModel(const ValueProvider3D& veTable) : AirmassVeModelBase(veTable) {}
 
-		AirmassResult getAirmass(int rpm) override {
+		AirmassResult getAirmass(int rpm, bool postState) override {
 			// Default load value 10, will be overriden
-			getVe(rpm, 10.0f);
+			getVe(rpm, 10.0f, postState);
 
 			return {};
 		}
 	};
 
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	DummyAirmassModel dut(veTable);
 
 	// Use default mode - will call with 10
-	dut.getAirmass(0);
+	dut.getAirmass(0, true);
 	EXPECT_FLOAT_EQ(engine->engineState.veTableYAxis, 10.0f);
 
 	// Override to TPS
 	engineConfiguration->veOverrideMode = VE_TPS;
 	Sensor::setMockValue(SensorType::Tps1, 30.0f);
-	dut.getAirmass(0);
+	dut.getAirmass(0, true);
 	EXPECT_FLOAT_EQ(engine->engineState.veTableYAxis, 30.0f);
 }
 
@@ -138,9 +138,17 @@ TEST(AirmassModes, FallbackMap) {
 	StrictMock<MockVp3d> mapFallback;
 
 	// Failed map -> use 75
-	EXPECT_CALL(mapFallback, getValue(5678, 20)).WillOnce(Return(75));
+	{
+		InSequence is;
 
-	EngineTestHelper eth(TEST_ENGINE);
+		// Working map -> return 33 (should be unused)
+		EXPECT_CALL(mapFallback, getValue(1234, 20)).WillOnce(Return(33));
+
+		// Failed map -> use 75
+		EXPECT_CALL(mapFallback, getValue(5678, 20)).WillOnce(Return(75));
+	}
+
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	SpeedDensityAirmass dut(veTable, mapFallback);
 
@@ -149,27 +157,20 @@ TEST(AirmassModes, FallbackMap) {
 
 	// Working MAP sensor at 40 kPa
 	Sensor::setMockValue(SensorType::Map, 40);
-	EXPECT_FLOAT_EQ(dut.getMap(1234), 40);
-
-	// Failed MAP sensor, should use fixed value
-	Sensor::resetMockValue(SensorType::Map);
-	engineConfiguration->enableMapEstimationTableFallback = false;
-	engineConfiguration->failedMapFallback = 33;
-	EXPECT_FLOAT_EQ(dut.getMap(2345), 33);
+	EXPECT_FLOAT_EQ(dut.getMap(1234, false), 40);
 
 	// Failed MAP sensor, should use table
 	Sensor::resetMockValue(SensorType::Map);
-	engineConfiguration->enableMapEstimationTableFallback = true;
-	EXPECT_FLOAT_EQ(dut.getMap(5678), 75);
+	EXPECT_FLOAT_EQ(dut.getMap(5678, false), 75);
 }
 
 void setInjectionMode(int value);
 
 TEST(FuelMath, testDifferentInjectionModes) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
 
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{1.3440001f, 50.0f}));
 
 	setInjectionMode((int)IM_BATCH);
@@ -191,11 +192,11 @@ TEST(FuelMath, testDifferentInjectionModes) {
 }
 
 TEST(FuelMath, deadtime) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
 
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{1.3440001f, 50.0f}));
 
 	// First test with no deadtime
@@ -211,9 +212,9 @@ TEST(FuelMath, deadtime) {
 }
 
 TEST(FuelMath, CylinderFuelTrim) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	EXPECT_CALL(*eth.mockAirmass, getAirmass(_))
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
 		.WillRepeatedly(Return(AirmassResult{1, 50.0f}));
 
 	setTable(config->fuelTrims[0].table, -4);
@@ -241,7 +242,7 @@ struct MockIdle : public MockIdleController {
 };
 
 TEST(FuelMath, IdleVeTable) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	MockAirmass dut;
 
@@ -264,17 +265,26 @@ TEST(FuelMath, IdleVeTable) {
 
 	// Gets normal VE table
 	idler.isIdling = false;
-	EXPECT_FLOAT_EQ(dut.getVe(1000, 50), 0.5f);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.5f);
 
 	// Gets idle VE table
 	idler.isIdling = true;
-	EXPECT_FLOAT_EQ(dut.getVe(1000, 50), 0.4f);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.4f);
+
+	// Below half threshold, fully use idle VE table
+	Sensor::setMockValue(SensorType::Tps1, 0);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.4f);
+	Sensor::setMockValue(SensorType::Tps1, 2);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.4f);
+	Sensor::setMockValue(SensorType::Tps1, 5);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.4f);
 
 	// As TPS approaches idle threshold, phase-out the idle VE table
-	Sensor::setMockValue(SensorType::Tps1, 2.5f);
-	EXPECT_FLOAT_EQ(dut.getVe(1000, 50), 0.425f);
-	Sensor::setMockValue(SensorType::Tps1, 5.0f);
-	EXPECT_FLOAT_EQ(dut.getVe(1000, 50), 0.45f);
-	Sensor::setMockValue(SensorType::Tps1, 7.5f);
-	EXPECT_FLOAT_EQ(dut.getVe(1000, 50), 0.475f);
+
+	Sensor::setMockValue(SensorType::Tps1, 6);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.42f);
+	Sensor::setMockValue(SensorType::Tps1, 8);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.46f);
+	Sensor::setMockValue(SensorType::Tps1, 10);
+	EXPECT_FLOAT_EQ(dut.getVe(1000, 50, false), 0.5f);
 }

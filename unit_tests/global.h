@@ -14,12 +14,13 @@
 
 #include "common_headers.h"
 
+#define EFU_UNIT_TESTS fail("typo please EFU_UNIT_TEST");
+
 typedef uint32_t iomode_t;
 typedef uint32_t ioportid_t;
 typedef uint32_t ioportmask_t;
 
 #define DL_OUTPUT_BUFFER 200
-#define FIRMWARE_ID "UNIT_TEST"
 
 // just a stub implementation for unit tests
 #define getCurrentRemainingStack() (999999)

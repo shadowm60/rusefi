@@ -512,7 +512,9 @@ pins:
     function: CAN-L (ME7.8.8-compatible)
 
 info:
+  board_url: https://github.com/rusefi/rusefi/wiki/Hellen81
   title: Hellen 81
+  directory: hellen/hellen81
   image:
     file: main.jpg
   pins:

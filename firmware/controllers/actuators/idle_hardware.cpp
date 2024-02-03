@@ -34,12 +34,16 @@ void applyIACposition(percent_t position) {
 	 */
 	float duty = PERCENT_TO_DUTY(position);
 
-	if (engineConfiguration->useETBforIdleControl) {
 #if EFI_ELECTRONIC_THROTTLE_BODY
-		setEtbIdlePosition(position);
+	setEtbIdlePosition(position);
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
+
+#if EFI_UNIT_TEST
+	if (false) {
+#endif // EFI_UNIT_TEST
+
 #if ! EFI_UNIT_TEST
-	} else if (engineConfiguration->useStepperIdle) {
+	if (engineConfiguration->useStepperIdle) {
 		iacMotor.setTargetPosition(duty * engineConfiguration->idleStepperTotalSteps);
 #endif /* EFI_UNIT_TEST */
 	} else {
@@ -55,12 +59,11 @@ void applyIACposition(percent_t position) {
 		if (!engineConfiguration->isDoubleSolenoidIdle) {
 			idleSolenoidOpen.setSimplePwmDutyCycle(duty);
 		} else {
-			/* use 0.01..0.99 range */
-			float idle_range = 0.98; /* move to config? */
-			float idle_open, idle_close;
+			// use 0.01..0.99 range
+			float idle_range = 0.98; // move to config?
 
-			idle_open = 0.01 + idle_range * duty;
-			idle_close = 0.01 + idle_range * (1.0 - duty);
+			float idle_open = 0.01 + idle_range * duty;
+			float idle_close = 0.01 + idle_range * (1.0 - duty);
 
 			idleSolenoidOpen.setSimplePwmDutyCycle(idle_open);
 			idleSolenoidClose.setSimplePwmDutyCycle(idle_close);
@@ -76,7 +79,6 @@ bool isIdleHardwareRestartNeeded() {
 			isConfigurationChanged(idle.stepperStepPin) ||
 			isConfigurationChanged(idle.solenoidFrequency) ||
 			isConfigurationChanged(useStepperIdle) ||
-			isConfigurationChanged(useETBforIdleControl) ||
 			isConfigurationChanged(idle.solenoidPin) ||
 			isConfigurationChanged(secondSolenoidPin) ||
 			isConfigurationChanged(useRawOutputToDriveIdleStepper) ||
@@ -112,10 +114,10 @@ void initIdleHardware() {
 
 			hw = &iacHbridgeHw;
 		} else if (engineConfiguration->useHbridgesToDriveIdleStepper) {
-			auto motorA = initDcMotor(engineConfiguration->stepperDcIo[0],
-				ETB_COUNT + 0, /*useTwoWires*/ true);
-			auto motorB = initDcMotor(engineConfiguration->stepperDcIo[1],
-				ETB_COUNT + 1, /*useTwoWires*/ true);
+			auto motorA = initDcMotor("DC dis-1", engineConfiguration->stepperDcIo[0],
+				ETB_COUNT + 0, engineConfiguration->stepper_dc_use_two_wires);
+			auto motorB = initDcMotor("DC dis-2", engineConfiguration->stepperDcIo[1],
+				ETB_COUNT + 1, engineConfiguration->stepper_dc_use_two_wires);
 
 			iacHbridgeHw.initialize(
 				motorA,
@@ -138,9 +140,7 @@ void initIdleHardware() {
 		}
 
 		iacMotor.initialize(hw, engineConfiguration->idleStepperTotalSteps);
-	} else if (engineConfiguration->useETBforIdleControl || !isBrainPinValid(engineConfiguration->idle.solenoidPin)) {
-		// here we do nothing for ETB idle and for no idle
-	} else {
+	} else if (isBrainPinValid(engineConfiguration->idle.solenoidPin)) {
 		// we are here for single or double solenoid idle
 
 		/**
@@ -154,7 +154,7 @@ void initIdleHardware() {
 
 		if (engineConfiguration->isDoubleSolenoidIdle) {
 			if (!isBrainPinValid(engineConfiguration->secondSolenoidPin)) {
-				firmwareError(OBD_PCM_Processor_Fault, "Second idle pin should be configured for double solenoid mode.");
+				criticalError("Second idle pin should be configured for double solenoid mode.");
 				return;
 			}
 

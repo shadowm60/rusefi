@@ -26,6 +26,9 @@
 
 
 #if EFI_MAP_AVERAGING
+#if !EFI_SHAFT_POSITION_INPUT
+	fail("EFI_SHAFT_POSITION_INPUT required to have EFI_EMULATE_POSITION_SENSORS")
+#endif
 
 #include "map_averaging.h"
 #include "trigger_central.h"
@@ -59,7 +62,7 @@ static void endAveraging(MapAverager* arg);
 static size_t currentMapAverager = 0;
 
 static void startAveraging(scheduling_s *endAveragingScheduling) {
-	efiAssertVoid(CUSTOM_ERR_6649, getCurrentRemainingStack() > 128, "lowstck#9");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6649, hasLotsOfRemainingStack(), "lowstck#9");
 
 	// TODO: set currentMapAverager based on cylinder bank
 	auto& averager = getMapAvg(currentMapAverager);
@@ -114,7 +117,9 @@ void MapAverager::stop() {
 
 		setValidValue(minPressure, getTimeNowNt());
 	} else {
-		warning(CUSTOM_UNEXPECTED_MAP_VALUE, "No MAP values");
+#if EFI_PROD_CODE
+		warning(ObdCode::CUSTOM_UNEXPECTED_MAP_VALUE, "No MAP values to average");
+#endif
 	}
 }
 
@@ -125,16 +130,14 @@ void MapAverager::stop() {
  * @note This method is invoked OFTEN, this method is a potential bottleneck - the implementation should be
  * as fast as possible
  */
-void mapAveragingAdcCallback(adcsample_t adcValue) {
-	efiAssertVoid(CUSTOM_ERR_6650, getCurrentRemainingStack() > 128, "lowstck#9a");
-
-	float instantVoltage = adcToVoltsDivided(adcValue);
+void mapAveragingAdcCallback(float instantVoltage) {
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6650, hasLotsOfRemainingStack(), "lowstck#9a");
 
 	SensorResult mapResult = getMapAvg(currentMapAverager).submit(instantVoltage);
 
 	if (!mapResult) {
 		// hopefully this warning is not too much CPU consumption for fast ADC callback
-		warning(CUSTOM_INSTANT_MAP_DECODING, "Invalid MAP at %f", instantVoltage);
+		warning(ObdCode::CUSTOM_INSTANT_MAP_DECODING, "Invalid MAP at %f", instantVoltage);
 	}
 
 	float instantMap = mapResult.value_or(0);
@@ -172,24 +175,24 @@ void refreshMapAveragingPreCalc() {
 	if (isValidRpm(rpm)) {
 		MAP_sensor_config_s * c = &engineConfiguration->map;
 		angle_t start = interpolate2d(rpm, c->samplingAngleBins, c->samplingAngle);
-		efiAssertVoid(CUSTOM_ERR_MAP_START_ASSERT, !cisnan(start), "start");
+		efiAssertVoid(ObdCode::CUSTOM_ERR_MAP_START_ASSERT, !cisnan(start), "start");
 
 		angle_t offsetAngle = engine->triggerCentral.triggerFormDetails.eventAngles[engineConfiguration->mapAveragingSchedulingAtIndex];
-		efiAssertVoid(CUSTOM_ERR_MAP_AVG_OFFSET, !cisnan(offsetAngle), "offsetAngle");
+		efiAssertVoid(ObdCode::CUSTOM_ERR_MAP_AVG_OFFSET, !cisnan(offsetAngle), "offsetAngle");
 
-		for (size_t i = 0; i < engineConfiguration->specs.cylindersCount; i++) {
-			angle_t cylinderOffset = getEngineCycle(getEngineRotationState()->getOperationMode()) * i / engineConfiguration->specs.cylindersCount;
-			efiAssertVoid(CUSTOM_ERR_MAP_CYL_OFFSET, !cisnan(cylinderOffset), "cylinderOffset");
+		for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
+			angle_t cylinderOffset = getEngineCycle(getEngineRotationState()->getOperationMode()) * i / engineConfiguration->cylindersCount;
+			efiAssertVoid(ObdCode::CUSTOM_ERR_MAP_CYL_OFFSET, !cisnan(cylinderOffset), "cylinderOffset");
 			// part of this formula related to specific cylinder offset is never changing - we can
 			// move the loop into start-up calculation and not have this loop as part of periodic calculation
 			// todo: change the logic as described above in order to reduce periodic CPU usage?
 			float cylinderStart = start + cylinderOffset - offsetAngle + tdcPosition();
-			fixAngle(cylinderStart, "cylinderStart", CUSTOM_ERR_6562);
+			wrapAngle(cylinderStart, "cylinderStart", ObdCode::CUSTOM_ERR_6562);
 			engine->engineState.mapAveragingStart[i] = cylinderStart;
 		}
 		engine->engineState.mapAveragingDuration = interpolate2d(rpm, c->samplingWindowBins, c->samplingWindow);
 	} else {
-		for (size_t i = 0; i < engineConfiguration->specs.cylindersCount; i++) {
+		for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
 			engine->engineState.mapAveragingStart[i] = NAN;
 		}
 		engine->engineState.mapAveragingDuration = NAN;
@@ -202,7 +205,7 @@ void refreshMapAveragingPreCalc() {
  */
 void mapAveragingTriggerCallback(
 		uint32_t index, efitick_t edgeTimestamp) {
-#if EFI_ENGINE_CONTROL
+#if EFI_ENGINE_CONTROL && EFI_PROD_CODE
 	// this callback is invoked on interrupt thread
 	if (index != (uint32_t)engineConfiguration->mapAveragingSchedulingAtIndex)
 		return;
@@ -219,16 +222,16 @@ void mapAveragingTriggerCallback(
 	}
 
 	// todo: this could be pre-calculated
-	int samplingCount = engineConfiguration->measureMapOnlyInOneCylinder ? 1 : engineConfiguration->specs.cylindersCount;
+	int samplingCount = engineConfiguration->measureMapOnlyInOneCylinder ? 1 : engineConfiguration->cylindersCount;
 
 	for (int i = 0; i < samplingCount; i++) {
 		angle_t samplingStart = engine->engineState.mapAveragingStart[i];
 
 		angle_t samplingDuration = engine->engineState.mapAveragingDuration;
 		// todo: this assertion could be moved out of trigger handler
-		assertAngleRange(samplingDuration, "samplingDuration", CUSTOM_ERR_6563);
+		assertAngleRange(samplingDuration, "samplingDuration", ObdCode::CUSTOM_ERR_6563);
 		if (samplingDuration <= 0) {
-			warning(CUSTOM_MAP_ANGLE_PARAM, "map sampling angle should be positive");
+			warning(ObdCode::CUSTOM_MAP_ANGLE_PARAM, "map sampling angle should be positive");
 			return;
 		}
 
@@ -236,12 +239,12 @@ void mapAveragingTriggerCallback(
 
 		if (cisnan(samplingEnd)) {
 			// todo: when would this happen?
-			warning(CUSTOM_ERR_6549, "no map angles");
+			warning(ObdCode::CUSTOM_ERR_6549, "no map angles");
 			return;
 		}
 
 		// todo: pre-calculate samplingEnd for each cylinder
-		fixAngle(samplingEnd, "samplingEnd", CUSTOM_ERR_6563);
+		wrapAngle(samplingEnd, "samplingEnd", ObdCode::CUSTOM_ERR_6563);
 		// only if value is already prepared
 		int structIndex = getRevolutionCounter() % 2;
 
@@ -254,7 +257,7 @@ void mapAveragingTriggerCallback(
 		scheduleByAngle(startTimer, edgeTimestamp, samplingStart,
 				{ startAveraging, endTimer });
 	}
-#endif
+#endif // EFI_ENGINE_CONTROL && EFI_PROD_CODE
 }
 
 void initMapAveraging() {

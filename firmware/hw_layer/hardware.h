@@ -7,6 +7,7 @@
 
 #pragma once
 
+// 'startHardware' is invoked both on boot and configuration change
 void startHardware();
 void stopHardware();
 
@@ -33,7 +34,7 @@ void stopHardware();
 
 int getSpiPrescaler(spi_speed_e speed, spi_device_e device);
 
-EXTERNC SPIDriver * getSpiDevice(spi_device_e spiDevice);
+SPIDriver * getSpiDevice(spi_device_e spiDevice);
 void turnOnSpi(spi_device_e device);
 void lockSpi(spi_device_e device);
 void unlockSpi(spi_device_e device);
@@ -43,8 +44,6 @@ brain_pin_e getSckPin(spi_device_e device);
 
 #endif /* HAL_USE_SPI */
 
-#ifdef __cplusplus
-
 void applyNewHardwareSettings();
 
 // Initialize hardware that doesn't require configuration to be loaded
@@ -53,14 +52,13 @@ void initHardwareNoConfig();
 // Initialize hardware with configuration loaded
 void initHardware();
 
+void checkLastResetCause();
+
+// todo: can we do simpler here? move conditional compilation into debounce.h?
 #if EFI_PROD_CODE
 #include "debounce.h"
-
+#else
+class ButtonDebounce;
 #endif /* EFI_PROD_CODE */
 
-void showBor(void);
 void setBor(int borValue);
-
-class ButtonDebounce;
-
-#endif /* __cplusplus */

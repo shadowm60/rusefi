@@ -3,6 +3,8 @@ package com.rusefi;
 import com.devexperts.logging.Logging;
 import com.rusefi.enum_reader.Value;
 
+import com.rusefi.newparse.DefinitionsState;
+import com.rusefi.newparse.DefinitionsStateImpl;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedReader;
@@ -19,11 +21,16 @@ import java.util.TreeSet;
 
 import static com.devexperts.logging.Logging.getLogging;
 
+/**
+ * this class reads enum definition from a C/C++ header
+ */
 public class EnumsReader {
     private static final Logging log = getLogging(EnumsReader.class);
     private static final String ENUMCLASS_PREFIX = "enumclass";
 
     protected final Map<String, EnumState> enums = new TreeMap<>();
+
+    public DefinitionsState parseState = new DefinitionsStateImpl(this);
 
     /**
      * core implementation sorts by name, we need special considerations to sort by value
@@ -47,11 +54,19 @@ public class EnumsReader {
     }
 
     public EnumsReader read(Reader in) throws IOException {
-        enums.putAll(readStatic(in));
+		return read(in, new VariableRegistry(), false);
+	}
+
+    public EnumsReader read(Reader in, VariableRegistry registry, boolean enumWithValues) throws IOException {
+        enums.putAll(readStatic(in, registry, enumWithValues));
         return this;
     }
 
     public static Map<String, EnumState> readStatic(Reader in) throws IOException {
+	    return readStatic(in, new VariableRegistry(), false);
+    }
+    
+    public static Map<String, EnumState> readStatic(Reader in, VariableRegistry registry, boolean enumWithValues) throws IOException {
         boolean isInsideEnum = false;
         BufferedReader reader = new BufferedReader(in);
         String line;
@@ -59,6 +74,7 @@ public class EnumsReader {
         boolean isEnumClass = false;
         Map<String, Value> currentValues = new TreeMap<>();
         Map<String, EnumState> enums = new TreeMap<>();
+        int lastNumericValue = -1;
 
         boolean withAutoValue = false;
 
@@ -74,6 +90,7 @@ public class EnumsReader {
                 isInsideEnum = true;
                 enumName = null;
                 isEnumClass = false;
+                lastNumericValue = -1;
             } else if (line.startsWith(ENUMCLASS_PREFIX)) {
                 if (log.debugEnabled())
                     log.debug("  EnumsReader: Entering fancy enum class");
@@ -81,6 +98,7 @@ public class EnumsReader {
                 withAutoValue = false;
                 isInsideEnum = true;
                 isEnumClass = true;
+                lastNumericValue = -1;
                 int colonIndex = line.indexOf(":");
                 if (colonIndex == -1)
                     throw new IllegalStateException("color and Type not located in " + line);
@@ -92,7 +110,7 @@ public class EnumsReader {
                 if (log.debugEnabled())
                     log.debug("  EnumsReader: Ending enum " + enumName + " found " + currentValues.size() + " values");
                 if (withAutoValue)
-                    validateValues(currentValues);
+                    validateValues(currentValues, registry, enumWithValues);
 
                 enums.put(enumName, new EnumState(currentValues, enumName, isEnumClass));
             } else {
@@ -105,12 +123,16 @@ public class EnumsReader {
                             value = line.substring(index + 1);
                             line = line.substring(0, index);
                         } else {
-                            value = Integer.toString(currentValues.size());
+                            value = Integer.toString(enumWithValues ? lastNumericValue + 1 : currentValues.size());
                             withAutoValue = true;
                         }
                         if (log.debugEnabled())
                             log.debug("    EnumsReader: Line " + line);
-                        currentValues.put(line, new Value(line, value));
+                        Value newValue = new Value(line, value);
+                        if (enumWithValues) {
+                            lastNumericValue = newValue.getIntValueMaybeResolve(registry);
+                        }
+                        currentValues.put(line, newValue);
                     } else {
                         if (log.debugEnabled())
                             log.debug("    EnumsReader: Skipping Line " + line);
@@ -121,10 +143,10 @@ public class EnumsReader {
         return enums;
     }
 
-    private static void validateValues(Map<String, Value> currentValues) {
+    private static void validateValues(Map<String, Value> currentValues, VariableRegistry registry, boolean enumWithValues) {
         for (Map.Entry<String, Value> entry : currentValues.entrySet()) {
-            int v = entry.getValue().getIntValue();
-            if (v < 0 || v >= currentValues.size())
+            int v = enumWithValues ? entry.getValue().getIntValueMaybeResolve(registry) : entry.getValue().getIntValue();
+            if (v < 0 || (v >= currentValues.size() && !enumWithValues))
                 throw new IllegalStateException("Unexpected " + entry);
         }
     }
@@ -146,6 +168,17 @@ public class EnumsReader {
             values = new TreeMap<>(currentValues);
             this.enumName = enumName;
             this.isEnumClass = isEnumClass;
+        }
+
+        public String findByValue(int i) {
+            String key = "";
+            for (Map.Entry<String, Value> entry : entrySet()) {
+                if (entry.getValue().getIntValue() == i) {
+                    key = entry.getKey();
+                    break;
+                }
+            }
+            return key;
         }
 
         public Collection<Value> values() {

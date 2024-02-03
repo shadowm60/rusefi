@@ -10,11 +10,35 @@ allprojects {
         dependencies {
             implementation global_libs.annotations
             testImplementation global_libs.junit
+            testImplementation global_libs.junit5
+            testImplementation global_libs.junit5engine
+        }
+
+      test {
+        // Enable JUnit 5
+        useJUnitPlatform()
+      }
+    }
+
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        }
+    }
+
+    tasks.withType(JavaExec).configureEach {
+        if (name.endsWith("main()")) {
+            // https://github.com/gradle/gradle/issues/21364
+            notCompatibleWithConfigurationCache("JavaExec created by IntelliJ")
         }
     }
 }
 
-// gradlew allDeps 
+tasks.named('wrapper') {
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+// gradlew allDeps
 subprojects {
     task allDeps(type: DependencyReportTask) {}
 }

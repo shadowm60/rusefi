@@ -311,7 +311,7 @@ void hip9011_onFireEvent(uint8_t cylinderNumber, efitick_t nowNt) {
 	}
 }
 
-void hipAdcCallback(adcsample_t adcValue) {
+void hipAdcCallback(float volts) {
 	/* we read in digital mode */
 	if (instance.adv_mode)
 		return;
@@ -320,7 +320,9 @@ void hipAdcCallback(adcsample_t adcValue) {
 	} else if (instance.state == WAITING_FOR_RESULT_ADC) {
 		/* offload calculations to driver thread */
 		if (instance.channelIdx < HIP_INPUT_CHANNELS) {
-			instance.rawValue[instance.channelIdx] = adcValue;
+			/* normalize to 0..HIP9011_DIGITAL_OUTPUT_MAX */
+			instance.rawValue[instance.channelIdx] =
+				volts * HIP9011_DIGITAL_OUTPUT_MAX / HIP9011_ANALOG_OUTPUT_MAX;
 		}
 		instance.state = NOT_READY;
 		hip_wake_driver();
@@ -395,7 +397,7 @@ static int hip_init() {
 
 		ret = hip_testAdvMode();
 		if (ret) {
-			warning(CUSTOM_OBD_KNOCK_PROCESSOR, "TPIC/HIP does not support advanced mode");
+			warning(ObdCode::CUSTOM_OBD_KNOCK_PROCESSOR, "TPIC/HIP does not support advanced mode");
 			instance.adv_mode = false;
 		}
 	}
@@ -438,7 +440,7 @@ static msg_t hipThread(void *arg) {
 		/* retry until success */
 		ret = hip_init();
 		if (ret) {
-			warning(CUSTOM_OBD_KNOCK_PROCESSOR, "TPIC/HIP does not respond: %d", ret);
+			warning(ObdCode::CUSTOM_OBD_KNOCK_PROCESSOR, "TPIC/HIP does not respond: %d", ret);
 			chThdSleepMilliseconds(10 * 1000);
 		}
 	} while (ret);
@@ -483,19 +485,16 @@ static msg_t hipThread(void *arg) {
 
 			/* calculations */
 			if (instance.adv_mode) {
-				/* store for debug */
 				instance.rawValue[idx] = rawValue;
-				/* convert 10 bit integer value to 0.0 .. 1.0 float */
-				knockNormalized = ((float)rawValue) / HIP9011_DIGITAL_OUTPUT_MAX;
-				/* convert to magic volts */
-				knockVolts = knockNormalized * HIP9011_DESIRED_OUTPUT_VALUE;
 			} else {
+				/* get value stored by callback */
 				rawValue = instance.rawValue[idx];
-				/* first calculate ouput volts */
-				knockVolts = adcToVolts(rawValue) * engineConfiguration->analogInputDividerCoefficient;
-				/* and then normalize */
-				knockNormalized = knockVolts / HIP9011_DESIRED_OUTPUT_VALUE;
 			}
+			/* convert 10 bit integer value to 0.0 .. 1.0 float */
+			knockNormalized = ((float)rawValue) / HIP9011_DIGITAL_OUTPUT_MAX;
+			/* convert to magic volts
+			 * TODO: remove conversion to volts */
+			knockVolts = knockNormalized * HIP9011_ANALOG_OUTPUT_MAX;
 
 			/* Check for correct cylinder/input */
 			if (correctCylinder) {
@@ -531,8 +530,8 @@ void stopHip9001_pins() {
 }
 
 void startHip9001_pins() {
-	intHold.initPin("hip int/hold", engineConfiguration->hip9011IntHoldPin, &engineConfiguration->hip9011IntHoldPinMode);
-	Cs.initPin("hip CS", engineConfiguration->hip9011CsPin, &engineConfiguration->hip9011CsPinMode);
+	intHold.initPin("hip int/hold", engineConfiguration->hip9011IntHoldPin, engineConfiguration->hip9011IntHoldPinMode);
+	Cs.initPin("hip CS", engineConfiguration->hip9011CsPin, engineConfiguration->hip9011CsPinMode);
 }
 
 void initHip9011() {
@@ -640,8 +639,8 @@ static void showHipInfo() {
 		engineConfiguration->knockDetectionWindowEnd);
 
 	if (!instance.adv_mode) {
-		efiPrintf(" Adc input %s (%.2f V)",
-			getAdc_channel_e(engineConfiguration->hipOutputChannel),
+		efiPrintf(" Adc input %d (%.2f V)",
+			(int)engineConfiguration->hipOutputChannel,
 			getVoltage("hipinfo", engineConfiguration->hipOutputChannel));
 	}
 

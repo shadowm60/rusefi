@@ -8,34 +8,19 @@
 #pragma once
 
 #include "static_vector.h"
-#include "timer.h"
+#include <rusefi/timer.h>
 
 #define MOCK_ADC_SIZE 26
 
 struct Accelerometer {
-	float x = 0; // G value
-	float y = 0;
-	float z = 0;
-	float yaw = 0;
-	float roll = 0;
+	float lat = 0; // G value
+	float lon = 0;
+	float vert = 0;
+	float yawRate = 0;
 };
 
 struct SensorsState {
 	Accelerometer accelerometer;
-};
-
-class FuelConsumptionState {
-public:
-	void consumeFuel(float grams, efitick_t nowNt);
-
-	float getConsumedGrams() const;
-	float getConsumptionGramPerSecond() const;
-
-private:
-	float m_consumedGrams = 0;
-	float m_rate = 0;
-
-	Timer m_timer;
 };
 
 class TransmissionState {
@@ -45,11 +30,11 @@ public:
 
 struct warning_t {
 	Timer LastTriggered;
-	obd_code_e Code = OBD_None;
+	ObdCode Code = ObdCode::None;
 
 	warning_t() { }
 
-	explicit warning_t(obd_code_e code)
+	explicit warning_t(ObdCode code)
 		: Code(code)
 	{
 	}
@@ -60,22 +45,22 @@ struct warning_t {
 	}
 
 	// Compare against a plain OBD code
-	bool operator ==(const obd_code_e other) const {
+	bool operator ==(const ObdCode other) const {
 		return other == Code;
 	}
 };
 
-typedef static_vector<warning_t, 8> warningBuffer_t;
+typedef static_vector<warning_t, 24> warningBuffer_t;
 
 class WarningCodeState {
 public:
 	WarningCodeState();
-	void addWarningCode(obd_code_e code);
+	void addWarningCode(ObdCode code);
 	bool isWarningNow() const;
-	bool isWarningNow(obd_code_e code) const;
+	bool isWarningNow(ObdCode code) const;
 	void clear();
 	int warningCounter;
-	int lastErrorCode;
+	ObdCode lastErrorCode = ObdCode::None;
 
 	Timer timeSinceLastWarning;
 

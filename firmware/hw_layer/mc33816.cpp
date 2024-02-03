@@ -1,6 +1,8 @@
 /*
  * @file mc33816.cpp
  *
+ * TL,DR: GDI
+ *
  * The NXP MC33816 is a programmable gate driver IC for precision solenoid control applications.
  *
  *
@@ -174,8 +176,8 @@ void Pt2001::init() {
 	// High Voltage via DRIVEN
 	driven.initPin("mc33 DRIVEN", engineConfiguration->mc33816_driven);
 
-	spiCfg.ssport = getHwPort("hip", engineConfiguration->mc33816_cs);
-	spiCfg.sspad = getHwPin("hip", engineConfiguration->mc33816_cs);
+	spiCfg.ssport = getHwPort("mc33816", engineConfiguration->mc33816_cs);
+	spiCfg.sspad = getHwPin("mc33816", engineConfiguration->mc33816_cs);
 
 	// hard-coded for now, just resolve the conflict with SD card!
 	engineConfiguration->mc33816spiDevice = SPI_DEVICE_3;
@@ -194,14 +196,20 @@ void Pt2001::init() {
 	initIfNeeded();
 }
 
-static bool isInitializaed = false;
+static bool isInitialized = false;
 
 void Pt2001::initIfNeeded() {
 	if (Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE) < LOW_VBATT) {
-		isInitializaed = false;
+		isInitialized = false;
+	  efiPrintf("unhappy mc33 due to battery voltage");
 	} else {
-		if (!isInitializaed) {
-			isInitializaed = restart();
+		if (!isInitialized) {
+			isInitialized = restart();
+			if (isInitialized) {
+			  efiPrintf("happy mc33/PT2001!");
+			} else {
+			  efiPrintf("unhappy mc33 fault=%d", (int)fault);
+			}
 		}
 	}
 }

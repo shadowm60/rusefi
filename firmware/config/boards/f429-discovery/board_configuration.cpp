@@ -9,12 +9,16 @@ void boardInit(void)
 	/* NOP */
 }
 
-/**
- * @brief   Board-specific configuration defaults.
- * @todo    Add your board-specific code, if any.
- */
-void setBoardDefaultConfiguration() {
-    engineConfiguration->communicationLedPin = Gpio::Unassigned;
-    engineConfiguration->runningLedPin = Gpio::G13; /* LD3 - green */
-    engineConfiguration->warningLedPin = Gpio::Unassigned;
+Gpio getWarningLedPin() {
+	// this board has no warning led
+	return Gpio::Unassigned;
+}
+
+Gpio getCommsLedPin() {
+	return Gpio::Unassigned;
+}
+
+Gpio getRunningLedPin() {
+	// LD3 - green
+	return Gpio::G13;
 }

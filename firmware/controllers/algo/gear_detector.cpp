@@ -4,7 +4,16 @@ static constexpr float geometricMean(float x, float y) {
 	return sqrtf(x * y);
 }
 
-void GearDetector::onConfigurationChange(engine_configuration_s const * /*previousConfig*/) {
+GearDetector::GearDetector()
+	: Sensor(SensorType::DetectedGear)
+{
+}
+
+GearDetector::~GearDetector() {
+	unregister();
+}
+
+void GearDetector::initGearDetector() {
 	// Compute gear thresholds between gears
 
 	uint8_t gearCount = engineConfiguration->totalGearsCount;
@@ -14,15 +23,15 @@ void GearDetector::onConfigurationChange(engine_configuration_s const * /*previo
 		return;
 	}
 
-	if (gearCount > GEARS_COUNT) {
-		firmwareError(OBD_PCM_Processor_Fault, "too many gears");
+	if (gearCount > TCU_GEAR_COUNT) {
+		criticalError("too many gears");
 		return;
 	}
 
 	// validate gears
 	for (size_t i = 0; i < gearCount; i++) {
 		if (engineConfiguration->gearRatio[i] <= 0) {
-			firmwareError(OBD_PCM_Processor_Fault, "Invalid gear ratio for #%d", i + 1);
+			criticalError("Expecting positive gear ratio for #%d", i + 1);
 			return;
 		}
 	}
@@ -33,14 +42,25 @@ void GearDetector::onConfigurationChange(engine_configuration_s const * /*previo
 		float gearIplusOne = engineConfiguration->gearRatio[i + 1];
 
 		if (gearI <= gearIplusOne) {
-			firmwareError(OBD_PCM_Processor_Fault, "Invalid gear ordering near gear #%d", i + 1);
+			criticalError("Invalid gear ordering near gear #%d", i + 1);
 		}
 
 		m_gearThresholds[i] = geometricMean(gearI, gearIplusOne);
 	}
+
+	Register();
+}
+
+void GearDetector::onConfigurationChange(engine_configuration_s const * /*previousConfig*/) {
+    initGearDetector();
 }
 
 void GearDetector::onSlowCallback() {
+    if (!isInitialized) {
+        initGearDetector();
+        isInitialized = true;
+    }
+
 	float ratio = computeGearboxRatio();
 	m_gearboxRatio = ratio;
 
@@ -80,7 +100,7 @@ size_t GearDetector::determineGearFromRatio(float ratio) const {
 float GearDetector::getDriveshaftRpm() const {
 	auto vssKph = Sensor::getOrZero(SensorType::VehicleSpeed);
 
-	if (vssKph < 5) {
+	if (vssKph < 3) {
 		// Vehicle too slow to determine gearbox ratio, avoid div/0
 		return 0;
 	}
@@ -125,6 +145,12 @@ float GearDetector::getGearboxRatio() const {
 	return m_gearboxRatio;
 }
 
-size_t GearDetector::getCurrentGear() const {
+SensorResult GearDetector::get() const {
 	return m_currentGear;
+}
+
+void GearDetector::showInfo(const char* sensorName) const {
+	efiPrintf("Sensor \"%s\" is gear detector.", sensorName);
+	efiPrintf("    Gearbox ratio: %.3f", m_gearboxRatio);
+	efiPrintf("    Detected gear: %d", m_currentGear);
 }

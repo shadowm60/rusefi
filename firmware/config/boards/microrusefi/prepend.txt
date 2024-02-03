@@ -1,18 +1,11 @@
 #define MAIN_HELP_URL "https://rusefi.com/s/microrusefi"
 
-#define ts_show_hip9011 false
-#define ts_show_cj125 false
 
-
-
-
-#define ts_show_lcd false
-#define ts_show_joystick false
 
 ! https://rusefi.com/forum/viewtopic.php?p=43270#p43270
 #define ts_show_egt true
 
-#define ts_show_gps false
+
 #define ts_show_etb_pins false
 #define ts_show_analog_divider false
 #define ts_show_spi true
@@ -27,7 +20,13 @@
 #define ts_show_sd_pins true
 #define ts_show_vbatt false
 #define ts_show_clt_iat_pullup false
+#define ts_show_tps_sent true
+#define ts_show_inj_diag true
+#define ts_show_output_diag true
+#define ts_show_tle8888 true
 
-#define show_test_presets false
-#define show_Frankenso_presets false
+#define ts_show_spi2_enable false
+#define ts_show_spi2_pins false
+#define ts_show_spi3_pins false
+
 #define show_microRusEFI_presets true

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "efi_scaled_channel.h"
+#include "rusefi_types.h"
 #include <cstdint>
 #include <cstddef>
 
@@ -10,7 +11,7 @@ public:
 	// Scaled channels, memcpys data directly and describes format in header
 	template <typename TValue, int TMult, int TDiv>
 	constexpr LogField(const scaled_channel<TValue, TMult, TDiv>& toRead,
-			   const char* name, const char* units, int8_t digits)
+			   const char* name, const char* units, int8_t digits, const char* category = "none")
 		: m_multiplier(float(TDiv) / TMult)
 		, m_addr(toRead.getFirstByteAddr())
 		, m_type(resolveType<TValue>())
@@ -18,13 +19,14 @@ public:
 		, m_size(sizeForType(resolveType<TValue>()))
 		, m_name(name)
 		, m_units(units)
+		, m_category(category)
 	{
 	}
 
 	// Non-scaled channel, works for plain arithmetic types (int, float, uint8_t, etc)
 	template <typename TValue, typename = typename std::enable_if<std::is_arithmetic_v<TValue>>::type>
 	constexpr LogField(TValue& toRead,
-			   const char* name, const char* units, int8_t digits)
+			   const char* name, const char* units, int8_t digits, const char* category = "none")
 		: m_multiplier(1)
 		, m_addr(&toRead)
 		, m_type(resolveType<TValue>())
@@ -32,6 +34,7 @@ public:
 		, m_size(sizeForType(resolveType<TValue>()))
 		, m_name(name)
 		, m_units(units)
+		, m_category(category)
 	{
 	}
 
@@ -83,6 +86,7 @@ private:
 
 	const char* const m_name;
 	const char* const m_units;
+	const char* const m_category;
 };
 
 template<>
@@ -109,6 +113,15 @@ template<>
 constexpr LogField::Type LogField::resolveType<uint32_t>() {
 	return Type::U32;
 }
+
+#if EFI_PROD_CODE
+// we allow both 'int' and 'int32_t' just to allow extra flexibility in headers
+// https://stackoverflow.com/questions/55782246/why-is-uint32-t-typedeffed-to-unsigned-long-on-arm-none-eabi-gcc-and-how-to
+template<>
+constexpr LogField::Type LogField::resolveType<int>() {
+	return Type::S32;
+}
+#endif
 
 template<>
 constexpr LogField::Type LogField::resolveType<int32_t>() {

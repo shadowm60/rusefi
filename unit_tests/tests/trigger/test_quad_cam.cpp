@@ -5,22 +5,22 @@
 
 #include "pch.h"
 
-TEST(trigger, testQuadCam) {
+TEST(trigger, testQuadCamInput) {
 	// setting some weird engine
-	EngineTestHelper eth(FORD_ESCORT_GT);
+	EngineTestHelper eth(engine_type_e::FORD_ESCORT_GT);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engineConfiguration->alwaysInstantRpm = true;
 
 	setCrankOperationMode();
 
 	// changing to 'ONE TOOTH' trigger on CRANK with CAM/VVT
-	engineConfiguration->vvtMode[0] = VVT_FIRST_HALF;
-	engineConfiguration->vvtMode[1] = VVT_FIRST_HALF;
+	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
+	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
 	engineConfiguration->camInputs[0] = Gpio::A10; // we just need to indicate that we have CAM
 
 	// this crank trigger would be easier to test, crank shape is less important for this test
-	eth.setTriggerType(TT_ONE);
+	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 
 	ASSERT_EQ(0, Sensor::getOrZero(SensorType::Rpm));
 
@@ -68,7 +68,7 @@ TEST(trigger, testQuadCam) {
 	float basePos = -80.2f;
 
 	// All four cams should now have the same position
-	EXPECT_NEAR_M3(360 + basePos, engine->triggerCentral.getVVTPosition(firstBank, firstCam));
+	EXPECT_NEAR_M3(basePos, engine->triggerCentral.getVVTPosition(firstBank, firstCam));
 	EXPECT_NEAR_M3(basePos, engine->triggerCentral.getVVTPosition(firstBank, secondCam));
 	EXPECT_NEAR_M3(basePos, engine->triggerCentral.getVVTPosition(secondBank, firstCam));
 	EXPECT_NEAR_M3(basePos, engine->triggerCentral.getVVTPosition(secondBank, secondCam));

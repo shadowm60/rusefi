@@ -61,7 +61,7 @@ void UartDmaTsChannel::start(uint32_t baud) {
 		.timeout_cb		= tsRxIRQIdleHandler,
 		.speed			= baud,
 		.cr1			= 0,
-		.cr2			= 0/*USART_CR2_STOP1_BITS*/ | USART_CR2_LINEN,
+		.cr2			= USART_CR2_STOP1_BITS | USART_CR2_LINEN,
 		.cr3			= 0,
 		.rxhalf_cb		= tsRxIRQHalfHandler
 	};
@@ -73,9 +73,11 @@ void UartDmaTsChannel::start(uint32_t baud) {
 	uartStartReceive(m_driver, sizeof(dmaBuffer), dmaBuffer);
 }
 
-size_t UartDmaTsChannel::readTimeout(uint8_t* buffer, size_t size, int timeout) {
+size_t UartDmaTsChannel::readTimeout(uint8_t* p_buffer, size_t size, int timeout) {
 	// Instead of reading from the device, read from our custom RX queue
-	return iqReadTimeout(&fifoRxQueue, buffer, size, timeout);
+	size_t transferred = iqReadTimeout(&fifoRxQueue, p_buffer, size, timeout);
+	bytesIn += transferred;
+    return transferred;
 }
 
 #endif // HAL_USE_UART && EFI_USE_UART_DMA

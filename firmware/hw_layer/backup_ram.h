@@ -25,14 +25,6 @@ typedef enum {
 	 * See startPrimeInjectionPulse() in controllers/trigger/main_trigger_callback.cpp
 	 */
 	BACKUP_IGNITION_SWITCH_COUNTER,
-	/**
-	 * CJ125 Calibration data (16bit)
-	 */
-	BACKUP_CJ125_CALIBRATION_LAMBDA,
-	/**
-	 * CJ125 Calibration data (16bit)
-	 */
-	BACKUP_CJ125_CALIBRATION_HEATER,
 
 	DFU_JUMP_REQUESTED,
 
@@ -60,6 +52,10 @@ struct BackupSramData {
 	ErrorCookie Cookie;
 
 	critical_msg_t ErrorString;
+	critical_msg_t hardFile;
+	int hardLine;
+	int check;
+	critical_msg_t rawMsg;
 	port_extctx FaultCtx;
 	uint32_t FaultType;
 	uint32_t FaultAddress;

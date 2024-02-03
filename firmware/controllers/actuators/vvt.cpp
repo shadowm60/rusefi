@@ -9,43 +9,46 @@
 
 #include "local_version_holder.h"
 #include "vvt.h"
+#include "bench_test.h"
 
 #define NO_PIN_PERIOD 500
-
-#if defined(HAS_OS_ACCESS)
-#error "Unexpected OS ACCESS HERE"
-#endif /* HAS_OS_ACCESS */
 
 using vvt_map_t = Map3D<SCRIPT_TABLE_8, SCRIPT_TABLE_8, int8_t, uint16_t, uint16_t>;
 
 static vvt_map_t vvtTable1;
 static vvt_map_t vvtTable2;
 
-void VvtController::init(int index, int bankIndex, int camIndex, const ValueProvider3D* targetMap) {
-	this->index = index;
-	m_bank = bankIndex;
-	m_cam = camIndex;
+VvtController::VvtController(int p_index)
+	: index(p_index)
+	, m_bank(BANK_BY_INDEX(p_index))
+	, m_cam(CAM_BY_INDEX(p_index))
+{
+}
 
+void VvtController::init(const ValueProvider3D* targetMap, IPwm* pwm) {
 	// Use the same settings for the Nth cam in every bank (ie, all exhaust cams use the same PID)
-	m_pid.initPidClass(&engineConfiguration->auxPid[camIndex]);
+	m_pid.initPidClass(&engineConfiguration->auxPid[m_cam]);
 
 	m_targetMap = targetMap;
+	m_pwm = pwm;
 }
 
-int VvtController::getPeriodMs() {
-	return isBrainPinValid(engineConfiguration->vvtPins[index]) ?
-		GET_PERIOD_LIMITED(&engineConfiguration->auxPid[index]) : NO_PIN_PERIOD;
-}
-
-void VvtController::PeriodicTask() {
-	if (engine->auxParametersVersion.isOld(engine->getGlobalConfigurationVersion())) {
-		m_pid.reset();
+void VvtController::onFastCallback() {
+	if (!m_pwm || !m_targetMap) {
+		// not init yet
+		return;
 	}
 
 	update();
 }
 
-expected<angle_t> VvtController::observePlant() const {
+void VvtController::onConfigurationChange(engine_configuration_s const * previousConfig) {
+	if (!m_pid.isSame(&previousConfig->auxPid[m_cam])) {
+		m_pid.reset();
+	}
+}
+
+expected<angle_t> VvtController::observePlant() {
 #if EFI_SHAFT_POSITION_INPUT
 	return engine->triggerCentral.getVVTPosition(m_bank, m_cam);
 #else
@@ -55,12 +58,21 @@ expected<angle_t> VvtController::observePlant() const {
 
 expected<angle_t> VvtController::getSetpoint() {
 	int rpm = Sensor::getOrZero(SensorType::Rpm);
+	bool enabled = rpm > engineConfiguration->vvtControlMinRpm
+			&& engine->rpmCalculator.getSecondsSinceEngineStart(getTimeNowNt()) > engineConfiguration->vvtActivationDelayMs / MS_PER_SECOND
+			 ;
+	if (!enabled) {
+		return unexpected;
+    }
+
 	float load = getFuelingLoad();
 	float target = m_targetMap->getValue(rpm, load);
 
 #if EFI_TUNER_STUDIO
 	engine->outputChannels.vvtTargets[index] = target;
 #endif
+
+	vvtTarget = target;
 
 	return target;
 }
@@ -90,11 +102,6 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 	
 	float retVal = m_pid.getOutput(target, observation);
 
-	if (engineConfiguration->isVerboseAuxPid1) {
-		efiPrintf("aux duty: %.2f/value=%.2f/p=%.2f/i=%.2f/d=%.2f int=%.2f", retVal, observation,
-				m_pid.getP(), m_pid.getI(), m_pid.getD(), m_pid.getIntegration());
-	}
-
 #if EFI_TUNER_STUDIO
 	m_pid.postState(engine->outputChannels.vvtStatus[index]);
 #endif /* EFI_TUNER_STUDIO */
@@ -103,16 +110,13 @@ expected<percent_t> VvtController::getClosedLoop(angle_t target, angle_t observa
 }
 
 void VvtController::setOutput(expected<percent_t> outputValue) {
-	float rpm = Sensor::getOrZero(SensorType::Rpm);
 #if EFI_SHAFT_POSITION_INPUT
-	bool enabled = rpm > engineConfiguration->vvtControlMinRpm
-			&& engine->rpmCalculator.getSecondsSinceEngineStart(getTimeNowNt()) > engineConfiguration->vvtActivationDelayMs / MS_PER_SECOND
-			 ;
+	vvtOutput = outputValue.value_or(0);
 
-	if (outputValue && enabled) {
-		m_pwm.setSimplePwmDutyCycle(PERCENT_TO_DUTY(outputValue.Value));
+	if (outputValue) {
+		m_pwm->setSimplePwmDutyCycle(PERCENT_TO_DUTY(outputValue.Value));
 	} else {
-		m_pwm.setSimplePwmDutyCycle(0);
+		m_pwm->setSimplePwmDutyCycle(0);
 
 		// we need to avoid accumulating iTerm while engine is not running
 		m_pid.reset();
@@ -120,7 +124,7 @@ void VvtController::setOutput(expected<percent_t> outputValue) {
 #endif // EFI_SHAFT_POSITION_INPUT
 }
 
-#if EFI_AUX_PID
+#if EFI_VVT_PID
 
 static const char *vvtOutputNames[CAM_INPUTS_COUNT] = {
 "Vvt Output#1",
@@ -135,20 +139,32 @@ static const char *vvtOutputNames[CAM_INPUTS_COUNT] = {
 #endif
  };
 
+static OutputPin vvtPins[CAM_INPUTS_COUNT];
+static SimplePwm vvtPwms[CAM_INPUTS_COUNT];
 
-static VvtController instances[CAM_INPUTS_COUNT];
+OutputPin* getVvtOutputPin(int index) {
+    return &vvtPins[index];
+}
+
+static void applyVvtPinState(int stateIndex, PwmConfig *state) /* pwm_gen_callback */ {
+    OutputPin *output = state->outputPins[0];
+    if (output == getOutputOnTheBenchTest()) {
+        return;
+    }
+    state->applyPwmValue(output, stateIndex);
+}
 
 static void turnVvtPidOn(int index) {
 	if (!isBrainPinValid(engineConfiguration->vvtPins[index])) {
 		return;
 	}
 
-	startSimplePwmExt(&instances[index].m_pwm, vvtOutputNames[index],
+	startSimplePwmExt(&vvtPwms[index], vvtOutputNames[index],
 			&engine->executor,
 			engineConfiguration->vvtPins[index],
-			&instances[index].m_pin,
-			// todo: do we need two separate frequencies?
-			engineConfiguration->vvtOutputFrequency[0], 0.1);
+			getVvtOutputPin(index),
+			engineConfiguration->vvtOutputFrequency, 0.1,
+			applyVvtPinState);
 }
 
 void startVvtControlPins() {
@@ -159,33 +175,27 @@ void startVvtControlPins() {
 
 void stopVvtControlPins() {
 	for (int i = 0;i < CAM_INPUTS_COUNT;i++) {
-		instances[i].m_pin.deInit();
+		getVvtOutputPin(i)->deInit();
 	}
 }
 
 void initVvtActuators() {
-    if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
-        engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
-    }
+	if (engineConfiguration->vvtControlMinRpm < engineConfiguration->cranking.rpm) {
+		engineConfiguration->vvtControlMinRpm = engineConfiguration->cranking.rpm;
+	}
 
 	vvtTable1.init(config->vvtTable1, config->vvtTable1LoadBins,
 			config->vvtTable1RpmBins);
 	vvtTable2.init(config->vvtTable2, config->vvtTable2LoadBins,
 			config->vvtTable2RpmBins);
 
-	for (int i = 0;i < CAM_INPUTS_COUNT;i++) {
 
-		int camIndex = i % CAMS_PER_BANK;
-		int bankIndex = i / CAMS_PER_BANK;
-		auto targetMap = camIndex == 0 ? &vvtTable1 : &vvtTable2;
-		instances[i].init(i, bankIndex, camIndex, targetMap);
-	}
+	engine->module<VvtController1>()->init(&vvtTable1, &vvtPwms[0]);
+	engine->module<VvtController2>()->init(&vvtTable2, &vvtPwms[1]);
+	engine->module<VvtController3>()->init(&vvtTable1, &vvtPwms[2]);
+	engine->module<VvtController4>()->init(&vvtTable2, &vvtPwms[3]);
 
 	startVvtControlPins();
-
-	for (int i = 0;i < CAM_INPUTS_COUNT;i++) {
-		instances[i].start();
-	}
 }
 
 #endif

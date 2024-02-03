@@ -11,6 +11,7 @@
 
 #if EFI_CAN_SUPPORT
 #include "can_dash.h"
+#include "can_dash_ms.h"
 #include "can_msg_tx.h"
 #include "can_bmw.h"
 #include "can_vag.h"
@@ -119,65 +120,18 @@ static bool cluster_time_set;
 constexpr uint8_t e90_temp_offset = 49;
 
 // todo: those forward declarations are out of overall code style
-void canDashboardBMW(CanCycle cycle);
 void canDashboardFiat(CanCycle cycle);
 void canMazdaRX8(CanCycle cycle);
 void canDashboardW202(CanCycle cycle);
-void canDashboardBMWE90(CanCycle cycle);
 void canDashboardVagMqb(CanCycle cycle);
 void canDashboardNissanVQ(CanCycle cycle);
 void canDashboardGenesisCoupe(CanCycle cycle);
 void canDashboardAim(CanCycle cycle);
 void canDashboardHaltech(CanCycle cycle);
 
-void updateDash(CanCycle cycle) {
-
-	// Transmit dash data, if enabled
-	switch (engineConfiguration->canNbcType) {
-	case CAN_BUS_NBC_NONE:
-		break;
-	case CAN_BUS_NBC_BMW:
-		canDashboardBMW(cycle);
-		break;
-	case CAN_BUS_Haltech:
-		canDashboardHaltech(cycle);
-		break;
-	case CAN_BUS_NBC_FIAT:
-		canDashboardFiat(cycle);
-		break;
-	case CAN_BUS_NBC_VAG:
-		canDashboardVAG(cycle);
-		break;
-	case CAN_BUS_MAZDA_RX8:
-		canMazdaRX8(cycle);
-		break;
-	case CAN_BUS_W202_C180:
-		canDashboardW202(cycle);
-		break;
-	case CAN_BUS_BMW_E90:
-		canDashboardBMWE90(cycle);
-		break;
-	case CAN_BUS_MQB:
-		canDashboardVagMqb(cycle);
-		break;
-	case CAN_BUS_NISSAN_VQ:
-		canDashboardNissanVQ(cycle);
-		break;
-	case CAN_BUS_GENESIS_COUPE:
-		canDashboardGenesisCoupe(cycle);
-		break;
-	case CAN_AIM_DASH:
-		canDashboardAim(cycle);
-		break;
-	default:
-		firmwareError(OBD_PCM_Processor_Fault, "Nothing for canNbcType %s", getCan_nbc_e(engineConfiguration->canNbcType));
-		break;
-	}
-}
-
 //BMW Dashboard
 //todo: we use 50ms fixed cycle, trace is needed to check for correct period
-void canDashboardBMW(CanCycle cycle) {
+static void canDashboardBmwE46(CanCycle cycle) {
 	
 	if (cycle.isInterval(CI::_50ms)) {
 		{
@@ -426,8 +380,7 @@ void canDashboardVagMqb(CanCycle cycle) {
 	}
 }
 
-void canDashboardBMWE90(CanCycle cycle)
-{
+static void canDashboardBmwE90(CanCycle cycle) {
 
 	if (cycle.isInterval(CI::_50ms)) {
 		
@@ -625,6 +578,7 @@ void canDashboardHaltech(CanCycle cycle) {
 			msg[7] = 0;			
 		}
 
+#if EFI_ENGINE_CONTROL
 		/* 0x362 - 50Hz rate */
 		{ 
 			CanTxMessage msg(CanCategory::NBC, 0x362, 6);
@@ -642,6 +596,7 @@ void canDashboardHaltech(CanCycle cycle) {
 			msg[4] = (ignAngle >> 8);			
 			msg[5] = (ignAngle & 0x00ff);
 		}
+#endif // EFI_ENGINE_CONTROL
 
 		/* todo: 0x3E5 = 50Hz rate */
 		{ 
@@ -770,7 +725,7 @@ void canDashboardHaltech(CanCycle cycle) {
 		{ 
 			CanTxMessage msg(CanCategory::NBC, 0x36A, 4);
 			/* Knock Level 1 */
-			tmp = (engine->outputChannels.knockLevel * 100);
+			tmp = (engine->module<KnockController>()->m_knockLevel * 100);
 			msg[0] = (tmp >> 8);
 			msg[1] = (tmp & 0x00ff);
 			/* Knock Level 2 */
@@ -1228,7 +1183,7 @@ struct Aim5f4 {
 	scaled_channel<uint16_t, 10000> Boost;
 	scaled_channel<uint16_t, 3200> Vbat;
 	scaled_channel<uint16_t, 10> FuelUse;
-	scaled_channel<uint16_t, 10> Gear;
+	scaled_channel<int16_t, 1> Gear;
 };
 
 static void populateFrame(Aim5f4& msg) {
@@ -1239,7 +1194,7 @@ static void populateFrame(Aim5f4& msg) {
 	msg.Boost = boostBar;
 	msg.Vbat = Sensor::getOrZero(SensorType::BatteryVoltage);
 	msg.FuelUse = 0;
-	msg.Gear = 0;
+	msg.Gear = Sensor::getOrZero(SensorType::DetectedGear);
 }
 
 struct Aim5f5 {
@@ -1280,12 +1235,14 @@ struct Aim5f7 {
 };
 
 static void populateFrame(Aim5f7& msg) {
+#if EFI_ENGINE_CONTROL
 	// We don't handle wheel speed, just set to 0?
 	msg.LambdaErr1 = 0;
 	msg.LambdaErr2 = 0;
 	// both targets are the same for now
 	msg.LambdaTarget1 = (float)engine->fuelComputer.targetLambda;
 	msg.LambdaTarget2 = (float)engine->fuelComputer.targetLambda;
+#endif // EFI_ENGINE_CONTROL
 }
 
 void canDashboardAim(CanCycle cycle) {
@@ -1293,14 +1250,16 @@ void canDashboardAim(CanCycle cycle) {
 		return;
 	}
 
-	transmitStruct<Aim5f0>(CanCategory::NBC, 0x5f0, false);
-	transmitStruct<Aim5f1>(CanCategory::NBC, 0x5f1, false);
-	transmitStruct<Aim5f2>(CanCategory::NBC, 0x5f2, false);
-	transmitStruct<Aim5f3>(CanCategory::NBC, 0x5f3, false);
-	transmitStruct<Aim5f4>(CanCategory::NBC, 0x5f4, false);
-	transmitStruct<Aim5f5>(CanCategory::NBC, 0x5f5, false);
-	transmitStruct<Aim5f6>(CanCategory::NBC, 0x5f6, false);
-	transmitStruct<Aim5f7>(CanCategory::NBC, 0x5f7, false);
+	auto canChannel = engineConfiguration->canBroadcastUseChannelTwo;
+
+	transmitStruct<Aim5f0>(CanCategory::NBC, 0x5f0, false, canChannel);
+	transmitStruct<Aim5f1>(CanCategory::NBC, 0x5f1, false, canChannel);
+	transmitStruct<Aim5f2>(CanCategory::NBC, 0x5f2, false, canChannel);
+	transmitStruct<Aim5f3>(CanCategory::NBC, 0x5f3, false, canChannel);
+	transmitStruct<Aim5f4>(CanCategory::NBC, 0x5f4, false, canChannel);
+	transmitStruct<Aim5f5>(CanCategory::NBC, 0x5f5, false, canChannel);
+	transmitStruct<Aim5f6>(CanCategory::NBC, 0x5f6, false, canChannel);
+	transmitStruct<Aim5f7>(CanCategory::NBC, 0x5f7, false, canChannel);
 
 	// there are more, but less important for us
 	// transmitStruct<Aim5f8>(0x5f8, false);
@@ -1309,6 +1268,54 @@ void canDashboardAim(CanCycle cycle) {
 	// transmitStruct<Aim5fb>(0x5fb, false);
 	// transmitStruct<Aim5fc>(0x5fc, false);
 	// transmitStruct<Aim5fd>(0x5fd, false);
+}
+
+void updateDash(CanCycle cycle) {
+
+	// Transmit dash data, if enabled
+	switch (engineConfiguration->canNbcType) {
+	case CAN_BUS_NBC_NONE:
+		break;
+	case CAN_BUS_BMW_E46:
+		canDashboardBmwE46(cycle);
+		break;
+	case CAN_BUS_Haltech:
+		canDashboardHaltech(cycle);
+		break;
+	case CAN_BUS_NBC_FIAT:
+		canDashboardFiat(cycle);
+		break;
+	case CAN_BUS_NBC_VAG:
+		canDashboardVAG(cycle);
+		break;
+	case CAN_BUS_MAZDA_RX8:
+		canMazdaRX8(cycle);
+		break;
+	case CAN_BUS_W202_C180:
+		canDashboardW202(cycle);
+		break;
+	case CAN_BUS_BMW_E90:
+		canDashboardBmwE90(cycle);
+		break;
+	case CAN_BUS_MQB:
+		canDashboardVagMqb(cycle);
+		break;
+	case CAN_BUS_NISSAN_VQ:
+		canDashboardNissanVQ(cycle);
+		break;
+	case CAN_BUS_GENESIS_COUPE:
+		canDashboardGenesisCoupe(cycle);
+		break;
+	case CAN_AIM_DASH:
+		canDashboardAim(cycle);
+		break;
+	case CAN_BUS_MS_SIMPLE_BROADCAST:
+		canDashboardTS(cycle);
+		break;
+	default:
+		criticalError("Nothing for canNbcType %s", getCan_nbc_e(engineConfiguration->canNbcType));
+		break;
+	}
 }
 
 #endif // EFI_CAN_SUPPORT

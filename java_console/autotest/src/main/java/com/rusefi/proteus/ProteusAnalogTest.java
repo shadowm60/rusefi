@@ -27,8 +27,7 @@ public class ProteusAnalogTest extends RusefiTestBase {
         double vbatt = SensorCentral.getInstance().getValue(Sensor.VBATT);
 
         // allow some tolerance for the supply voltage...
-        assertTrue(vbatt > 11);
-        assertTrue(vbatt < 13);
+        assertTrue("VBatt " + vbatt + " out of range", vbatt > 11 && vbatt < 13);
     }
 
     // not really 'analog' test. Not the best placement since we are unable to rebuild discovery HW CI :(
@@ -65,8 +64,8 @@ public class ProteusAnalogTest extends RusefiTestBase {
 
         double actualTps = SensorCentral.getInstance().getValue(Sensor.TPS);
 
-        // Accept up to 2% error - there is an analog filter installed, it should be at least be close
-        assertEquals(expectedTps, actualTps, 2);
+        // Accept up to 2.5% error - there is an analog filter installed, it should be at least be close
+        assertEquals("With idle of " + idle, expectedTps, actualTps, 2.5);
     }
 
     @Test

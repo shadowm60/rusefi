@@ -1,47 +1,39 @@
 #!/bin/bash
 
-# for example 'proteus'
-BOARD_NAME="$1"
+# fail on error!
+set -e
 
-# for example 'mre-f4'
+# for example 'config/boards/proteus'
+BOARD_DIR="$1"
+
+# for example 'proteus_f4'
 export BUNDLE_NAME="$2"
 
-export INI_FILE_OVERRIDE="$3"
-export RUSEFI_CONSOLE_SETTINGS="$4"
+SCRIPT_NAME=compile.sh
+echo "Entering $SCRIPT_NAME with folder $BOARD_DIR and bundle name $BUNDLE_NAME"
 
-SCRIPT_NAME=compile_and_upload.sh
-echo "Entering $SCRIPT_NAME with 1=$1 2=$2 3=$3 4=$4"
-
-[ -n $BOARD_NAME ] || { echo "BOARD_NAME parameter expected"; exit 1; }
+[ -n $BOARD_DIR ] || { echo "BOARD_DIR parameter expected"; exit 1; }
 
 [ -n $BUNDLE_NAME ] || { echo "BUNDLE_NAME parameter expected"; exit 1; }
-
-COMPILE_SCRIPT="compile_$BUNDLE_NAME.sh"
 
 cd firmware
 bash clean.sh
 cd ..
 
-root_dir=$(pwd)
+cd firmware/$BOARD_DIR
+pwd
 
-cd firmware/config/boards
-pwd
-cd $BOARD_NAME
-pwd
+COMPILE_SCRIPT="compile_$BUNDLE_NAME.sh"
+if [ -f $COMPILE_SCRIPT ]; then
+  # detailed compile script is useful for instance when same board has multiple MCU targets
+  echo "[$COMPILE_SCRIPT] found!"
+else
+  echo "Using default script name..."
+  COMPILE_SCRIPT="compile_firmware.sh"
+fi
+
 echo "Invoking $COMPILE_SCRIPT"
 
 bash $COMPILE_SCRIPT
-[ $? -eq 0 ] || { echo "ERROR invoking $COMPILE_SCRIPT"; exit 1; }
 
-echo "We are in"
-pwd
-cd ${root_dir}
-echo "We are now in"
-pwd
-
-[ -e firmware/build/rusefi.hex ] || { echo "Just to confirm - FAILED to compile with $COMPILE_SCRIPT"; exit 1; }
-
-# We are back at root rusEFI folder
-pwd
-
-echo "exiting $SCRIPT_NAME"
+echo "Success for $SCRIPT_NAME!"

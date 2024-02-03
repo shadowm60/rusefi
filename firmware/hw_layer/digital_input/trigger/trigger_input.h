@@ -11,8 +11,9 @@
 #include "trigger_structure.h"
 #include "trigger_central.h"
 
-void turnOnTriggerInputPins();
-void applyNewTriggerInputPins();
+void onEcuStartTriggerImplementation();
+
+void onEcuStartDoSomethingTriggerInputPins();
 void startTriggerInputPins();
 void stopTriggerInputPins();
 

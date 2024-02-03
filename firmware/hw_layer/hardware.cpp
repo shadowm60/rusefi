@@ -26,6 +26,8 @@
 #include "serial_hw.h"
 #include "idle_thread.h"
 #include "odometer.h"
+#include "kline.h"
+#include "dac.h"
 
 #if EFI_PROD_CODE
 #include "mpu_util.h"
@@ -39,8 +41,6 @@
 #include "hip9011.h"
 #include "histogram.h"
 #include "gps_uart.h"
-#include "HD44780.h"
-#include "joystick.h"
 #include "sent.h"
 #include "cdm_ion_sense.h"
 #include "trigger_central.h"
@@ -54,12 +54,15 @@
 #if EFI_MC33816
 #include "mc33816.h"
 #endif /* EFI_MC33816 */
+#if EFI_WS2812
+#include "WS2812.h"
+#endif /* EFI_WS2812 */
 
 #if EFI_MAP_AVERAGING
 #include "map_averaging.h"
 #endif
 
-#if EFI_INTERNAL_FLASH
+#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
 #include "flash_main.h"
 #endif
 
@@ -78,7 +81,7 @@ extern bool isSpiInitialized[5];
  * Only one consumer can use SPI bus at a given time
  */
 void lockSpi(spi_device_e device) {
-	efiAssertVoid(CUSTOM_STACK_SPI, getCurrentRemainingStack() > 128, "lockSpi");
+	efiAssertVoid(ObdCode::CUSTOM_STACK_SPI, hasLotsOfRemainingStack(), "lockSpi");
 	spiAcquireBus(getSpiDevice(device));
 }
 
@@ -86,8 +89,7 @@ void unlockSpi(spi_device_e device) {
 	spiReleaseBus(getSpiDevice(device));
 }
 
-static void initSpiModules(engine_configuration_s *engineConfiguration) {
-	UNUSED(engineConfiguration);
+static void initSpiModules() {
 	if (engineConfiguration->is_enabled_spi_1) {
 		 turnOnSpi(SPI_DEVICE_1);
 	}
@@ -129,10 +131,10 @@ SPIDriver * getSpiDevice(spi_device_e spiDevice) {
 		return &SPID4;
 	}
 #endif
-	firmwareError(CUSTOM_ERR_UNEXPECTED_SPI, "Unexpected SPI device: %d", spiDevice);
+	firmwareError(ObdCode::CUSTOM_ERR_UNEXPECTED_SPI, "Unexpected SPI device: %d", spiDevice);
 	return NULL;
 }
-#endif
+#endif // HAL_USE_SPI
 
 #if HAL_USE_ADC
 
@@ -141,7 +143,7 @@ static FastAdcToken hipSampleIndex;
 
 #if HAL_TRIGGER_USE_ADC
 static FastAdcToken triggerSampleIndex;
-#endif
+#endif // HAL_TRIGGER_USE_ADC
 
 extern AdcDevice fastAdc;
 
@@ -175,7 +177,7 @@ void onFastAdcComplete(adcsample_t*) {
 	/**
 	 * this callback is executed 10 000 times a second, it needs to be as fast as possible
 	 */
-	efiAssertVoid(CUSTOM_STACK_ADC, getCurrentRemainingStack() > 128, "lowstck#9b");
+	efiAssertVoid(ObdCode::CUSTOM_STACK_ADC, hasLotsOfRemainingStack(), "lowstck#9b");
 
 #if EFI_SENSOR_CHART && EFI_SHAFT_POSITION_INPUT
 	if (getEngineState()->sensorChartMode == SC_AUX_FAST1) {
@@ -185,11 +187,11 @@ void onFastAdcComplete(adcsample_t*) {
 #endif /* EFI_SENSOR_CHART */
 
 #if EFI_MAP_AVERAGING
-	mapAveragingAdcCallback(getFastAdc(fastMapSampleIndex));
+	mapAveragingAdcCallback(adcToVoltsDivided(getFastAdc(fastMapSampleIndex), engineConfiguration->map.sensor.hwChannel));
 #endif /* EFI_MAP_AVERAGING */
 #if EFI_HIP_9011
 	if (engineConfiguration->isHip9011Enabled) {
-		hipAdcCallback(getFastAdc(hipSampleIndex));
+		hipAdcCallback(adcToVoltsDivided(getFastAdc(hipSampleIndex), engineConfiguration->hipOutputChannel));
 	}
 #endif /* EFI_HIP_9011 */
 }
@@ -206,8 +208,7 @@ static void calcFastAdcIndexes() {
 #endif/* HAL_USE_ADC */
 }
 
-static void adcConfigListener(Engine *engine) {
-	UNUSED(engine);
+static void adcConfigListener() {
 	// todo: something is not right here - looks like should be a callback for each configuration change?
 	calcFastAdcIndexes();
 }
@@ -226,7 +227,7 @@ void stopSpi(spi_device_e device) {
 
 /**
  * this method is NOT currently invoked on ECU start
- * todo: maybe start invoking this method on ECU start so that peripheral start-up initialization and restart are unified?
+ * todo: reduce code duplication by moving more logic into startHardware method
  */
 
 void applyNewHardwareSettings() {
@@ -252,13 +253,11 @@ void applyNewHardwareSettings() {
 	stopSent();
 #endif // EFI_SENT_SUPPORT
 
-#if (HAL_USE_PAL && EFI_JOYSTICK)
-	stopJoystickPins();
-#endif /* HAL_USE_PAL && EFI_JOYSTICK */
-
 #if EFI_CAN_SUPPORT
 	stopCanPins();
 #endif /* EFI_CAN_SUPPORT */
+
+	stopKLine();
 
 #if EFI_AUX_SERIAL
 	stopAuxSerialPins();
@@ -286,12 +285,8 @@ void applyNewHardwareSettings() {
 		stopSpi(SPI_DEVICE_4);
 	}
 
-#if EFI_HD44780_LCD
-	stopHD44780_pins();
-#endif /* #if EFI_HD44780_LCD */
-
 	if (isPinOrModeChanged(clutchUpPin, clutchUpPinMode)) {
-		// bug? duplication with stopPedalPins?
+		// bug? duplication with stopSwitchPins?
 		efiSetPadUnused(activeConfiguration.clutchUpPin);
 	}
 
@@ -310,16 +305,7 @@ void applyNewHardwareSettings() {
 	/*******************************************
 	 * Start everything back with new settings *
 	 ******************************************/
-
-#if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
-	startTriggerInputPins();
-#endif /* EFI_SHAFT_POSITION_INPUT */
-
 	startHardware();
-
-#if EFI_HD44780_LCD
-	startHD44780_pins();
-#endif /* #if EFI_HD44780_LCD */
 
 #if EFI_PROD_CODE && (BOARD_EXT_GPIOCHIPS > 0)
 	/* TODO: properly restart gpio chips...
@@ -336,11 +322,12 @@ void applyNewHardwareSettings() {
 	startSmartCsPins();
 #endif /* (BOARD_EXT_GPIOCHIPS > 0) */
 
-	enginePins.startPins();
-
 #if EFI_AUX_SERIAL
 	startAuxSerialPins();
 #endif /* EFI_AUX_SERIAL */
+
+    startKLine();
+
 
 #if EFI_HIP_9011
 	startHip9001_pins();
@@ -362,34 +349,27 @@ void applyNewHardwareSettings() {
 #if EFI_LOGIC_ANALYZER
 	startLogicAnalyzerPins();
 #endif /* EFI_LOGIC_ANALYZER */
-#if EFI_AUX_PID
+#if EFI_VVT_PID
 	startVvtControlPins();
-#endif /* EFI_AUX_PID */
+#endif /* EFI_VVT_PID */
 
 #if EFI_SENT_SUPPORT
 	startSent();
 #endif
 
-	adcConfigListener(engine);
+	adcConfigListener();
 }
 
-#if EFI_PROD_CODE
+#if EFI_BOR_LEVEL
 void setBor(int borValue) {
 	efiPrintf("setting BOR to %d", borValue);
 	BOR_Set((BOR_Level_t)borValue);
-	showBor();
 }
-
-void showBor(void) {
-	efiPrintf("BOR=%d", (int)BOR_Get());
-}
-#endif /* EFI_PROD_CODE */
+#endif /* EFI_BOR_LEVEL */
 
 // This function initializes hardware that can do so before configuration is loaded
 void initHardwareNoConfig() {
-	efiAssertVoid(CUSTOM_IH_STACK, getCurrentRemainingStack() > EXPECTED_REMAINING_STACK, "init h");
-	efiAssertVoid(CUSTOM_EC_NULL, engineConfiguration!=NULL, "engineConfiguration");
-	
+	efiAssertVoid(ObdCode::CUSTOM_IH_STACK, hasLotsOfRemainingStack(), "init h");
 
 	efiPrintf("initHardware()");
 
@@ -411,22 +391,18 @@ void initHardwareNoConfig() {
 	initPrimaryPins();
 #endif // EFI_GPIO_HARDWARE
 
-#if EFI_PROD_CODE
+#if EFI_PROD_CODE && EFI_SIGNAL_EXECUTOR_ONE_TIMER
 	// it's important to initialize this pretty early in the game before any scheduling usages
 	initSingleTimerExecutorHardware();
-#if EFI_RTC
-	initRtc();
-#endif // EFI_RTC
-#endif // EFI_PROD_CODE
+#endif // EFI_PROD_CODE && EFI_SIGNAL_EXECUTOR_ONE_TIMER
 
-#if EFI_INTERNAL_FLASH
+#if EFI_PROD_CODE && EFI_RTC
+	initRtc();
+#endif // EFI_PROD_CODE && EFI_RTC
+
+#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
 	initFlash();
 #endif
-
-#if EFI_SHAFT_POSITION_INPUT
-	// todo: figure out better startup logic
-	initTriggerCentral();
-#endif /* EFI_SHAFT_POSITION_INPUT */
 
 #if EFI_FILE_LOGGING
 	initEarlyMmcCard();
@@ -439,7 +415,7 @@ void initHardwareNoConfig() {
 }
 
 void stopHardware() {
-	stopPedalPins();
+	stopSwitchPins();
 
 #if EFI_PROD_CODE && (BOARD_EXT_GPIOCHIPS > 0)
 	stopSmartCsPins();
@@ -453,18 +429,26 @@ void stopHardware() {
 	stopTriggerEmulatorPins();
 #endif /* EFI_EMULATE_POSITION_SENSORS */
 
-#if EFI_AUX_PID
+#if EFI_VVT_PID
 	stopVvtControlPins();
-#endif /* EFI_AUX_PID */
+#endif /* EFI_VVT_PID */
 }
 
 /**
  * This method is invoked both on ECU start and configuration change
+ * At the moment we have too many system which handle ECU start and configuration change separately
+ * TODO: move move hardware code here
  */
 void startHardware() {
-#if (HAL_USE_PAL && EFI_JOYSTICK)
-	startJoystickPins();
-#endif /* HAL_USE_PAL && EFI_JOYSTICK */
+	initStartStopButton();
+
+#if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
+	startTriggerInputPins();
+#endif /* EFI_SHAFT_POSITION_INPUT */
+
+#if EFI_ENGINE_CONTROL
+	enginePins.startPins();
+#endif /* EFI_ENGINE_CONTROL */
 
 #if EFI_SHAFT_POSITION_INPUT
 	validateTriggerInputs();
@@ -473,7 +457,7 @@ void startHardware() {
 
 #endif // EFI_SHAFT_POSITION_INPUT
 
-	startPedalPins();
+	startSwitchPins();
 
 #if EFI_CAN_SUPPORT
 	startCanPins();
@@ -494,15 +478,6 @@ const I2CConfig i2cfg = {
 #endif
 
 void initHardware() {
-#if EFI_HD44780_LCD
-	lcd_HD44780_init();
-	if (hasFirmwareError())
-		return;
-
-	lcd_HD44780_print_string(VCS_VERSION);
-
-#endif /* EFI_HD44780_LCD */
-
 	if (hasFirmwareError()) {
 		return;
 	}
@@ -531,20 +506,16 @@ void initHardware() {
 #endif // TRIGGER_SCOPE
 
 #if HAL_USE_SPI
-	initSpiModules(engineConfiguration);
+	initSpiModules();
 #endif /* HAL_USE_SPI */
 
-#if EFI_PROD_CODE && (BOARD_EXT_GPIOCHIPS > 0)
+#if (EFI_PROD_CODE && BOARD_EXT_GPIOCHIPS > 0) || EFI_SIMULATOR
 	// initSmartGpio depends on 'initSpiModules'
 	initSmartGpio();
 #endif
 
 	// output pins potentially depend on 'initSmartGpio'
-	initOutputPins();
-
-#if EFI_ENGINE_CONTROL
-	enginePins.startPins();
-#endif /* EFI_ENGINE_CONTROL */
+	initMiscOutputPins();
 
 #if EFI_MC33816
 	initMc33816();
@@ -555,21 +526,29 @@ void initHardware() {
 #endif /* EFI_MAX_31855 */
 
 #if EFI_CAN_SUPPORT
+#if EFI_SIMULATOR
+	// Set CAN device name
+	CAND1.deviceName = "can0";
+#endif
+
 	initCan();
 #endif /* EFI_CAN_SUPPORT */
 
-//	init_adc_mcp3208(&adcState, &SPID2);
-//	requestAdcValue(&adcState, 0);
 
 #if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
-	turnOnTriggerInputPins();
+	onEcuStartTriggerImplementation();
 #endif /* EFI_SHAFT_POSITION_INPUT */
+	onEcuStartDoSomethingTriggerInputPins();
 
 #if EFI_HIP_9011
 	initHip9011();
 #endif /* EFI_HIP_9011 */
 
-#if EFI_MEMS
+#if EFI_WS2812
+	initWS2812();
+#endif /* EFI_LED_WS2812 */
+
+#if EFI_ONBOARD_MEMS
 	initAccelerometer();
 #endif
 
@@ -593,12 +572,14 @@ void initHardware() {
 	cdmIonInit();
 #endif // EFI_CDM_INTEGRATION
 
-#if (HAL_USE_PAL && EFI_JOYSTICK)
-	initJoystick();
-#endif /* HAL_USE_PAL && EFI_JOYSTICK */
-
 #if EFI_SENT_SUPPORT
 	initSent();
+#endif
+
+	initKLine();
+
+#if EFI_DAC
+	initDac();
 #endif
 
 	calcFastAdcIndexes();
@@ -629,3 +610,16 @@ int getSpiPrescaler(spi_speed_e speed, spi_device_e device) {
 }
 
 #endif /* HAL_USE_SPI */
+
+void checkLastResetCause() {
+#if EFI_PROD_CODE
+	Reset_Cause_t cause = getMCUResetCause();
+	const char *causeStr = getMCUResetCause(cause);
+	efiPrintf("Last Reset Cause: %s", causeStr);
+
+	// if reset by watchdog, signal a fatal error
+	if (cause == Reset_Cause_IWatchdog || cause == Reset_Cause_WWatchdog) {
+		firmwareError(ObdCode::OBD_PCM_Processor_Fault, "Watchdog Reset");
+	}
+#endif // EFI_PROD_CODE
+}

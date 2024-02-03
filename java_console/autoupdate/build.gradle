@@ -29,8 +29,10 @@ evaluationDependsOn(':core_ui')
 evaluationDependsOn(':core_io')
 
 jar {
-    archivesBaseName = 'rusefi_autoupdate'
-    destinationDir = file("$rootDir/../java_console_binary")
+    base {
+        archivesName = 'rusefi_autoupdate'
+    }
+    destinationDirectory = file("$rootDir/../java_console_binary")
 
     // lame 'shadowJar' manual implementation causes logo.png to be include both as source ans outputs? weird
     duplicatesStrategy = DuplicatesStrategy.WARN
@@ -40,7 +42,8 @@ jar {
 
     manifest {
         attributes(
-                'Main-Class': 'com.rusefi.autoupdate.Autoupdate'
+                'Main-Class': 'com.rusefi.autoupdate.Autoupdate',
+                'Built-Date': new Date().toString()
         )
     }
 }

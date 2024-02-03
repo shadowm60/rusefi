@@ -158,21 +158,18 @@ struct L9779 : public GpioChip {
 	/* last requested subaddr in case of read */
 	uint8_t						last_subaddr;
 
-	/* chip needs reintialization due to some critical issue */
-	bool						need_init;
 
 	/* statistic */
 	//int						por_cnt;
 	//int						wdr_cnt;
 	//int						comfe_cnt;
-	int							init_cnt;
 	//int						init_req_cnt;
 	int							spi_cnt;
 	int							spi_err_parity;		/* parity errors in rx data */
 	int							spi_err_frame;		/* rx messages with bit 15 set */
 	int							spi_err;			/* rx messages with incorrect ADDR or WR fields */
-	uint16_t					tx;
-	uint16_t					rx;
+	uint16_t					recentTx;
+	uint16_t					recentRx;
 };
 
 static L9779 chips[BOARD_L9779_COUNT];
@@ -271,9 +268,9 @@ int L9779::spi_rw(uint16_t tx, uint16_t *rx_ptr)
 	/* Ownership release. */
 	spiReleaseBus(spi);
 
-	/* statisctic and debug */
-	this->tx = tx;
-	this->rx = rx;
+	/* statistics and debug */
+	recentTx = tx;
+	recentRx = rx;
 	this->spi_cnt++;
 
 	if (rx_ptr)
@@ -282,9 +279,9 @@ int L9779::spi_rw(uint16_t tx, uint16_t *rx_ptr)
 	/* validate reply */
 	ret = spi_validate(rx);
 	/* save last accessed register */
-	last_addr = MSG_GET_ADDR(this->tx);
+	last_addr = MSG_GET_ADDR(recentTx);
 	if (last_addr == MSG_READ_ADDR)
-		last_subaddr = MSG_GET_SUBADDR(this->tx);
+		last_subaddr = MSG_GET_SUBADDR(recentTx);
 	else
 		last_subaddr = REG_INVALID;
 
@@ -319,16 +316,16 @@ int L9779::spi_rw_array(const uint16_t *tx, uint16_t *rx, int n)
 		spiUnselect(spi);
 
 		/* statistic and debug */
-		this->tx = tx[i];
-		this->rx = rxdata;
+		recentTx = tx[i];
+		recentRx = rxdata;
 		this->spi_cnt++;
 
 		/* validate reply  */
 		ret = spi_validate(rxdata);
 		/* save last accessed register */
-		last_addr = MSG_GET_ADDR(this->tx);
+		last_addr = MSG_GET_ADDR(recentTx);
 		if (last_addr == MSG_READ_ADDR)
-			last_subaddr = MSG_GET_SUBADDR(this->tx);
+			last_subaddr = MSG_GET_SUBADDR(recentTx);
 		else
 			last_subaddr = REG_INVALID;
 
@@ -449,6 +446,9 @@ int L9779::wake_driver()
 int L9779::chip_reset() {
 	int ret;
 
+	last_addr = REG_INVALID;
+	last_subaddr = REG_INVALID;
+
 	ret = spi_rw(CMD_CLOCK_UNLOCK_SW_RST(BIT(1)), NULL);
 	/**
 	 * ???
@@ -545,7 +545,7 @@ static THD_FUNCTION(l9779_driver_thread, p) {
 
 			chip->diag_ts = chTimeAddX(chVTGetSystemTimeX(), TIME_MS2I(DIAG_PERIOD_MS));
 		}
-		poll_interval = chip->calc_sleep_interval();	
+		poll_interval = chip->calc_sleep_interval();
 #endif
 		/* default poll_interval */
 	}
@@ -627,12 +627,11 @@ brain_pin_diag_e L9779::getDiag(size_t pin)
 
 int L9779::chip_init_data(void)
 {
-	int i;
 	int ret = 0;
 
 	o_oe_mask = 0;
 
-	for (i = 0; i < L9779_DIRECT_OUTPUTS; i++) {
+	for (int i = 0; i < L9779_DIRECT_OUTPUTS; i++) {
 		if (cfg->direct_gpio[i].port == NULL)
 			continue;
 
@@ -733,7 +732,7 @@ int L9779::deinit()
 
 int l9779_add(brain_pin_e base, unsigned int index, const l9779_config *cfg) {
 
-	efiAssert(OBD_PCM_Processor_Fault, cfg != NULL, "L9779CFG", 0)
+	efiAssert(ObdCode::OBD_PCM_Processor_Fault, cfg != NULL, "L9779CFG", 0)
 
 	/* no config or no such chip */
 	if ((!cfg) || (!cfg->spi_bus) || (index >= BOARD_L9779_COUNT))
@@ -748,7 +747,7 @@ int l9779_add(brain_pin_e base, unsigned int index, const l9779_config *cfg) {
 	/* config */
 	chip->cfg = cfg;
 	/* reset to defaults */
-
+	chip->drv_state = L9779_WAIT_INIT;
 
 	/* register */
 	int ret = gpiochip_register(base, DRIVER_NAME, *chip, L9779_SIGNALS);

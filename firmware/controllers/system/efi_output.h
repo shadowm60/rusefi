@@ -3,10 +3,39 @@
  *
  */
 
+#pragma once
+
 #include "io_pins.h"
 #include "smart_gpio.h"
+#include <rusefi/timer.h>
 
-#pragma once
+// This class acts as a boolean, but has a switch counter inside
+class SwitchedState {
+public:
+    SwitchedState(int8_t *p_state) {
+        state = p_state;
+    }
+
+    // returns true if the state has been changed
+    bool update(bool newState);
+    uint16_t getCounter();
+
+    operator bool() const {
+        return (bool)*state;
+    }
+
+private:
+    int8_t *state;
+    uint16_t counter = 0;
+};
+
+class SimpleSwitchedState {
+public:
+  SimpleSwitchedState() : state(&value) {
+  }
+  int8_t value = 0;
+  SwitchedState state;
+};
 
 // Used if you want a function to be virtual only for unit testing purposes
 #if EFI_UNIT_TEST
@@ -20,27 +49,20 @@
  */
 class OutputPin {
 public:
-	OutputPin();
-	/**
-	 * initializes pin & registers it in pin repository
-	 * outputMode being a pointer allow us to change configuration (for example invert logical pin) in configuration and get resuts applied
-	 * away, or at least I hope that's why
-	 */
-	void initPin(const char *msg, brain_pin_e brainPin, const pin_output_mode_e *outputMode, bool forceInitWithFatalError = false);
-	/**
-	 * same as above, with DEFAULT_OUTPUT mode
-	 */
+	// initializes pin & registers it in pin repository
+	void initPin(const char *msg, brain_pin_e brainPin, pin_output_mode_e outputMode, bool forceInitWithFatalError = false);
+
+	// same as above, with OM_DEFAULT mode
 	void initPin(const char *msg, brain_pin_e brainPin);
 
-	/**
-	 * dissociates pin from this output and un-registers it in pin repository
-	 */
+	// dissociates pin from this output and un-registers it in pin repository
 	void deInit();
 
-	bool isInitialized();
+	bool isInitialized() const;
 
 	bool getAndSet(int logicValue);
-	TEST_VIRTUAL void setValue(int logicValue);
+	void setValue(const char *msg, int logicValue, bool isForce = false);
+	TEST_VIRTUAL void setValue(int logicValue, bool isForce = false);
 	void toggle();
 	bool getLogicValue() const;
 
@@ -51,8 +73,15 @@ public:
 	uint8_t pin = 0;
 #endif /* EFI_GPIO_HARDWARE */
 
-#if EFI_UNIT_TEST
-	int unitTestTurnedOnCounter = 0;
+#if EFI_UNIT_TEST || EFI_SIMULATOR
+	int pinToggleCounter = 0;
+#endif
+
+#if EFI_SIMULATOR
+	Timer pinToggleTimer;
+	uint32_t durationsInStateMs[2];
+
+	void resetToggleStats();
 #endif
 
 	brain_pin_e brainPin = Gpio::Unassigned;
@@ -69,11 +98,11 @@ public:
 	 */
 private:
 	// todo: inline this method?
-	void setDefaultPinState(const pin_output_mode_e *defaultState);
+	void setDefaultPinState(pin_output_mode_e mode);
 	void setOnchipValue(int electricalValue);
 
 	// 4 byte pointer is a bit of a memory waste here
-	const pin_output_mode_e *modePtr = nullptr;
+	pin_output_mode_e mode = OM_DEFAULT;
 };
 
 /**
@@ -83,18 +112,23 @@ class NamedOutputPin : public virtual OutputPin {
 public:
 	NamedOutputPin();
 	explicit NamedOutputPin(const char *name);
+	virtual void setHigh(const char *msg);
+	virtual void setLow(const char *msg);
 	virtual void setHigh();
 	virtual void setLow();
 	const char *getName() const;
+	void setName(const char*);
 	const char *getShortName() const;
 	/**
 	 * @return true if pin was stopped
 	 */
 	bool stop();
-	// todo: char pointer is a bit of a memory waste here, we can reduce RAM usage by software-based getName() method
-	const char *name = nullptr;
 	/**
 	 * rusEfi Engine Sniffer protocol uses these short names to reduce bytes usage
 	 */
 	const char *shortName = nullptr;
+
+private:
+	// todo: char pointer is a bit of a memory waste here, we can reduce RAM usage by software-based getName() method
+	const char *name = nullptr;
 };

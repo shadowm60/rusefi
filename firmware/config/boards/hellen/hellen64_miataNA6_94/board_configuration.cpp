@@ -19,13 +19,6 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[2] = Gpio::D11;
 	engineConfiguration->injectionPins[3] = Gpio::D10;
 
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
-
 	engineConfiguration->clutchDownPin = Gpio::C4; // Clutch switch input
 	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
@@ -37,32 +30,6 @@ static void setIgnitionPins() {
 	engineConfiguration->ignitionPins[1] = Gpio::Unassigned ; // Gpio::E4
 	engineConfiguration->ignitionPins[2] = Gpio::E5; // 3I - IGN_2 (2&3)
 	engineConfiguration->ignitionPins[3] = Gpio::Unassigned; // Gpio::E3
-
-	//engineConfiguration->ignitionPins[4] = Gpio::E2;
-	//engineConfiguration->ignitionPins[5] = Gpio::I5;
-	//engineConfiguration->ignitionPins[6] = Gpio::I6;
-	//engineConfiguration->ignitionPins[7] = Gpio::I7;
-	
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_5; // 4T
-
-	engineConfiguration->adcVcc = 3.29f;
 }
 
 static void setupDefaultSensorInputs() {
@@ -83,17 +50,16 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
+#include "hellen_leds_176.cpp"
+
 void setBoardConfigOverrides() {
-	setHellen176LedPins();
-	setupVbatt();
+	setHellenVbatt();
 
 	setHellenSdCardSpi2();
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 
-	engineConfiguration->canTxPin = H176_CAN_TX;
-	engineConfiguration->canRxPin = H176_CAN_RX;
+	setHellenCan();
 }
 
 /**
@@ -101,13 +67,11 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-
-	engineConfiguration->isSdCardEnabled = true;
 
 	engineConfiguration->enableSoftwareKnock = true;
 
@@ -120,15 +84,15 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->tachOutputPin = Gpio::I0;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::G9;
 
-	engineConfiguration->vehicleSpeedSensorInputPin = H144_IN_VSS;
+	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
+
+
 }

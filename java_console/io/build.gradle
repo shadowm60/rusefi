@@ -18,28 +18,28 @@ dependencies {
     implementation global_libs.javaxJson
     api global_libs.jcip
     api project(':models')
+    api project(':peak-can-basic')
     api project(':core_io')
     api project(':logging')
 
-    implementation group: 'com.fazecast', name: 'jSerialComm', version: '2.9.2'
-    implementation group: 'tel.schich', name: 'javacan-core', version: '3.2.0'
+    implementation group: 'com.fazecast', name: 'jSerialComm', version: '2.10.3'
+    implementation group: 'tel.schich', name: 'javacan-core', version: "$javaCanVersion"
+    implementation group: 'tel.schich', name: 'javacan-core', version: "$javaCanVersion", classifier: 'x86_64'
     implementation global_libs.json
     implementation ts_plugin_libs.httpclient
 
-    // junit 4.13 does not mix well with httpclient :(
-    testImplementation group: 'junit', name: 'junit', version: '4.8.2'
     testFixturesImplementation global_libs.mockito
     testFixturesApi global_libs.annotations
-    testFixturesApi global_libs.junit
+    testFixturesApi global_libs.junit5api
 }
 
-compileJava {
-    doLast {
-        // gradle java plugin always generates JNI headers
-        copy {
-            from 'build/generated/sources/headers/java/main'
-            into "../../unit_tests/native"
-            include 'com*.h'
-        }
-    }
+tasks.register('copyJniHeader', Copy) {
+    dependsOn("compileJava")
+    from 'build/generated/sources/headers/java/main'
+    into "../../unit_tests/native"
+    include 'com*.h'
+}
+
+test {
+    dependsOn("copyJniHeader")
 }

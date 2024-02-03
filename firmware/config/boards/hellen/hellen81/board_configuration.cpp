@@ -18,18 +18,6 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[1] = Gpio::G8;
 	engineConfiguration->injectionPins[2] = Gpio::D11;
 	engineConfiguration->injectionPins[3] = Gpio::D10;
-
-	//engineConfiguration->injectionPins[4] = Gpio::D9;
-	//engineConfiguration->injectionPins[5] = Gpio::F12;
-	//engineConfiguration->injectionPins[6] = Gpio::F13;
-	//engineConfiguration->injectionPins[7] = Gpio::F14;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 }
 
 static void setIgnitionPins() {
@@ -37,41 +25,18 @@ static void setIgnitionPins() {
 	engineConfiguration->ignitionPins[1] = Gpio::E5;
 	engineConfiguration->ignitionPins[2] = Gpio::E4;
 	engineConfiguration->ignitionPins[3] = Gpio::E3;
-
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
 }
 
-static void setLedPins() {
-#ifdef EFI_COMMUNICATION_PIN
-	engineConfiguration->communicationLedPin = EFI_COMMUNICATION_PIN;
-#else
-	engineConfiguration->communicationLedPin = Gpio::H10;
-#endif /* EFI_COMMUNICATION_PIN */
-
-	//!!!!!!!!!!!
-	engineConfiguration->runningLedPin = Gpio::Unassigned;
-	//engineConfiguration->runningLedPin = Gpio::H9;  // green
-	
-	engineConfiguration->warningLedPin = Gpio::H11; // yellow
+Gpio getRunningLedPin() {
+	return Gpio::Unassigned;
 }
 
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
+Gpio getCommsLedPin() {
+	return Gpio::H10;
+}
 
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_5;
-
-	engineConfiguration->adcVcc = 3.29f;
+Gpio getWarningLedPin() {
+	return Gpio::H11;
 }
 
 static void setupDefaultSensorInputs() {
@@ -83,7 +48,7 @@ static void setupDefaultSensorInputs() {
 
 	engineConfiguration->tps1_1AdcChannel = EFI_ADC_4;
 
-	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
+
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_10;
 
 	engineConfiguration->afr.hwChannel = EFI_ADC_0;	// ADC1_16
@@ -94,8 +59,7 @@ static void setupDefaultSensorInputs() {
 }
 
 void setBoardConfigOverrides() {
-	setLedPins();
-	setupVbatt();
+	setHellenVbatt();
 
 // Hellen81a uses SPI2 for SD-card
 #if 1
@@ -104,8 +68,7 @@ void setBoardConfigOverrides() {
 	setHellenSdCardSpi3();
 #endif
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 
 	setHellenCan();
 }
@@ -115,13 +78,11 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-
-	engineConfiguration->isSdCardEnabled = true;
 
 	engineConfiguration->fuelPumpPin = Gpio::G2;	// OUT_IO9
 	engineConfiguration->fanPin = Gpio::D12;	// OUT_PWM8
@@ -138,10 +99,10 @@ void setBoardDefaultConfiguration() {
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
+
 	engineConfiguration->injectionMode = IM_SEQUENTIAL;	// IM_SIMULTANEOUS; //IM_BATCH;
 }

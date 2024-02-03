@@ -1,4 +1,4 @@
-# https://github.com/rusefi/rusefi/blob/master/firmware/config/boards/hellen/hellen_meta.h
+meta: config/boards/hellen_meta.h
 
 pins:
   - pin: A1
@@ -7,22 +7,27 @@ pins:
     color: black
 
   - pin: A2
-    function: +12V
-    type: 12v
+    function: +12V from main relay
+    type: 12v from main relay
     color: red
 
   - pin: A3
-    # H144_OUT_IO12
-    id: A8
+    meta: H144_OUT_IO12
     class: outputs
     function: Fuel Pump Relay Output (low)
     type: ls
     ts_name: A3 - Fuel Pump
     color: purple
 
+  - pin: A4old
+    meta: H144_OUT_IO13
+    class: outputs
+    function: Tachometer Output
+    ts_name: A4 - Tachometer legacy up to rev F
+    color: purple
+
   - pin: A4
-    # H144_OUT_IO13
-    id: G6
+    meta: H144_GP3
     class: outputs
     function: Tachometer Output
     ts_name: A4 - Tachometer
@@ -34,8 +39,7 @@ pins:
     color: brown
 
   - pin: A6
-    # H144_IGN_1
-    id: C13
+    meta: H144_IGN_1
     class: outputs
     function: Smart Ignition 1
     type: ign
@@ -43,8 +47,7 @@ pins:
     color: yellow
 
   - pin: A7
-    # H144_IGN_2
-    id: E5
+    meta: H144_IGN_2
     class: outputs
     function: Smart Ignition 2 Output
     type: ign
@@ -52,8 +55,7 @@ pins:
     color: yellow
 
   - pin: A8
-    # H144_LS_1
-    id: G7
+    meta: H144_LS_1
     function: Injector 1 Output
     class: outputs
     type: inj
@@ -66,40 +68,35 @@ pins:
     color: black
 
   - pin: On-board MAP
-    # H144_IN_MAP3
-    id: EFI_ADC_2
+    meta: H144_IN_MAP3
     class: analog_inputs
     function: MAP Sensor Input
     ts_name: On-board MAP
     color: orange
 
   - pin: B2
-    # H144_IN_MAP2 AIN10 PC1
-    id: EFI_ADC_11
+    meta: H144_IN_MAP2
     class: analog_inputs
     function: MAP Sensor Input
     ts_name: B2 - MAP
     color: orange
 
   - pin: B3
-    # H144_IN_IAT AIN14 PC3
-    id: EFI_ADC_13
+    meta: H144_IN_IAT
     class: analog_inputs
     function: IAT Sensor Input
     ts_name: B3 - IAT
     color: orange
 
   - pin: B4
-    # H144_IN_O2S2 AIN12 PA1
-    id: EFI_ADC_1
+    meta: H144_IN_O2S2
     class: analog_inputs
     function: O2 Sensor Input
     ts_name: B4 - O2
     color: orange
 
   - pin: B5
-    # H144_IN_TPS AIN17 PA4
-    id: EFI_ADC_4
+    meta: H144_IN_TPS
     class: analog_inputs
     function: TPS Sensor Input
     ts_name: B5 - TPS
@@ -111,16 +108,14 @@ pins:
     color: orange
 
   - pin: B7
-    # H144_IN_CLT AIN11 PC2
-    id: EFI_ADC_12
+    meta: H144_IN_CLT
     class: analog_inputs
     function: CLT Sensor Input
     ts_name: B7 - CLT
     color: orange
 
   - pin: B8
-    # H144_LS_2
-    id: G8
+    meta: H144_LS_2
     function: Injector 2 Output
     class: outputs
     type: inj
@@ -128,8 +123,7 @@ pins:
     color: blue
 
   - pin: C1
-    # H144_OUT_IO11
-    id: G2
+    meta: H144_OUT_IO11
     class: outputs
     function: Fan Relay or 5A Power Output (low)
     type: ls
@@ -137,8 +131,7 @@ pins:
     color: purple
 
   - pin: C2
-    # H144_IN_D_3
-    id: [E14, E14]
+    id: [H144_IN_D_3, H144_IN_D_3]
     class: [event_inputs, switch_inputs]
     function: Crank Sensor -
     type: hall
@@ -146,8 +139,7 @@ pins:
     color: white
 
   - pin: C3
-    # H144_IN_D_1
-    id: [E12, E12]
+    id: [H144_IN_D_1, H144_IN_D_1]
     class: [event_inputs, switch_inputs]
     function: Crank Sensor +
     type: hall
@@ -155,8 +147,7 @@ pins:
     color: gray
 
   - pin: C2C3
-    # H144_IN_CRANK
-    id: B1
+    meta: H144_IN_CRANK
     class: event_inputs
     function: Crank Sensor (VR)
     type: hall
@@ -164,9 +155,8 @@ pins:
     color: gray
 
   - pin: C4
-    # H144_IN_VSS
-    id: F11
-    class: switch_inputs
+    id: [H144_IN_VSS, H144_IN_VSS]
+    class: [event_inputs, switch_inputs]
     function: 2Step Digital Input
     type: hall
     ts_name: C4 - 2Step/Digital
@@ -183,8 +173,7 @@ pins:
     color: blue
 
   - pin: C7
-    # H144_IN_CAM
-    id: [A6, A6, EFI_ADC_6]
+    id: [H144_IN_CAM, H144_IN_CAM, EFI_ADC_6]
     class: [event_inputs, switch_inputs, analog_inputs]
     function: Camshaft HALL Sensor or Generic Digital Input
     type: hall
@@ -192,8 +181,7 @@ pins:
     color: brown
 
   - pin: C8
-    # H144_OUT_PWM1
-    id: D13
+    meta: H144_OUT_PWM1
     class: outputs
     function: Idle Output (low)
     type: ls
@@ -201,8 +189,7 @@ pins:
     color: purple
 
   - pin: D1
-    # H144_LS_3
-    id: D11
+    meta: H144_LS_3
     function: Injector 3
     class: outputs
     type: inj
@@ -210,16 +197,14 @@ pins:
     color: blue
 
   - pin: D2
-    # H144_OUT_PWM3
-    id: C7
+    meta: H144_OUT_PWM3
     function: Out Boost
     class: outputs
     ts_name: D2 - Out Boost
     color: purple
 
   - pin: D3
-    # H144_IN_SENS1
-    id: F3
+    meta: H144_IN_SENS1
     class: switch_inputs
     function: Digital Input 2
     type: hall
@@ -227,24 +212,21 @@ pins:
     color: green
 
   - pin: D4
-    # H144_IN_AUX1
-    id: EFI_ADC_8
+    meta: H144_IN_AUX1
     class: analog_inputs
     function: TPS2 Sensor Input
     ts_name: D4 - TPS2
     color: orange
 
   - pin: D5
-    # IN_PPS
-    id: EFI_ADC_3
+    meta: H144_IN_PPS
     class: analog_inputs
     function: PPS Sensor Input
     ts_name: D5 - PPS
     color: orange
 
   - pin: D6
-    # H144_IGN_3
-    id: E4
+    meta: H144_IGN_3
     class: outputs
     function: Smart Ignition 3 Output
     type: ign
@@ -252,8 +234,7 @@ pins:
     color: yellow
 
   - pin: D7
-    # H144_IGN_4
-    id: E3
+    meta: H144_IGN_4
     class: outputs
     function: Smart Ignition 4 Output
     type: ign
@@ -266,8 +247,7 @@ pins:
     color: black
 
   - pin: E1
-    # H144_LS_4
-    id: D10
+    meta: H144_LS_4
     function: Injector 4
     class: outputs
     type: inj
@@ -275,26 +255,23 @@ pins:
     color: blue
 
   - pin: E2
-    # H144_OUT_IO6
-    id: G11
+    meta: H144_OUT_IO6
     function: Out NOS
     class: outputs
     ts_name: E2 - Out NOS
     color: purple
 
   - pin: E3
-    # H144_IN_SENS2
-    id: F4
-    class: switch_inputs
+    id: [H144_IN_SENS2, H144_IN_SENS2]
+    class: [event_inputs, switch_inputs]
     function: Digital Input 3
     type: hall
     ts_name: E3 - Digital In 3
     color: green
 
   - pin: E4
-    # H144_IN_SENS3
-    id: F5
-    class: switch_inputs
+    id: [H144_IN_SENS3, H144_IN_SENS3]
+    class: [event_inputs, switch_inputs]
     function: Digital Input 4
     type: hall
     ts_name: E4 - Digital In 4
@@ -305,8 +282,7 @@ pins:
     color: white
 
   - pin: E6
-    # H144_IN_D_4
-    id: [E15, E15]
+    id: [H144_IN_D_4, H144_IN_D_4]
     class: [event_inputs, switch_inputs]
     function: Cam Sensor VR+ as Hall
     type: hall
@@ -314,8 +290,7 @@ pins:
     color: gray
 
   - pin: E5E6
-    # H144_IN_RES1
-    id: F9
+    meta: H144_IN_RES1
     class: event_inputs
     function: Cam Sensor (VR)
     type: vr
@@ -323,8 +298,7 @@ pins:
     color: gray
 
   - pin: E7
-    # H144_IN_D_AUX4
-    id: A7
+    meta: H144_IN_D_AUX4
     class: event_inputs
     ts_name: E7 - Flex
     function: Digital Input / Flex fuel sensor
@@ -336,8 +310,7 @@ pins:
     color: purple
 
   - pin: F1
-    # H144_OUT_PWM5
-    id: C9
+    meta: H144_OUT_PWM5
     class: outputs
     function: Idle2 Output (low)
     type: ls
@@ -346,17 +319,24 @@ pins:
 
   - pin: F2
     # H144_OUT_PWM7
-    id: D15
+#    id: D15 pin was moved to Aux on rev G
     function: VVT#1
     class: outputs
     type: ls
     ts_name: F2 - VVT#1
     color: purple
 
+  - pin: F2g
+    meta: H144_IGN_7
+    function: VVT#1 rev G
+    class: outputs
+    type: ls
+    ts_name: F2 - VVT#1 rev G
+    color: purple
+
   # also used as knock input (is hard-coded at the moment)
   - pin: F3
-    # H144_IN_SENS4
-    id: F6
+    meta: H144_IN_SENS4
     class: switch_inputs
     function: Digital Input 5 / Knock Input
     type: hall
@@ -365,16 +345,23 @@ pins:
 
   - pin: F4
     # H144_OUT_PWM8
-    id: D12
+#    id: D12 pin was moved to Aux on rev G
     function: VVT#2
     class: outputs
     type: ls
     ts_name: F4 - VVT#2
     color: purple
 
+  - pin: F4g
+    meta: H144_IGN_8
+    function: VVT#2 rev G
+    class: outputs
+    type: ls
+    ts_name: F4 - VVT#2 rev G
+    color: purple
+
   - pin: F5
-    # H144_OUT_IO10
-    id: G12
+    meta: H144_OUT_IO10
     class: outputs
     ts_name: F5 - MAIN
     function: Main relay control
@@ -382,16 +369,14 @@ pins:
     color: purple
 
   - pin: F6
-    # H144_IN_AUX2
-    id: EFI_ADC_14
+    meta: H144_IN_AUX2
     class: analog_inputs
     function: PPS2 Sensor Input
     ts_name: F6 - PPS2
     color: orange
 
   - pin: F7
-    # VIGN PA5
-    id: EFI_ADC_5
+    meta: H144_IN_VBATT
     class: analog_inputs
     ts_name: F7 - Ignition Key Voltage
     function: +12V engine ECU power source, run/start
@@ -404,8 +389,10 @@ pins:
 
 info:
   title: AlphaX 4chan
+  order: 0
   name: AlphaX 4chan
   board_url: https://rusefi.com/s/4chan
+  directory: hellen/alphax-4chan
   image:
     file: alphax-4chan.jpg
   pins:

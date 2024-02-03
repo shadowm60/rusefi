@@ -11,14 +11,12 @@
 
 #include "pch.h"
 
-unsigned int getBrainPinTotalNum(void) {
+static size_t getBrainPinTotalNum() {
 	return BRAIN_PIN_TOTAL_PINS;
 }
 
-const char* & getBrainUsedPin(unsigned int idx) {
-	/*if (idx >= getBrainPinTotalNum())
-		return NULL;*/
-	return engine->pinRepository.PIN_USED[idx];
+const char* & getBrainUsedPin(size_t index) {
+	return engine->pinRepository.getBrainUsedPin(index);
 }
 
 /* Common for firmware and unit tests */
@@ -33,13 +31,11 @@ bool isBrainPinValid(brain_pin_e brainPin) {
 	return true;
 }
 
-int brainPin_to_index(brain_pin_e brainPin) {
-	unsigned int i;
-
+int brainPin_to_index(Gpio brainPin) {
 	if (brainPin < Gpio::A0)
 		return -1;
 
-	i = brainPin - Gpio::A0;
+	size_t i = brainPin - Gpio::A0;
 
 	if (i >= getBrainPinTotalNum())
 		return -1;
@@ -52,7 +48,7 @@ int brainPin_to_index(brain_pin_e brainPin) {
  * @return true if this pin was already used, false otherwise
  */
 
-bool brain_pin_markUsed(brain_pin_e brainPin, const char *msg) {
+bool brain_pin_markUsed(Gpio brainPin, const char *msg) {
 #if ! EFI_BOOTLOADER
 	efiPrintf("pin_markUsed: %s on %s", msg, hwPortname(brainPin));
 #endif
@@ -61,13 +57,16 @@ bool brain_pin_markUsed(brain_pin_e brainPin, const char *msg) {
 	if (index < 0)
 		return true;
 
-	if (getBrainUsedPin(index) != NULL) {
-		/* TODO: get readable name of brainPin... */
-		firmwareError(CUSTOM_ERR_PIN_ALREADY_USED_1, "Pin \"%s\" required by \"%s\" but is used by \"%s\" %s",
+	if (engine->pinRepository.getBrainUsedPin(index) != nullptr) {
+		// hwPortname and share a buffer behind the scenes, even while they probably never use it for different
+		// values here let's have an explicit second buffer to make this more reliable
+		char physicalPinName[32];
+		strncpy(physicalPinName, hwPhysicalPinName(brainPin), sizeof(physicalPinName) - 1);
+		criticalError("Pin \"%s\" (%s) required by \"%s\" but is used by \"%s\"",
 				hwPortname(brainPin),
+				physicalPinName,
 				msg,
-				getBrainUsedPin(index),
-				getEngine_type_e(engineConfiguration->engineType));
+				getBrainUsedPin(index));
 		return true;
 	}
 
@@ -148,7 +147,8 @@ static void reportPins() {
 			int pin = getBrainPinIndex(brainPin);
 			ioportid_t port = getBrainPinPort(brainPin);
 
-			efiPrintf("pin %s%d: %s", portname(port), pin, pin_user);
+            const char *boardPinName = getBoardSpecificPinName(brainPin);
+			efiPrintf("pin %s%d (%s): %s", portname(port), pin, boardPinName, pin_user);
 			totalPinsUsed++;
 		}
 	}
@@ -198,16 +198,12 @@ __attribute__((weak)) const char * getBoardSpecificPinName(brain_pin_e /*brainPi
 	return nullptr;
 }
 
-const char *hwPortname(brain_pin_e brainPin) {
+const char *hwPhysicalPinName(Gpio brainPin) {
 	if (brainPin == Gpio::Invalid) {
 		return "INVALID";
 	}
 	if (brainPin == Gpio::Unassigned) {
 		return "NONE";
-	}
-	const char * boardSpecificPinName = getBoardSpecificPinName(brainPin);
-	if (boardSpecificPinName != nullptr) {
-		return boardSpecificPinName;
 	}
 
 	portNameStream.eos = 0; // reset
@@ -237,6 +233,14 @@ const char *hwPortname(brain_pin_e brainPin) {
 	portNameStream.buffer[portNameStream.eos] = 0; // need to terminate explicitly
 
 	return portNameBuffer;
+}
+
+const char *hwPortname(brain_pin_e brainPin) {
+	const char * boardSpecificPinName = getBoardSpecificPinName(brainPin);
+	if (boardSpecificPinName != nullptr) {
+		return boardSpecificPinName;
+	}
+	return hwPhysicalPinName(brainPin);
 }
 
 void initPinRepository(void) {
@@ -281,8 +285,8 @@ bool gpio_pin_markUsed(ioportid_t port, ioportmask_t pin, const char *msg) {
 		 * todo: the problem is that this warning happens before the console is even
 		 * connected, so the warning is never displayed on the console and that's quite a problem!
 		 */
-//		warning(OBD_PCM_Processor_Fault, "%s%d req by %s used by %s", portname(port), pin, msg, getBrainUsedPin(index));
-		firmwareError(CUSTOM_ERR_PIN_ALREADY_USED_1, "%s%d req by %s used by %s", portname(port), pin, msg, getBrainUsedPin(index));
+//		warning(ObdCode::OBD_PCM_Processor_Fault, "%s%d req by %s used by %s", portname(port), pin, msg, getBrainUsedPin(index));
+		firmwareError(ObdCode::CUSTOM_ERR_PIN_ALREADY_USED_1, "%s%d req by %s used by %s", portname(port), pin, msg, getBrainUsedPin(index));
 		return true;
 	}
 	getBrainUsedPin(index) = msg;
@@ -310,7 +314,10 @@ const char *getPinFunction(brain_input_pin_e brainPin) {
 	return getBrainUsedPin(index);
 }
 #else
-const char *hwPortname(brain_pin_e brainPin) {
+const char *hwPhysicalPinName(Gpio brainPin) {
+	return "N/A";
+}
+const char *hwPortname(Gpio brainPin) {
 	(void)brainPin;
 	return "N/A";
 }

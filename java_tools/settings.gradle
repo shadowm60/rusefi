@@ -1,9 +1,16 @@
+include ':trigger-image'
+include ':tune-tools'
 include ':proxy_server'
+// gradle naming convention does not like '_' symbol
 project(':proxy_server').projectDir = new File('proxy_server')
 include ':core_io'
 project(':core_io').projectDir = new File('../java_console/shared_io')
 include ':core_ui'
 project(':core_ui').projectDir = new File('../java_console/core_ui')
+include ':peak-can-basic'
+project(':peak-can-basic').projectDir = new File('../java_console/peak-can-basic')
+include ':trigger-ui'
+project(':trigger-ui').projectDir = new File('../java_console/trigger-ui')
 include ':logging-api'
 project(':logging-api').projectDir = new File('../java_console/logging-api')
 include ':gcc_map_reader'
@@ -11,11 +18,10 @@ project(':gcc_map_reader').projectDir = new File('gcc_map_reader')
 include ':enum_to_string'
 project(':enum_to_string').projectDir = new File('enum_to_string')
 include ':logicdata2c'
-project(':logicdata2c').projectDir = new File('logicdata2c')
 include ':version2header'
-project(':version2header').projectDir = new File('version2header')
 include ':bin2header'
-project(':bin2header').projectDir = new File('bin2header')
+include ':config_definition_base'
+project(':config_definition_base').projectDir = new File('configuration_definition_base')
 include ':config_definition'
 project(':config_definition').projectDir = new File('configuration_definition')
 include ':ts_plugin_launcher'

@@ -1,6 +1,6 @@
 #include "global.h"
 #include "sensor_type.h"
-// was generated automatically by rusEFI tool  from sensor_type.h // by enum2string.jar tool on Fri Oct 28 01:18:54 UTC 2022
+// was generated automatically by rusEFI tool  from sensor_type.h // by enum_to_string.jar tool on Tue Jan 09 15:06:38 UTC 2024
 // see also gen_config_and_enums.bat
 
 
@@ -13,6 +13,8 @@ case SensorType::AcceleratorPedalPrimary:
   return "AcceleratorPedalPrimary";
 case SensorType::AcceleratorPedalSecondary:
   return "AcceleratorPedalSecondary";
+case SensorType::AmbientTemperature:
+  return "AmbientTemperature";
 case SensorType::AuxAnalog1:
   return "AuxAnalog1";
 case SensorType::AuxAnalog2:
@@ -47,12 +49,14 @@ case SensorType::BatteryVoltage:
   return "BatteryVoltage";
 case SensorType::Clt:
   return "Clt";
+case SensorType::CompressorDischargePressure:
+  return "CompressorDischargePressure";
+case SensorType::CompressorDischargeTemperature:
+  return "CompressorDischargeTemperature";
+case SensorType::DetectedGear:
+  return "DetectedGear";
 case SensorType::DriverThrottleIntent:
   return "DriverThrottleIntent";
-case SensorType::EGT1:
-  return "EGT1";
-case SensorType::EGT2:
-  return "EGT2";
 case SensorType::FuelEthanolPercent:
   return "FuelEthanolPercent";
 case SensorType::FuelLevel:
@@ -63,10 +67,14 @@ case SensorType::FuelPressureInjector:
   return "FuelPressureInjector";
 case SensorType::FuelPressureLow:
   return "FuelPressureLow";
+case SensorType::FuelTemperature:
+  return "FuelTemperature";
 case SensorType::Iat:
   return "Iat";
 case SensorType::IdlePosition:
   return "IdlePosition";
+case SensorType::IgnKeyVoltage:
+  return "IgnKeyVoltage";
 case SensorType::InputShaftSpeed:
   return "InputShaftSpeed";
 case SensorType::Invalid:
@@ -97,10 +105,14 @@ case SensorType::MapSlow2:
   return "MapSlow2";
 case SensorType::OilPressure:
   return "OilPressure";
+case SensorType::OilTemperature:
+  return "OilTemperature";
 case SensorType::PlaceholderLast:
   return "PlaceholderLast";
 case SensorType::Rpm:
   return "Rpm";
+case SensorType::ThrottleInletPressure:
+  return "ThrottleInletPressure";
 case SensorType::Tps1:
   return "Tps1";
 case SensorType::Tps1Primary:
@@ -119,6 +131,8 @@ case SensorType::VehicleSpeed:
   return "VehicleSpeed";
 case SensorType::WastegatePosition:
   return "WastegatePosition";
+case SensorType::WheelSlipRatio:
+  return "WheelSlipRatio";
   }
  return NULL;
 }

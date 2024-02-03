@@ -5,6 +5,7 @@ pins:
     function: Digital trigger/switch input for instance Hall type CAM
     ts_name: Digital 2
     type: din
+    color: green
 
   - pin: 2
     id: [E12, E12]
@@ -12,6 +13,7 @@ pins:
     function: Digital trigger/switch input for instance VSS
     ts_name: Digital 3
     type: din
+    color: white
 
   - pin: 3
     id: [E14, E14]
@@ -23,6 +25,7 @@ pins:
   - pin: 4
     function: "Variable Reluctance #2 positive"
     type: vr
+    color: blue
 
   - id: E8
     class: event_inputs
@@ -31,6 +34,7 @@ pins:
   - pin: 5
     function: "Variable Reluctance #1 positive"
     type: vr
+    color: blue
 
   - id: E7
     class: event_inputs
@@ -39,14 +43,17 @@ pins:
   - pin: 6
     function: ETB 1 negative
     type: etb
+    color: white
 
   - pin: 7
     function: ETB 1 positive
     type: etb
+    color: blue
 
   - pin: 8
     function: ETB 2 negative
     type: etb
+    color: white
 
   - pin: 9
     id: [E13, E13]
@@ -61,6 +68,7 @@ pins:
     function: Digital trigger/switch input
     ts_name: Digital 1
     type: din
+    color: yellow
 
   - pin: 11
     id: [E15, E15]
@@ -72,10 +80,12 @@ pins:
   - pin: 12
     function: "Variable Reluctance #2 negative"
     type: vr
+    color: white
 
   - pin: 13
     function: "Variable Reluctance #1 negative"
     type: vr
+    color: white
 
   - pin: 14
     function: Ground
@@ -84,13 +94,16 @@ pins:
   - pin: 15
     function: ETB 2 positive
     type: etb
+    color: blue
 
   - pin: 16
     function: CAN bus low
+    color: blue
     type: can
 
   - pin: 17
     function: CAN bus high
+    color: green
     type: can
 
   - pin: 18
@@ -110,9 +123,13 @@ pins:
 
   - pin: 21
     function: CAN2 bus low
+    type: can
+    color: blue
 
   - pin: 22
     function: CAN2 bus high
+    type: can
+    color: green
 
   - pin: 23
     function: Power supply from main relay. Connect this pin to the output of the car's main relay that also powers injectors, coils, etc. Supplies power to electronic throttle drivers and high side outputs.
@@ -151,8 +168,9 @@ pins:
 info:
   title: Proteus
   name: Black23
-  board_url: "https://wiki.rusefi.com/Hardware/Proteus/Proteus/"
-  id: black23
+  board_url: "https://github.com/rusefi/rusefi/wiki/Proteus-Manual"
+  directory: proteus
+  cid: black23
   image:
     file: black23.jpg
   pins:

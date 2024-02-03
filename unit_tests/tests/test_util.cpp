@@ -9,7 +9,6 @@
 
 #include <string.h>
 
-#include "cyclic_buffer.h"
 #include "histogram.h"
 
 #include "malfunction_central.h"
@@ -17,7 +16,6 @@
 
 #include "nmea.h"
 #include "mmc_card.h"
-#include "lcd_menu_tree.h"
 #include "fl_stack.h"
 
 TEST(util, testitoa) {
@@ -59,40 +57,6 @@ TEST(util, crc) {
 	c = crc32(line, 1);
 	c = crc32inc(line + 1, c, 8 - 1);
 	assertEqualsM("crc32 line inc", 0x4775a7b1, c);
-}
-
-TEST(util, cyclicBufferContains) {
-	cyclic_buffer<int> sb;
-	sb.add(10);
-	ASSERT_EQ(TRUE, sb.contains(10));
-	ASSERT_EQ(FALSE, sb.contains(11));
-}
-
-TEST(util, cyclicBuffer) {
-	cyclic_buffer<int> sb;
-
-	{
-		sb.add(10);
-
-		ASSERT_EQ(10, sb.sum(3));
-
-		sb.add(2);
-		ASSERT_EQ(12, sb.sum(2));
-	}
-	{
-		sb.clear();
-
-		sb.add(1);
-		sb.add(2);
-		sb.add(3);
-		sb.add(4);
-
-		ASSERT_EQ(4, sb.maxValue(3));
-		ASSERT_EQ(4, sb.maxValue(113));
-		ASSERT_EQ( 2,  sb.minValue(3)) << "minValue(3)";
-		ASSERT_EQ(1, sb.minValue(113));
-	}
-
 }
 
 TEST(util, histogram) {
@@ -140,15 +104,15 @@ static void testMalfunctionCentralRemoveNonExistent() {
 	clearWarnings();
 
 	// this should not crash
-	removeError(OBD_TPS1_Correlation);
+	removeError(ObdCode::OBD_TPS1_Correlation);
 }
 
 static void testMalfunctionCentralSameElementAgain() {
 	clearWarnings();
 	error_codes_set_s localCopy;
 
-	addError(OBD_TPS1_Correlation);
-	addError(OBD_TPS1_Correlation);
+	addError(ObdCode::OBD_TPS1_Correlation);
+	addError(ObdCode::OBD_TPS1_Correlation);
 	getErrorCodes(&localCopy);
 	ASSERT_EQ(1, localCopy.count);
 }
@@ -157,10 +121,10 @@ static void testMalfunctionCentralRemoveFirstElement() {
 	clearWarnings();
 	error_codes_set_s localCopy;
 
-	obd_code_e firstElement = OBD_TPS1_Correlation;
+	ObdCode firstElement = ObdCode::OBD_TPS1_Correlation;
 	addError(firstElement);
 
-	obd_code_e secondElement = OBD_TPS2_Correlation;
+	ObdCode secondElement = ObdCode::OBD_TPS2_Correlation;
 	addError(secondElement);
 	getErrorCodes(&localCopy);
 	ASSERT_EQ(2, localCopy.count);
@@ -186,7 +150,7 @@ TEST(misc, testMalfunctionCentral) {
 	getErrorCodes(&localCopy);
 	ASSERT_EQ(0, localCopy.count);
 
-	obd_code_e code = OBD_TPS1_Correlation;
+	ObdCode code = ObdCode::OBD_TPS1_Correlation;
 	// let's add one error and validate
 	addError(code);
 
@@ -195,18 +159,18 @@ TEST(misc, testMalfunctionCentral) {
 	ASSERT_EQ(code, localCopy.error_codes[0]);
 
 	// let's remove value which is not in the collection
-	removeError((obd_code_e) 22);
+	removeError((ObdCode) 22);
 	// element not present - nothing to removed
 	ASSERT_EQ(1, localCopy.count);
 	ASSERT_EQ(code, localCopy.error_codes[0]);
 
-	code = OBD_TPS2_Correlation;
+	code = ObdCode::OBD_TPS2_Correlation;
 	addError(code);
 	getErrorCodes(&localCopy);
 	// todo:	ASSERT_EQ(2, localCopy.count);
 
 	for (int code = 0; code < 100; code++) {
-		addError((obd_code_e) code);
+		addError((ObdCode) code);
 	}
 	getErrorCodes(&localCopy);
 	ASSERT_EQ(MAX_ERROR_CODES_COUNT, localCopy.count);
@@ -325,8 +289,6 @@ TEST(misc, testConsoleLogic) {
 	strcpy(buffer, "\"echo\"");
 	ASSERT_TRUE(strEqual("echo", unquote(buffer))) << "unquote quoted";
 
-	char *ptr = validateSecureLine(UNKNOWN_COMMAND);
-	ASSERT_EQ(0, strcmp(UNKNOWN_COMMAND, ptr));
 	ASSERT_EQ(10, tokenLength(UNKNOWN_COMMAND));
 
 	// handling invalid token should work
@@ -434,67 +396,6 @@ TEST(misc, testMisc) {
 //	ASSERT_EQ(SPARKOUT_12_OUTPUT, getPinByName("spa12"));
 }
 
-TEST(misc, testMenuTree) {
-	MenuItem ROOT(NULL, NULL);
-
-	MenuTree tree(&ROOT);
-
-	MenuItem miTopLevel1(tree.root, "top level 1");
-	MenuItem miTopLevel2(tree.root, "top level 2");
-	MenuItem miTopLevel3(tree.root, LL_RPM);
-	MenuItem miTopLevel4(tree.root, "top level 4");
-	MenuItem miTopLevel5(tree.root, "top level 5");
-
-	MenuItem miSubMenu1_1(&miTopLevel1, "sub menu 1 1");
-	MenuItem miSubMenu1_2(&miTopLevel1, "sub menu 1 2");
-
-	MenuItem miSubMenu5_1(&miTopLevel5, "sub menu 5 1");
-	MenuItem miSubMenu5_2(&miTopLevel5, "sub menu 5 2");
-
-	ASSERT_EQ(0, miTopLevel1.index);
-	ASSERT_EQ(1, miTopLevel2.index);
-	ASSERT_EQ(4, miTopLevel5.index);
-
-	tree.init(&miTopLevel1, 3);
-
-	tree.nextItem();
-	ASSERT_TRUE(tree.topVisible == &miTopLevel1);
-	ASSERT_TRUE(tree.current == &miTopLevel2);
-
-	tree.back();
-	ASSERT_TRUE(tree.current == &miTopLevel2); // no 'back' since we are on the top level already
-
-	tree.nextItem();
-	ASSERT_TRUE(tree.topVisible == &miTopLevel1);
-	ASSERT_TRUE(tree.current == &miTopLevel3);
-
-	tree.nextItem();
-	ASSERT_TRUE(tree.topVisible == &miTopLevel2);
-	ASSERT_TRUE(tree.current == &miTopLevel4);
-
-	tree.enterSubMenu();
-	ASSERT_TRUE(tree.current == &miTopLevel4) << "still same"; // no children in this one
-
-	tree.nextItem();
-	ASSERT_TRUE(tree.topVisible == &miTopLevel3);
-	ASSERT_TRUE(tree.current == &miTopLevel5) << "tl5";
-
-	tree.nextItem();
-	ASSERT_TRUE(tree.topVisible == &miTopLevel1) << "tl1 t";
-	ASSERT_TRUE(tree.current == &miTopLevel1) << "tl1 c";
-
-	tree.nextItem();
-	tree.nextItem();
-	tree.nextItem();
-	tree.nextItem();
-
-	tree.enterSubMenu();
-	ASSERT_TRUE(tree.current == &miSubMenu5_1);
-
-	tree.back();
-	ASSERT_TRUE(tree.current == &miTopLevel1);
-}
-
 int getRusEfiVersion(void) {
 	return TS_FILE_VERSION;
 }
@@ -520,76 +421,31 @@ TEST(util, PeakDetect) {
 	EXPECT_EQ(dut.detect(500, startTime + timeout + 1), 500);
 }
 
-TEST(util, WrapAround62) {
-	// Random test
-	{
-		WrapAround62 t;
-		uint32_t source = 0;
-		uint64_t actual = 0;
-
-		// Test random progression, positive and negative.
-		uint32_t seed = time(NULL);
-		printf("Testing with seed 0x%08x\n", seed);
-		srand(seed);
-		for (unsigned i = 0; i < 10000; i++) {
-			int32_t delta = rand();
-			if (delta < 0) {
-				delta = ~delta;
-			}
-			delta -= RAND_MAX >> 1;
-
-			// Cap negative test
-			if (delta < 0 && -delta > actual) {
-				delta = -actual;
-			}
-
-			source += delta;
-			actual += delta;
-
-			uint64_t next = t.update(source);
-			EXPECT_EQ(actual, next);
-		}
-	}
-
-	// More pointed test for expected edge conditions
-	{
-		WrapAround62 t;
-
-		EXPECT_EQ(t.update(0x03453455), 0x003453455LL);
-		EXPECT_EQ(t.update(0x42342323), 0x042342323LL);
-		EXPECT_EQ(t.update(0x84356345), 0x084356345LL);
-		EXPECT_EQ(t.update(0x42342323), 0x042342323LL);
-		EXPECT_EQ(t.update(0x84356345), 0x084356345LL);
-		EXPECT_EQ(t.update(0xC5656565), 0x0C5656565LL);
-		EXPECT_EQ(t.update(0x01122112), 0x101122112LL); // Wrap around!
-		EXPECT_EQ(t.update(0xC5656565), 0x0C5656565LL);
-		EXPECT_EQ(t.update(0x84356345), 0x084356345LL);
-		EXPECT_EQ(t.update(0xC5656565), 0x0C5656565LL);
-		EXPECT_EQ(t.update(0x01122112), 0x101122112LL); // Wrap around!
-		EXPECT_EQ(t.update(0x42342323), 0x142342323LL);
-		EXPECT_EQ(t.update(0x84356345), 0x184356345LL);
-		EXPECT_EQ(t.update(0x42342323), 0x142342323LL);
-		EXPECT_EQ(t.update(0x84356345), 0x184356345LL);
-		EXPECT_EQ(t.update(0xC5656565), 0x1C5656565LL);
-		EXPECT_EQ(t.update(0x01122112), 0x201122112LL); // Wrap around!
-		EXPECT_EQ(t.update(0xC5656565), 0x1C5656565LL);
-		EXPECT_EQ(t.update(0x84356345), 0x184356345LL);
-		EXPECT_EQ(t.update(0xC5656565), 0x1C5656565LL);
-		EXPECT_EQ(t.update(0x01122112), 0x201122112LL); // Wrap around!
-		EXPECT_EQ(t.update(0xC5656565), 0x1C5656565LL);
-		EXPECT_EQ(t.update(0x84356345), 0x184356345LL);
-		EXPECT_EQ(t.update(0x42342323), 0x142342323LL);
-		EXPECT_EQ(t.update(0x01122112), 0x101122112LL);
-		EXPECT_EQ(t.update(0x84356345), 0x084356345LL);
-		EXPECT_EQ(t.update(0x42342323), 0x042342323LL);
-		EXPECT_EQ(t.update(0x03453455), 0x003453455LL);
-	}
-}
-
 TEST(util, isInRange) {
 	EXPECT_FALSE(isInRange(5, 4, 10));
 	EXPECT_TRUE(isInRange(5, 5, 10));
 	EXPECT_TRUE(isInRange(5, 7, 10));
 	EXPECT_TRUE(isInRange(5, 10, 10));
 	EXPECT_FALSE(isInRange(5, 11, 10));
+}
+
+TEST(util, wrapAngle) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// Test within range
+	EXPECT_EQ(0, wrapAngleMethod(0));
+	EXPECT_EQ(20, wrapAngleMethod(20));
+	EXPECT_EQ(710, wrapAngleMethod(710));
+
+	// Test off the top of the range
+	EXPECT_EQ(1, wrapAngleMethod(721));
+	EXPECT_EQ(20, wrapAngleMethod(740));
+	EXPECT_EQ(719, wrapAngleMethod(720 + 719));
+	EXPECT_EQ(0, wrapAngleMethod(720 + 720));
+	EXPECT_EQ(5, wrapAngleMethod(10 * 720 + 5));
+
+	// Test off the bottom of the range
+	EXPECT_EQ(719, wrapAngleMethod(-1));
+	EXPECT_EQ(360, wrapAngleMethod(-360));
+	EXPECT_EQ(1, wrapAngleMethod(-719));
 }

@@ -22,12 +22,9 @@ typedef struct {
 
 static usb_buf_s usbBuf;
 
-
 static bool isUsbSerialInitialized = false;
 
 static bool isUsbSerialInitStarted = false;
-
-static thread_reference_t threadrx = NULL;
 
 // called from the USB IRQ handler
 static void onUsbDataReceived(uint8_t* pu8Data, uint32_t u32ReceviedSize) {
@@ -72,8 +69,7 @@ static size_t _write(void *ip, const uint8_t *bp, size_t n) {
 	return _writet(ip, bp, n, USB_WRITE_TIMEOUT);
 }
 static size_t _readt(void *ip, uint8_t *bp, size_t n, sysinterval_t timeout) {
-	size_t numBytesRead;
-	//numBytesRead = UsbDeviceCdcCom_ReceiveBuffer(bp, n);
+	//size_t numBytesRead = UsbDeviceCdcCom_ReceiveBuffer(bp, n);
 
 	return (size_t)iqReadTimeout(&usbBuf.fifoRxQueue, bp, n, timeout);
 /*

@@ -1,10 +1,13 @@
 #!/bin/bash
 
-echo "I am flash_openocd.sh"
+echo "I am flash_openocd407.sh"
 
-cd ../misc/install
+STLINK=$(lsusb | grep 'ST-LINK\|STLINK')
+if [ "$STLINK" ]; then
+  echo "I see $STLINK make sure your board file accepts this specific kind of ST-LINK"
+else
+  echo "Do not see any ST-LINK. If you are on WSL make sure you have bound USB"
+  exit -1
+fi
 
-[ -e openocd/openocd.exe ] || { echo "openocd/openocd.exe NOT FOUND"; exit 1; }
-
-./openocd/openocd.exe -f openocd/stm32f4discovery.cfg  -c "program ../../firmware/build/rusefi.bin verify reset exit 0x08000000"
-
+sudo openocd -f board/stm32f4discovery.cfg  -c "program build/rusefi.bin verify reset exit 0x08000000"

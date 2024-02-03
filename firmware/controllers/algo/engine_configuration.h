@@ -11,7 +11,7 @@
 #include "persistent_configuration.h"
 
 #ifndef DEFAULT_ENGINE_TYPE
-#define DEFAULT_ENGINE_TYPE MINIMAL_PINS
+#define DEFAULT_ENGINE_TYPE engine_type_e::MINIMAL_PINS
 #endif
 
 #define CLT_MANUAL_IDLE_CORRECTION config->cltIdleCorrBins, config->cltIdleCorr, CLT_CURVE_SIZE
@@ -20,6 +20,12 @@
 #define INJECTOR_LAG_CURVE engineConfiguration->injector.battLagCorrBins, engineConfiguration->injector.battLagCorr, VBAT_INJECTOR_CURVE_SIZE
 
 #define MOCK_UNDEFINED -1
+
+#if !defined(EFI_SIM_IS_WINDOWS) || !EFI_SIM_IS_WINDOWS
+#define BOARD_WEAK __attribute__((weak))
+#else
+#define BOARD_WEAK
+#endif
 
 void setCrankOperationMode();
 void setCamOperationMode();
@@ -40,10 +46,9 @@ void setDefaultBasePins();
 void setDefaultSdCardParameters();
 
 void onBurnRequest();
-void incrementGlobalConfigurationVersion();
+void incrementGlobalConfigurationVersion(const char * msg = "undef");
 
-void commonFrankensoAnalogInputs(engine_configuration_s *engineConfiguration);
-void setFrankenso0_1_joystick(engine_configuration_s *engineConfiguration);
+void commonFrankensoAnalogInputs();
 
 void emptyCallbackWithConfiguration(engine_configuration_s * engine);
 
@@ -61,9 +66,15 @@ void resetConfigurationExt(engine_type_e engineType);
 void rememberCurrentConfiguration();
 #endif /* __cplusplus */
 
-void setBoardDefaultConfiguration(void);
-void setBoardConfigOverrides(void);
+void setBoardDefaultConfiguration();
+void setBoardConfigOverrides();
+void onBoardStandBy();
 void boardOnConfigurationChange(engine_configuration_s *previousConfiguration);
+Gpio getCommsLedPin();
+Gpio getWarningLedPin();
+Gpio getRunningLedPin();
+
+int hackHellenBoardId(int detectedId);
 
 #if !EFI_UNIT_TEST
 extern persistent_config_container_s persistentState;
@@ -97,5 +108,8 @@ extern bool isActiveConfigurationVoid;
 
 #define isPinOrModeChanged(pin, mode) (isConfigurationChanged(pin) || isConfigurationChanged(mode))
 
+// total number of outputs: low side + high side
 int getBoardMetaOutputsCount();
+int getBoardMetaLowSideOutputsCount();
 Gpio* getBoardMetaOutputs();
+int getBoardMetaDcOutputsCount();

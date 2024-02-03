@@ -4,17 +4,20 @@
 
 #pragma once
 
-#include "expected.h"
+#include <rusefi/expected.h>
 
 template <typename TInput, typename TOutput>
 class ClosedLoopController {
 public:
-	void update() {
+	expected<TOutput> update() {
 		expected<TOutput> outputValue = getOutput();
 		setOutput(outputValue);
+
+		return outputValue;
 	}
 
-	virtual expected<TOutput> getOutput() {
+private:
+	expected<TOutput> getOutput() {
 		expected<TInput> setpoint = getSetpoint();
 		// If we don't know the setpoint, return failure.
 		if (!setpoint) {
@@ -41,13 +44,12 @@ public:
 
 		return openLoopResult.Value + closedLoopResult.Value;
 	}
-private:
 
 	// Get the setpoint: where should the controller put the plant?
 	virtual expected<TInput> getSetpoint() = 0;
 
 	// Get the current observation: what is the current state of the world?
-	virtual expected<TInput> observePlant() const = 0;
+	virtual expected<TInput> observePlant() = 0;
 
 	// Get the open-loop output: output state based on only the setpoint
 	virtual expected<TOutput> getOpenLoop(TInput setpoint) = 0;

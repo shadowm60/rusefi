@@ -17,6 +17,7 @@
 #include "pch.h"
 #include "chprintf.h"
 #include "rusEfiFunctionalTest.h"
+#include "flash_int.h"
 
 #include <iostream>
 #include <filesystem>
@@ -31,7 +32,7 @@ static thread_t *cdtp;
 
 #define cputs(msg) chMsgSend(cdtp, (msg_t)msg)
 
-void printToConsole(char *p) {
+void printToConsole(const char *p) {
 	cputs(p);
 }
 
@@ -58,7 +59,7 @@ extern int isSerialOverTcpReady;
  *
  * @param[in] id event id.
  */
-static void termination_handler(eventid_t id) {
+static void termination_handler(eventid_t /*id*/) {
 
 	chThdSleepMilliseconds(10);
 
@@ -140,6 +141,8 @@ static virtual_timer_t exitTimer;
  * Simulator main.                                                        *
  *------------------------------------------------------------------------*/
 int main(int argc, char** argv) {
+	setbuf(stdout, NULL);
+
 	/*
 	 * System initializations.
 	 * - HAL initialization, this also initializes the configured device drivers
@@ -213,11 +216,13 @@ static std::string makeFileName(flashaddr_t addr) {
 	return ss.str();
 }
 
-int intFlashErase(flashaddr_t address, size_t size) {
+int intFlashErase(flashaddr_t address, size_t) {
 	// Try to delete the file, swallow any errors (we can overwrite it anyway)
 	try {
 		std::filesystem::remove(makeFileName(address));
 	} catch (...) { }
+
+	return FLASH_RETURN_SUCCESS;
 }
 
 int intFlashRead(flashaddr_t address, char* buffer, size_t size) {

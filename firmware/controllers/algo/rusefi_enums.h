@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <rusefi/true_false.h>
 #include "efifeatures.h"
 #include "obd_error_codes.h"
 #include "live_data_ids.h"
@@ -20,6 +21,7 @@
 // we do not want to start the search for header from current folder so we use brackets here
 // https://stackoverflow.com/questions/21593/what-is-the-difference-between-include-filename-and-include-filename
 #include <rusefi_hw_enums.h>
+#include "rusefi_hw_pin_mode.h"
 
 #define PERCENT_MULT 100.0f
 #define PERCENT_DIV 0.01f
@@ -53,23 +55,21 @@ typedef enum  __attribute__ ((__packed__)) {
 	VVT_INACTIVE = 0,
 
 	/**
-	 * Single-tooth cam sensor mode where TDC and cam signal happen in opposite 360 degree of 720 degree engine cycle
+	 * Single tooth on the camshaft anywhere in the 720 degree cycle
 	 */
-	VVT_SECOND_HALF = 1,
+	VVT_SINGLE_TOOTH = 1,
 	/**
 	 * Toyota 2JZ has three cam tooth. We pick one of these three tooth to synchronize based on the expected angle position of the event
 	 */
-	VVT_2JZ = 2,
+	VVT_TOYOTA_3_TOOTH = 2,
 	/**
 	 * Mazda NB2 has three cam tooth. We synchronize based on gap ratio.
 	 * @see TT_VVT_MIATA_NB
 	 */
 	VVT_MIATA_NB = 3,
 
-	/**
-	 * Single-tooth cam sensor mode where TDC and cam signal happen in the same 360 degree of 720 degree engine cycle
-	 */
-	VVT_FIRST_HALF = 4,
+	VVT_MITSUBISHI_4G69 = 4,
+
 	/**
 	 * @see TT_VVT_BOSCH_QUICK_START
 	 */
@@ -107,6 +107,13 @@ typedef enum  __attribute__ ((__packed__)) {
 	 */
 	VVT_HONDA_K_EXHAUST = 16,
 
+	VVT_MITSUBISHI_4G9x = 17,
+	VVT_MITSUBISHI_4G63 = 18,
+
+	VVT_FORD_COYOTE = 19,
+
+    VVT_MITSUBISHI_6G72 = 20,
+
 } vvt_mode_e;
 
 /**
@@ -117,16 +124,16 @@ typedef enum __attribute__ ((__packed__)) {
 	 * Speed Density algorithm - Engine Load is a function of MAP, VE and target AFR
 	 * http://articles.sae.org/8539/
 	 */
-	LM_SPEED_DENSITY = 3,
+	LM_SPEED_DENSITY = 0,
 
 	/**
 	 * MAF with a known kg/hour function
 	 */
-	LM_REAL_MAF = 4,
+	LM_REAL_MAF = 1,
 
-	LM_ALPHA_N = 5,
+	LM_ALPHA_N = 2,
 
-	LM_LUA = 6,
+	LM_LUA = 3,
 
 	// This mode is for unit testing only, so that tests don't have to rely on a particular real airmass mode
 	LM_MOCK = 100,
@@ -150,6 +157,16 @@ typedef enum  __attribute__ ((__packed__)) {
 } tle8888_mode_e;
 
 typedef enum __attribute__ ((__packed__)) {
+	DWELL_2MS = 0,
+	DWELL_4MS = 1,
+	DWELL_8MS = 2,
+	DWELL_16MS = 3,
+	DWELL_32MS = 4,
+	DWELL_64MS = 5,
+
+} mc33810maxDwellTimer_e;
+
+typedef enum __attribute__ ((__packed__)) {
 	/**
 	 * In auto mode we currently have some pid-like-but-not really PID logic which is trying
 	 * to get idle RPM to desired value by dynamically adjusting idle valve position.
@@ -163,6 +180,25 @@ typedef enum __attribute__ ((__packed__)) {
 	IM_MANUAL = 1,
 
 } idle_mode_e;
+
+enum class SentEtbType : uint8_t {
+	NONE = 0,
+	GM_TYPE_1 = 1,
+	FORD_TYPE_1 = 2,
+	CUSTOM = 3,
+};
+
+enum class CanGpioType : uint8_t {
+	NONE = 0,
+	DRT = 1,
+	MS = 2,
+};
+
+enum class UiMode : uint8_t {
+	FULL = 0,
+	INSTALLATION = 1,
+	TUNING = 2,
+};
 
 typedef enum __attribute__ ((__packed__)) {
 	/**
@@ -186,8 +222,6 @@ typedef enum __attribute__ ((__packed__)) {
 	PI_PULLDOWN = 2
 } pin_input_mode_e;
 
-#define CRANK_MODE_MULTIPLIER 2.0f
-
 /**
  * @see getCycleDuration
  * @see getEngineCycle
@@ -198,7 +232,7 @@ typedef enum {
 	/**
 	 * 720 degree engine cycle but trigger is defined using a 360 cycle which is when repeated.
 	 * For historical reasons we have a pretty weird approach where one crank trigger revolution is
-	 * defined as if it's stretched to 720 degress. See CRANK_MODE_MULTIPLIER
+	 * defined as if it's stretched to 720 degrees. See CRANK_MODE_MULTIPLIER
 	 */
 	FOUR_STROKE_CRANK_SENSOR = 1,
 	/**
@@ -226,6 +260,10 @@ typedef enum {
 	// without a missing tooth, plus a single tooth cam channel to resolve the engine phase.
 	FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR = 6,
 
+	/**
+	 * Same pattern repeated six times on crank wheel like 1995 Lamborghini Diablo
+	 */
+	FOUR_STROKE_SIX_TIMES_CRANK_SENSOR = 7,
 } operation_mode_e;
 
 /**
@@ -306,7 +344,10 @@ typedef enum __attribute__ ((__packed__)) {
 typedef enum __attribute__ ((__packed__)) {
 	BMW_e46 = 0,
 	W202 = 1,
-
+	BMW_e90 = 2,
+	NISSAN_350 = 3,
+	HYUNDAI_PB = 4,
+  HONDA_CIVIC9 = 5,
 } can_vss_nbc_e;
 
 /**
@@ -343,8 +384,6 @@ typedef enum __attribute__ ((__packed__)) {
 	 * 5v->20.0afr
 	 */
 	ES_14Point7_Free = 2,
-
-	ES_NarrowBand = 3,
 
 	ES_PLX = 4,
 
@@ -389,8 +428,8 @@ typedef enum __attribute__ ((__packed__)) {
 	 * For an old Freescale MPX4250D use "MT_MPX4250".
 	 * See https://www.nxp.com/docs/en/data-sheet/MPX4250A.pdf
 	 */
-	MT_MPX4250A = 9, 
-	
+	MT_MPX4250A = 9,
+
 
 	/**
 	 * Bosch 2.5 Bar TMap Map Sensor with IAT
@@ -415,7 +454,10 @@ typedef enum __attribute__ ((__packed__)) {
 	 * 4 bar
 	 */
 	MT_MPXH6400 = 14,
-
+	/**
+	 * 3 bar
+	 */
+	MT_MPXH6300 = 15,
 
 } air_pressure_sensor_type_e;
 
@@ -471,7 +513,7 @@ typedef enum __attribute__ ((__packed__)) {
 	CAN_BUS_NBC_FIAT = 1,
 	CAN_BUS_NBC_VAG = 2,
 	CAN_BUS_MAZDA_RX8 = 3,
-	CAN_BUS_NBC_BMW = 4,
+	CAN_BUS_BMW_E46 = 4,
 	CAN_BUS_W202_C180 = 5,
     CAN_BUS_BMW_E90 = 6,
 	CAN_BUS_Haltech = 7,
@@ -480,6 +522,7 @@ typedef enum __attribute__ ((__packed__)) {
 	CAN_BUS_GENESIS_COUPE = 10,
 	CAN_BUS_HONDA_K = 11,
 	CAN_AIM_DASH = 12,
+	CAN_BUS_MS_SIMPLE_BROADCAST = 13,
 
 } can_nbc_e;
 
@@ -489,24 +532,6 @@ typedef enum __attribute__ ((__packed__)) {
 	TCHARGE_MODE_AIR_INTERP_TABLE = 2,
 
 } tChargeMode_e;
-
-// peak type
-typedef enum {
-  MINIMUM = -1,
-  NOT_A_PEAK = 0,
-  MAXIMUM = 1
-} PidAutoTune_Peak;
-
-// auto tuner state
-typedef enum {
-  AUTOTUNER_OFF = 0,
-  STEADY_STATE_AT_BASELINE = 1,
-  STEADY_STATE_AFTER_STEP_UP = 2,
-  RELAY_STEP_UP = 4,
-  RELAY_STEP_DOWN = 8,
-  CONVERGED = 16,
-  FAILED = 128
-} PidAutoTune_AutoTunerState;
 
 typedef enum __attribute__ ((__packed__)) {
 	INIT = 0,
@@ -561,13 +586,19 @@ typedef enum __attribute__ ((__packed__)) {
 	GPPWM_GppwmOutput4 = 21,
 	GPPWM_LuaGauge1 = 22,
 	GPPWM_LuaGauge2 = 23,
+	GPPWM_Rpm = 24,
+	GPPWM_DetectedGear = 25,
+	GPPWM_BaroPressure = 26,
 } gppwm_channel_e;
 
 typedef enum __attribute__ ((__packed__)) {
-	B100KBPS = 0, // 100kbps
-	B250KBPS = 1, // 250kbps
-	B500KBPS = 2, // 500kbps
-	B1MBPS = 3, // 1Mbps
+	B50KBPS = 0, // 50kbps
+	B83KBPS = 1, // 83.33kbps
+	B100KBPS = 2, // 100kbps
+	B125KBPS = 3, // 125kbps
+	B250KBPS = 4, // 250kbps
+	B500KBPS = 5, // 500kbps
+	B1MBPS = 6, // 1Mbps
 } can_baudrate_e;
 
 typedef enum __attribute__ ((__packed__)) {
@@ -590,14 +621,12 @@ typedef enum __attribute__ ((__packed__)) {
 } load_override_e;
 
 typedef enum __attribute__ ((__packed__)) {
-// todo: rename to HB_None?
-	ETB_None = 0,
-	ETB_Throttle1 = 1,
-	ETB_Throttle2 = 2,
-	ETB_IdleValve = 3,
-	ETB_Wastegate = 4,
-// todo: rename to dc_function_e? rename to hbrg_function_e?
-} etb_function_e;
+	DC_None = 0,
+	DC_Throttle1 = 1,
+	DC_Throttle2 = 2,
+	DC_IdleValve = 3,
+	DC_Wastegate = 4,
+} dc_function_e;
 
 typedef enum __attribute__ ((__packed__)) {
 	STEPPER_FULL = 0,
@@ -616,6 +645,12 @@ typedef enum __attribute__ ((__packed__)) {
 	ICM_FixedRailPressure = 1,
 	ICM_SensedRailPressure = 2,
 } injector_compensation_mode_e;
+
+typedef enum __attribute__ ((__packed__)) {
+	FPM_Absolute = 0,
+	FPM_Gauge = 1,
+	FPM_Differential = 2,
+} fuel_pressure_sensor_mode_e;
 
 typedef enum __attribute__ ((__packed__)) {
 	INJ_None = 0,
@@ -683,5 +718,7 @@ enum class SelectedGear : uint8_t {
 	Manual1 = 10,
 	Low = 11,
 };
+
+#define SC_Exhaust_First 1
 
 #endif // __cplusplus

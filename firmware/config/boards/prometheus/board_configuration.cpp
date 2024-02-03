@@ -15,12 +15,21 @@ static bool is469 = true;
 static bool is469 = false;
 #endif
 
+Gpio getCommsLedPin() {
+	// this board has no comms led
+	return Gpio::Unassigned;
+}
+
+Gpio getWarningLedPin() {
+	// this board has no warning led
+	return Gpio::Unassigned;
+}
 
 static void setPrometheusDefaults() {
 	engineConfiguration->useCicPidForIdle = true;
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
@@ -28,21 +37,20 @@ static void setPrometheusDefaults() {
 
 	engineConfiguration->globalTriggerAngleOffset = 114;	// the end of 19th tooth?
 
-	engineConfiguration->specs.displacement = 1.645;
+	engineConfiguration->displacement = 1.645;
 	engineConfiguration->injector.flow = 200;
-	
-	engineConfiguration->cranking.baseFuel = 25;		// ???
+
+	engineConfiguration->cranking.baseFuel = 25;
 	engineConfiguration->cranking.rpm = 600;
 
-	engineConfiguration->rpmHardLimit = 8500; // yes, 3k. let's play it safe for now
-	
+	engineConfiguration->rpmHardLimit = 8500;
+
 	engineConfiguration->map.sensor.type = MT_MPX4250;
 
 	engineConfiguration->idleStepperReactionTime = 10;
 	engineConfiguration->stepperDirectionPinMode = OM_INVERTED;
 	engineConfiguration->useLinearCltSensor = true;
 
-	//engineConfiguration->canNbcType = CAN_BUS_NBC_BMW;
 	engineConfiguration->canNbcType = CAN_BUS_MAZDA_RX8;
 	engineConfiguration->canReadEnabled = true;
 	engineConfiguration->canWriteEnabled = false;
@@ -62,7 +70,7 @@ void setPinConfigurationOverrides() {
 	engineConfiguration->injectionPins[1] = is469 ? Gpio::D15 : Gpio::C7;  // #2
 	engineConfiguration->injectionPins[2] = is469 ? Gpio::D10 : Gpio::B15; // #3
 	engineConfiguration->injectionPins[3] = is469 ? Gpio::D14 : Gpio::C6;  // #4
-	
+
 	engineConfiguration->ignitionPins[0] = Gpio::A10;
 	engineConfiguration->ignitionPins[1] = Gpio::A9;
 	engineConfiguration->ignitionPins[2] = Gpio::A8;
@@ -99,12 +107,11 @@ void setPinConfigurationOverrides() {
 
 /**
  * @brief   Board-specific configuration defaults.
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	// give a chance to trigger SWD programmer... Wait for 2 secs (=2000 ms).
-	// TODO: remove it when the bootloader is ready
-	chThdSleepMilliseconds(2000);
+//	chThdSleepMilliseconds(2000);
 
 	engineConfiguration->binarySerialTxPin = Gpio::A0;
 	engineConfiguration->binarySerialRxPin = Gpio::A1;
@@ -127,7 +134,7 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->injectionPins[1] = is469 ? Gpio::D15 : Gpio::C7;  // #2
 	engineConfiguration->injectionPins[2] = is469 ? Gpio::D10 : Gpio::B15; // #3
 	engineConfiguration->injectionPins[3] = is469 ? Gpio::D14 : Gpio::C6;  // #4
-	
+
 	engineConfiguration->ignitionPins[0] = Gpio::A10;
 	engineConfiguration->ignitionPins[1] = Gpio::A9;
 	engineConfiguration->ignitionPins[2] = Gpio::A8;
@@ -137,65 +144,39 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->vbattDividerCoeff = ((float) (2 + 10)) / 2;
 	engineConfiguration->clt.config.bias_resistor = 2700;
 	engineConfiguration->iat.config.bias_resistor = 2700;
-	
+
 	engineConfiguration->useStepperIdle = true;
 	engineConfiguration->idle.stepperDirectionPin = is469 ? Gpio::B14 : Gpio::B12;
 	engineConfiguration->idle.stepperStepPin = is469 ? Gpio::B15 : Gpio::B13;
 	engineConfiguration->stepperEnablePin = Gpio::Unassigned;
-	engineConfiguration->stepperEnablePinMode = OM_DEFAULT;
-
-	engineConfiguration->communicationLedPin = Gpio::Unassigned;// Gpio::A13; // yellow LED
-	engineConfiguration->runningLedPin = Gpio::A13; //Gpio::A13; // yellow LED
-	engineConfiguration->warningLedPin = Gpio::Unassigned;
 
 	engineConfiguration->triggerInputPins[0] = Gpio::A5;
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
 	engineConfiguration->camInputs[0] = is469 ? Gpio::E9 : Gpio::A6;
-	
+
 	engineConfiguration->tachOutputPin = Gpio::C8;
-	engineConfiguration->tachOutputPinMode = OM_DEFAULT;
 	engineConfiguration->fuelPumpPin = is469 ? Gpio::D6 : Gpio::B7;
-	engineConfiguration->fuelPumpPinMode = OM_DEFAULT;
 	engineConfiguration->mainRelayPin = is469 ? Gpio::B11 : Gpio::B2;
-	engineConfiguration->mainRelayPinMode = OM_DEFAULT;
 	engineConfiguration->fanPin = Gpio::C9;
-	engineConfiguration->fanPinMode = OM_DEFAULT;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::C1;
-	engineConfiguration->malfunctionIndicatorPinMode = OM_DEFAULT;
 
 
-	
 	// debug pad
 	engineConfiguration->triggerSimulatorPins[0] = Gpio::D8;
-	engineConfiguration->triggerSimulatorPinModes[0] = OM_DEFAULT;
 
 	// not used
-	engineConfiguration->displayMode = DM_NONE;
-	engineConfiguration->HD44780_rs = Gpio::Unassigned;
-	engineConfiguration->HD44780_e = Gpio::Unassigned;
-	engineConfiguration->HD44780_db4 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db5 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db6 = Gpio::Unassigned;
-	engineConfiguration->HD44780_db7 = Gpio::Unassigned;
-	for (int i = 0; i < DIGIPOT_COUNT ; i++) {
-		engineConfiguration->digitalPotentiometerChipSelect[i] = Gpio::Unassigned;
-	}
 	engineConfiguration->triggerSimulatorPins[1] = Gpio::Unassigned;
-	engineConfiguration->triggerSimulatorPinModes[1] = OM_DEFAULT;
 	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 
-	/////////////////////////////////////////////////////////
-	
-	engineConfiguration->is_enabled_spi_1 = true;
 	engineConfiguration->is_enabled_spi_2 = false;
 	engineConfiguration->is_enabled_spi_3 = true;
-	
+
 	engineConfiguration->spi1mosiPin = Gpio::B5;
-	engineConfiguration->spi1MosiMode = PO_DEFAULT;	// PAL_STM32_OTYPE_PUSHPULL
+	engineConfiguration->spi1MosiMode = PO_DEFAULT;
 	engineConfiguration->spi1misoPin = Gpio::B4;
-	engineConfiguration->spi1MisoMode = PO_DEFAULT;	// PAL_STM32_OTYPE_PUSHPULL
+	engineConfiguration->spi1MisoMode = PO_DEFAULT;
 	engineConfiguration->spi1sckPin = Gpio::B3;
-	engineConfiguration->spi1SckMode = PO_DEFAULT;	// PAL_STM32_OTYPE_PUSHPULL
+	engineConfiguration->spi1SckMode = PO_DEFAULT;
 
 	engineConfiguration->spi3mosiPin = Gpio::C12;
 	engineConfiguration->spi3MosiMode = PO_OPENDRAIN; // 4
@@ -212,23 +193,10 @@ void setBoardDefaultConfiguration() {
     engineConfiguration->hipOutputChannel = EFI_ADC_10; // PC0
     engineConfiguration->isHip9011Enabled = true;
 
-	engineConfiguration->cj125SpiDevice = SPI_DEVICE_3;
-	engineConfiguration->cj125ua = is469 ? EFI_ADC_9 : EFI_ADC_8;
-	engineConfiguration->cj125ur = EFI_ADC_12;
-	engineConfiguration->cj125CsPin = Gpio::A15;
-	engineConfiguration->cj125CsPinMode = OM_OPENDRAIN;
-	engineConfiguration->wboHeaterPin = Gpio::C13;
-	engineConfiguration->o2heaterPin = Gpio::C13;
-	//engineConfiguration->isCJ125Enabled = true;
-	engineConfiguration->isCJ125Enabled = false;
-
 	engineConfiguration->canTxPin = Gpio::B9;
 	engineConfiguration->canRxPin = Gpio::B8;
-	
-	//!!!!!!!!!!!!!!!
-#if 1
+
 	setPrometheusDefaults();
-#endif
 
 	engineConfiguration->is_enabled_spi_1 = true;
 	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_1;
@@ -236,3 +204,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->isSdCardEnabled = true;
 }
 
+Gpio getRunningLedPin() {
+	return Gpio::A13; //Gpio::A13; // yellow LED
+}

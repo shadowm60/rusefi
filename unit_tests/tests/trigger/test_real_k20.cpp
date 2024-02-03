@@ -12,20 +12,19 @@ TEST(realk20, cranking) {
 	reader.open("tests/trigger/resources/civic-K20-cranking.csv", NORMAL_ORDER, REVERSE_ORDER);
 	reader.twoBanksSingleCamMode = false;
 
-	EngineTestHelper eth (PROTEUS_HONDA_K);
+	EngineTestHelper eth (engine_type_e::HONDA_K);
 
 	while (reader.haveMore()) {
 		reader.processLine(&eth);
 
-		// TODO
-		// float vvtI = engine->triggerCentral.getVVTPosition(/*bankIndex*/0, /*camIndex*/0);
-		// if (vvtI != 0) {
-		// 	EXPECT_TRUE(vvtI > -10 && vvtI < 10);
-		// }
+		float vvtI = engine->triggerCentral.getVVTPosition(/*bankIndex*/0, /*camIndex*/0);
+		if (vvtI != 0) {
+			EXPECT_TRUE(vvtI > -10 && vvtI < 10);
+		}
 
 		float vvtE = engine->triggerCentral.getVVTPosition(/*bankIndex*/0, /*camIndex*/1);
 		if (vvtE != 0) {
-			EXPECT_TRUE(vvtE > -10 && vvtE < 10);
+			EXPECT_TRUE(vvtE > -10 && vvtE < 10) << vvtE;
 		}
 
 	}

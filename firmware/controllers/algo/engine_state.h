@@ -32,7 +32,7 @@ public:
 	// Per-injection fuel mass, including TPS accel enrich
 	float injectionMass[MAX_CYLINDER_COUNT] = {0};
 
-	FuelConsumptionState fuelConsumption;
+	float injectionStage2Fraction = 0;
 
 	Timer crankingTimer;
 
@@ -78,11 +78,13 @@ public:
 	 * @see getInjectionDuration()
 	 */
 	floatms_t injectionDuration = 0;
+	floatms_t injectionDurationStage2 = 0;
 
 	angle_t injectionOffset = 0;
 
 	multispark_state multispark;
 
+	bool shouldUpdateInjectionTiming = true;
 };
 
 EngineState * getEngineState();

@@ -13,12 +13,12 @@ import java.util.Objects;
 import static com.rusefi.config.FieldType.*;
 
 /**
- * @see Fields
+ * See Fields
  */
 
 public class Field {
     public static final int NO_BIT_OFFSET = -1;
-    private static final int FIELD_PRECISION = 3;
+    public static final int FIELD_PRECISION = 5;
 
     private final String name;
     private final int offset;
@@ -49,19 +49,14 @@ public class Field {
     }
 
     public Field(String name, int offset, int stringSize, FieldType type, int bitOffset, String... options) {
-        this.name = name;
+      this.name = Objects.requireNonNull(name);
+      if (name.trim().isEmpty())
+        throw new IllegalStateException("Empty field name");
         this.offset = offset;
         this.stringSize = stringSize;
         this.type = type;
         this.bitOffset = bitOffset;
         this.options = options;
-    }
-
-    public static Field findField(Field[] values, String instancePrefix, String fieldName) {
-        Field field = findFieldOrNull(values, instancePrefix, fieldName);
-        if (field == null)
-            throw new IllegalStateException("No field: " + fieldName);
-        return field;
     }
 
     /**
@@ -100,6 +95,8 @@ public class Field {
         Number number = value;
         if (number instanceof Float)
             return niceToString(number.floatValue(), precision);
+        if (number instanceof Double)
+            return niceToString(number.doubleValue(), precision);
         return number.toString();
     }
 
@@ -158,7 +155,7 @@ public class Field {
                 '}';
     }
 
-    public Object getAnyValue(ConfigurationImage ci, double multiplier) {
+    public String getAnyValue(ConfigurationImage ci, double multiplier) {
         if (options == null) {
             // we are here for non-enum types
             return niceToString(getValue(ci, multiplier));
@@ -218,7 +215,12 @@ public class Field {
     public Double getValue(ConfigurationImage ci, double multiplier) {
         Objects.requireNonNull(ci, "ConfigurationImage");
         Number value;
-        ByteBuffer wrapped = ci.getByteBuffer(getOffset(), type.getStorageSize());
+        ByteBuffer wrapped;
+        try {
+          wrapped = ci.getByteBuffer(getOffset(), type.getStorageSize());
+        } catch (IndexOutOfBoundsException e) {
+            throw new RuntimeException("while " + name + " at " + getOffset() + " from " + ci.getSize(), e);
+        }
         if (bitOffset != NO_BIT_OFFSET) {
             int packed = wrapped.getInt();
             value = (packed >> bitOffset) & 1;
@@ -234,8 +236,10 @@ public class Field {
         } else if (type == UINT16) {
             short signed = wrapped.getShort();
             value = signed & 0xFFFF;
-        } else {
+        } else if (type == FLOAT) {
             value = wrapped.getFloat();
+        } else {
+            throw new IllegalStateException("Unexpected " + type);
         }
         return value.doubleValue() * multiplier;
     }
@@ -272,7 +276,7 @@ public class Field {
     }
 
     public boolean getBooleanValue(ConfigurationImage ci) {
-        return getValue(ci) != 0.0;
+        return getValue(ci).doubleValue() != 0.0;
     }
 
     public Field setScale(double scale) {

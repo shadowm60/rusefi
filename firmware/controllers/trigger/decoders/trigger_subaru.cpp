@@ -9,15 +9,8 @@
 
 #include "trigger_subaru.h"
 
-static void initialize_one_of_36_2_2_2(TriggerWaveform *s, int firstCount, int secondCount, bool knownOperationModeHack) {
+static void initialize_one_of_36_2_2_2(TriggerWaveform *s, int firstCount, int secondCount) {
 	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::RiseOnly);
-
-#if EFI_UNIT_TEST
-	// placed on 'cam' on '2-stroke' rotary
-	if (knownOperationModeHack) {
-		s->knownOperationMode = false;
-	}
-#endif // EFI_UNIT_TEST
 
 	float wide = 30 * 2;
 	float narrow = 10 * 2;
@@ -52,15 +45,25 @@ static void initialize_one_of_36_2_2_2(TriggerWaveform *s, int firstCount, int s
  * https://rusefi.com/forum/viewtopic.php?f=2&t=1932
  */
 void initialize36_2_2_2(TriggerWaveform *s) {
-	initialize_one_of_36_2_2_2(s, 12, 15, /*knownOperationModeHack*/true);
+	initialize_one_of_36_2_2_2(s, 12, 15);
 
-	s->setTriggerSynchronizationGap(0.333f);
-	s->setSecondTriggerSynchronizationGap(1.0f);
-	s->setThirdTriggerSynchronizationGap(3.0f);
+#if EFI_UNIT_TEST
+	// usually used on crank but placed on 'cam' on '2-stroke' rotary
+	// this 'knownOperationMode' does not matter for trigger decoding only matters for .ini code generation and trigger images
+	s->knownOperationMode = false;
+#endif // EFI_UNIT_TEST
+
+    // 36/2/2/2 data from https://rusefi.com/online/view.php?log=1287
+    // todo: probably should be unified with EZ30 below?
+	s->setTriggerSynchronizationGap3(/*gapIndex*/0, 0.25, 0.5);
+	s->setTriggerSynchronizationGap3(/*gapIndex*/1, 0.7, 1.7);
+	s->setTriggerSynchronizationGap3(/*gapIndex*/2, 2.25, 4.2);
 }
 
 void initializeSubaruEZ30(TriggerWaveform *s) {
-	initialize_one_of_36_2_2_2(s, 18, 9, /*knownOperationModeHack*/false);
+	initialize_one_of_36_2_2_2(s, 18, 9);
+
+    s->tdcPosition = 240;
 
 	s->setTriggerSynchronizationGap3(/*gapIndex*/0, 0.25, 0.5);
 	s->setTriggerSynchronizationGap3(/*gapIndex*/1, 0.7, 1.5);
@@ -203,8 +206,8 @@ void initializeSubaru_SVX(TriggerWaveform *s) {
 #define CRANK_1_RISE(n)		(CRANK_1_FALL(n) - width)
 
 #define SUBARU_SVX_CRANK1_PULSE(n) \
-	s->addEventAngle(20 + (30 * (n)) + offset - width, TriggerValue::RISE, SVX_CRANK_1);	\
-	s->addEventAngle(20 + (30 * (n)) + offset, TriggerValue::FALL, SVX_CRANK_1)
+	s->addEventAngle(CRANK_1_RISE(n), TriggerValue::RISE, SVX_CRANK_1);	\
+	s->addEventAngle(CRANK_1_FALL(n), TriggerValue::FALL, SVX_CRANK_1)
 
 	/* cam falling edge offset from preceding Cr #1 falling edge */
 	float cam_offset = (10.0 + 30.0 + 30.0 + 30.0) - 90.0;

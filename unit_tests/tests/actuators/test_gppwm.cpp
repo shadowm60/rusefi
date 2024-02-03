@@ -50,14 +50,14 @@ TEST(GpPwm, OutputOnOff) {
 		InSequence i;
 
 		// Rising edge test
-		EXPECT_CALL(pin, setValue(0));
-		EXPECT_CALL(pin, setValue(1));
-		EXPECT_CALL(pin, setValue(1));
+		EXPECT_CALL(pin, setValue(0, false));
+		EXPECT_CALL(pin, setValue(1, false));
+		EXPECT_CALL(pin, setValue(1, false));
 
 		// Falling edge test
-		EXPECT_CALL(pin, setValue(1));
-		EXPECT_CALL(pin, setValue(0));
-		EXPECT_CALL(pin, setValue(0));
+		EXPECT_CALL(pin, setValue(1, false));
+		EXPECT_CALL(pin, setValue(0, false));
+		EXPECT_CALL(pin, setValue(0, false));
 	}
 
 	ch.init(false, nullptr, &pin, nullptr, &cfg);
@@ -74,11 +74,12 @@ TEST(GpPwm, OutputOnOff) {
 }
 
 TEST(GpPwm, TestGetOutput) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	GppwmChannel ch;
 
 	gppwm_channel cfg;
 	cfg.loadAxis = GPPWM_Tps;
+	cfg.rpmAxis = GPPWM_Rpm;
 	cfg.dutyIfError = 21.0f;
 
 	MockVp3d table;
@@ -93,10 +94,10 @@ TEST(GpPwm, TestGetOutput) {
 	Sensor::resetAllMocks();
 
 	// Should return dutyIfError
-	EXPECT_FLOAT_EQ(21.0f, ch.getOutput());
+	EXPECT_FLOAT_EQ(21.0f, ch.getOutput().Result);
 
 	// Set TPS, should return tps value
 	Sensor::setMockValue(SensorType::Tps1, 35.0f);
 	Sensor::setMockValue(SensorType::Rpm, 1200);
-	EXPECT_FLOAT_EQ(35.0f, ch.getOutput());	
+	EXPECT_FLOAT_EQ(35.0f, ch.getOutput().Result);	
 }

@@ -5,8 +5,8 @@
 
 AirmassVeModelBase::AirmassVeModelBase(const ValueProvider3D& veTable) : m_veTable(&veTable) {}
 
-float AirmassVeModelBase::getVeLoadAxis(float passedLoad) const {
-	switch(engineConfiguration->veOverrideMode) {
+static float getVeLoadAxis(ve_override_e mode, float passedLoad) {
+	switch(mode) {
 		case VE_None: return passedLoad;
 		case VE_MAP: return Sensor::getOrZero(SensorType::Map);
 		case VE_TPS: return Sensor::getOrZero(SensorType::Tps1);
@@ -14,11 +14,11 @@ float AirmassVeModelBase::getVeLoadAxis(float passedLoad) const {
 	}
 }
 
-float AirmassVeModelBase::getVe(int rpm, float load) const {
-	efiAssert(OBD_PCM_Processor_Fault, m_veTable != nullptr, "VE table null", 0);
+float AirmassVeModelBase::getVe(int rpm, float load, bool postState) const {
+	efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_veTable != nullptr, "VE table null", 0);
 
 	// Override the load value if necessary
-	load = getVeLoadAxis(load);
+	load = getVeLoadAxis(engineConfiguration->veOverrideMode, load);
 
 	percent_t ve = m_veTable->getValue(rpm, load);
 
@@ -26,14 +26,21 @@ float AirmassVeModelBase::getVe(int rpm, float load) const {
 	auto tps = Sensor::get(SensorType::Tps1);
 	// get VE from the separate table for Idle if idling
 	if (engine->module<IdleController>()->isIdlingOrTaper() &&
-	    tps && engineConfiguration->useSeparateVeForIdle) {
+		tps && engineConfiguration->useSeparateVeForIdle) {
+		float idleVeLoad = getVeLoadAxis(engineConfiguration->idleVeOverrideMode, load);
+
 		percent_t idleVe = interpolate3d(
 			config->idleVeTable,
-			config->idleVeLoadBins, load,
+			config->idleVeLoadBins, idleVeLoad,
 			config->idleVeRpmBins, rpm
 		);
+
 		// interpolate between idle table and normal (running) table using TPS threshold
-		ve = interpolateClamped(0.0f, idleVe, engineConfiguration->idlePidDeactivationTpsThreshold, ve, tps.Value);
+		// 0 TPS -> idle table
+		// 1/2 threshold -> idle table
+		// idle threshold -> normal table
+		float idleThreshold = engineConfiguration->idlePidDeactivationTpsThreshold;
+		ve = interpolateClamped(idleThreshold / 2, idleVe, idleThreshold, ve, tps.Value);
 	}
 #endif // EFI_IDLE_CONTROL
 
@@ -41,9 +48,13 @@ float AirmassVeModelBase::getVe(int rpm, float load) const {
 	for (size_t i = 0; i < efi::size(config->veBlends); i++) {
 		auto result = calculateBlend(config->veBlends[i], rpm, load);
 
-		engine->outputChannels.veBlendBias[i] = result.Bias;
-		engine->outputChannels.veBlendOutput[i] = result.Value;
+		if (postState) {
+			engine->outputChannels.veBlendParameter[i] = result.BlendParameter;
+			engine->outputChannels.veBlendBias[i] = result.Bias;
+			engine->outputChannels.veBlendOutput[i] = result.Value;
+		}
 
+		// Skip extra floating point math if we can...
 		if (result.Value == 0) {
 			continue;
 		}
@@ -53,7 +64,10 @@ float AirmassVeModelBase::getVe(int rpm, float load) const {
 		ve *= ((100 + result.Value) * 0.01f);
 	}
 
-	engine->engineState.currentVe = ve;
-	engine->engineState.veTableYAxis = load;
+	if (postState) {
+		engine->engineState.currentVe = ve;
+		engine->engineState.veTableYAxis = load;
+	}
+
 	return ve * PERCENT_DIV;
 }

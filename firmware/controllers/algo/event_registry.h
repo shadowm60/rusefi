@@ -21,9 +21,11 @@ struct AngleBasedEvent {
 	 */
 	AngleBasedEvent *nextToothEvent = nullptr;
 
-	float enginePhase;
+	angle_t enginePhase;
 
-	void setAngle(angle_t angle);
+	void setAngle(angle_t p_enginePhase) {
+    	enginePhase = p_enginePhase;
+    }
 
 	bool shouldSchedule(float currentPhase, float nextPhase) const;
 	float getAngleFromNow(float currentPhase) const;
@@ -45,6 +47,9 @@ public:
 	// For single sparks, this should be zero.
 	uint8_t sparksRemaining = 0;
 
+	// Track whether coil charge was intentionally skipped (spark limiter)
+	bool wasSparkLimited = false;
+
 	/**
 	 * Desired timing advance
 	 */
@@ -63,7 +68,7 @@ public:
 	 */
 	int sparkId = 0;
 	/**
-	 * [0, specs.cylindersCount)
+	 * [0, cylindersCount)
 	 */
 	int cylinderIndex = 0;
 	int8_t cylinderNumber = 0;

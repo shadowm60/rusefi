@@ -45,15 +45,16 @@ bool LaunchControlBase::isInsideSwitchCondition() {
 }
 
 /**
- * Returns True in case Vehicle speed is less then threshold.
- * This condition would only return true based on speed if DisablebySpeed is true
- * The condition logic is written in that way, that if we do not use disable by speed
- * then we have to return true, and trust that we would disable by other condition!
+ * Returns True when Vehicle speed ALLOWS launch control
  */ 
 bool LaunchControlBase::isInsideSpeedCondition() const {
+	if (engineConfiguration->launchSpeedThreshold == 0) {
+		return true; // allow launch, speed does not matter
+	}
+
 	int speed = Sensor::getOrZero(SensorType::VehicleSpeed);
 	
-	return (engineConfiguration->launchSpeedThreshold > speed) || (!(engineConfiguration->launchActivationMode ==  ALWAYS_ACTIVE_LAUNCH));
+	return engineConfiguration->launchSpeedThreshold > speed;
 }
 
 /**
@@ -113,7 +114,7 @@ void LaunchControlBase::update() {
 	or it is supposed to be referencing 'launchTimingRpmRange'?
 	         + (engineConfiguration->enableLaunchRetard ? engineConfiguration->launchAdvanceRpmRange : 0)
 */
-	         + engineConfiguration->hardCutRpmRange;
+			+ engineConfiguration->hardCutRpmRange;
 
 	if (!combinedConditions) {
 		// conditions not met, reset timer
@@ -137,20 +138,27 @@ bool LaunchControlBase::isLaunchFuelRpmRetardCondition() const {
 	return isLaunchRpmRetardCondition() && engineConfiguration->launchFuelCutEnable;
 }
 
-void SoftSparkLimiter::setTargetSkipRatio(float targetSkipRatio) {
-	this->targetSkipRatio = targetSkipRatio;
+SoftSparkLimiter::SoftSparkLimiter(bool p_allowHardCut) {
+    this->allowHardCut = p_allowHardCut;
+#if EFI_UNIT_TEST
+    initLaunchControl();
+#endif // EFI_UNIT_TEST
+}
+
+void SoftSparkLimiter::setTargetSkipRatio(float p_targetSkipRatio) {
+	this->targetSkipRatio = p_targetSkipRatio;
 }
 
 static tinymt32_t tinymt;
 
 bool SoftSparkLimiter::shouldSkip()  {
-	if (targetSkipRatio == 0 || wasJustSkipped) {
+	if (targetSkipRatio == 0 || (!allowHardCut && wasJustSkipped)) {
 		wasJustSkipped = false;
 		return false;
 	}
 
 	float r = tinymt32_generate_float(&tinymt);
-	wasJustSkipped = r < 2 * targetSkipRatio;
+	wasJustSkipped = r < (allowHardCut ? 1 : 2) * targetSkipRatio;
 	return wasJustSkipped;
 }
 

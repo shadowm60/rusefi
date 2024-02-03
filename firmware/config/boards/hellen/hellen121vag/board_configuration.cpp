@@ -20,13 +20,6 @@ static void setInjectorPins() {
 	engineConfiguration->injectionPins[1] = H176_LS_2;
 	engineConfiguration->injectionPins[2] = H176_LS_3; // 97 - INJ_3
 	engineConfiguration->injectionPins[3] = H176_LS_4;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 }
 
 static void setIgnitionPins() {
@@ -34,32 +27,6 @@ static void setIgnitionPins() {
 	engineConfiguration->ignitionPins[1] = Gpio::E5 ; // 7 - IGN_2
 	engineConfiguration->ignitionPins[2] = Gpio::E4; // 111 - IGN_3
 	engineConfiguration->ignitionPins[3] = Gpio::E3; // 94 - IGN_4
-
-	//engineConfiguration->ignitionPins[4] = Gpio::E2;
-	//engineConfiguration->ignitionPins[5] = Gpio::I5;
-	//engineConfiguration->ignitionPins[6] = Gpio::I6;
-	//engineConfiguration->ignitionPins[7] = Gpio::I7;
-	
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_5; // 4T
-
-	engineConfiguration->adcVcc = 3.29f;
 }
 
 static void setupDefaultSensorInputs() {
@@ -76,10 +43,7 @@ static void setupDefaultSensorInputs() {
     // 35 In PPS2
     setPPSInputs(H144_IN_PPS, H144_IN_AUX2);
 
-	engineConfiguration->throttlePedalUpVoltage = 0.4;
-	engineConfiguration->throttlePedalWOTVoltage = 2;
-	engineConfiguration->throttlePedalSecondaryUpVoltage = 0.7;
-	engineConfiguration->throttlePedalSecondaryWOTVoltage = 4.1;
+	setPPSCalibration(0.4, 2, 0.7, 4.1);
 
 	engineConfiguration->mafAdcChannel = EFI_ADC_10;
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_11;
@@ -91,14 +55,14 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
+#include "hellen_leds_176.cpp"
+
 void setBoardConfigOverrides() {
-	setHellen176LedPins();
-	setupVbatt();
+	setHellenVbatt();
 
 	setHellenSdCardSpi3();
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 
 	setHellenCan();
 }
@@ -108,7 +72,7 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
@@ -123,9 +87,6 @@ void setBoardDefaultConfiguration() {
 
 	engineConfiguration->globalTriggerAngleOffset = 93;
 
-	engineConfiguration->isSdCardEnabled = true;
-
-	// todo: should this be a global default not just Hellen121?
 	engineConfiguration->boostCutPressure = 200;
 
 	engineConfiguration->vvtMode[0] = VVT_BOSCH_QUICK_START;
@@ -133,15 +94,15 @@ void setBoardDefaultConfiguration() {
 
 	engineConfiguration->enableSoftwareKnock = true;
 
-	engineConfiguration->fuelPumpPin = H144_OUT_IO3;
+	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_IO3;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::G4; // 47 - CEL
-	engineConfiguration->tachOutputPin = H144_OUT_PWM7;
+	engineConfiguration->tachOutputPin = Gpio::H144_OUT_PWM7;
 
 // earlier revisions?	engineConfiguration->idle.solenoidPin = Gpio::D14;	// OUT_PWM5
-    engineConfiguration->idle.solenoidPin = H144_OUT_IO4;
+    engineConfiguration->idle.solenoidPin = Gpio::H144_OUT_IO4;
 
-	engineConfiguration->fanPin = H144_OUT_PWM8;
-	engineConfiguration->mainRelayPin = H144_OUT_IO1;
+	engineConfiguration->fanPin = Gpio::H144_OUT_PWM8;
+	engineConfiguration->mainRelayPin = Gpio::H144_OUT_IO1;
 
 //	engineConfiguration->injectorCompensationMode
 	engineConfiguration->fuelReferencePressure = 300;
@@ -152,13 +113,11 @@ void setBoardDefaultConfiguration() {
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_VAG);
 	strcpy(engineConfiguration->engineCode, "base");
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 
-	engineConfiguration->vrThreshold[0].pin = H144_OUT_PWM6;
+	engineConfiguration->vrThreshold[0].pin = Gpio::H144_OUT_PWM6;
 	hellenWbo();
 }

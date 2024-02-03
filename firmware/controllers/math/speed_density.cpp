@@ -31,8 +31,6 @@ fuel_Map3D_t veMap;
 #define tpMax 100
 
 float IFuelComputer::getTChargeCoefficient(int rpm, float tps) {
-	sdIsTChargeAirModel = engineConfiguration->tChargeMode == TCHARGE_MODE_AIR_INTERP;
-
 	// First, do TPS mode since it doesn't need any of the airflow math.
 	if (engineConfiguration->tChargeMode == TCHARGE_MODE_RPM_TPS) {
 		float minRpmKcurrentTPS = interpolateMsg("minRpm", tpMin,
@@ -47,7 +45,7 @@ float IFuelComputer::getTChargeCoefficient(int rpm, float tps) {
 
 	constexpr floatms_t gramsPerMsToKgPerHour = (3600.0f * 1000.0f) / 1000.0f;
 	// We're actually using an 'old' airMass calculated for the previous cycle, but it's ok, we're not having any self-excitaton issues
-	floatms_t airMassForEngine = sdAirMassInOneCylinder * engineConfiguration->specs.cylindersCount;
+	floatms_t airMassForEngine = sdAirMassInOneCylinder * engineConfiguration->cylindersCount;
 	// airMass is in grams per 1 cycle for 1 cyl. Convert it to airFlow in kg/h for the engine.
 	// And if the engine is stopped (0 rpm), then airFlow is also zero (avoiding NaN division)
 	floatms_t airFlow = (rpm == 0) ? 0 : airMassForEngine * gramsPerMsToKgPerHour / getEngineCycleDuration(rpm);
@@ -66,7 +64,7 @@ float IFuelComputer::getTChargeCoefficient(int rpm, float tps) {
 			engineConfiguration->tchargeValues
 		);
 	} else {
-		firmwareError(OBD_PCM_Processor_Fault, "Unexpected tChargeMode: %d", engineConfiguration->tChargeMode);
+		criticalError("Unexpected tChargeMode: %d", engineConfiguration->tChargeMode);
 		return 0;
 	}
 }
@@ -98,7 +96,7 @@ temperature_t IFuelComputer::getTCharge(int rpm, float tps) {
 	sdTcharge_coff = getTChargeCoefficient(rpm, tps);
 
 	if (cisnan(sdTcharge_coff)) {
-		warning(CUSTOM_ERR_T2_CHARGE, "t2-getTCharge NaN");
+		warning(ObdCode::CUSTOM_ERR_T2_CHARGE, "t2-getTCharge NaN");
 		return coolantTemp;
 	}
 
@@ -109,7 +107,7 @@ temperature_t IFuelComputer::getTCharge(int rpm, float tps) {
 
 	if (cisnan(Tcharge)) {
 		// we can probably end up here while resetting engine state - interpolation would fail
-		warning(CUSTOM_ERR_TCHARGE_NOT_READY, "getTCharge NaN");
+		warning(ObdCode::CUSTOM_ERR_TCHARGE_NOT_READY, "getTCharge NaN");
 		return coolantTemp;
 	}
 

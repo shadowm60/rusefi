@@ -20,13 +20,15 @@ public:
     void startConfiguration();
     bool readPinEvent();
     bool readPinState();
+    bool readPinState2(bool valueWithinThreshold);
     static void stopConfigurationList();
     static void startConfigurationList();
     static void debug();
+    bool getPhysicalState();
 private:
     const char* const m_name;
     efitick_t m_threshold;
-    efitick_t timeLast;
+    Timer timeLast;
     brain_pin_e *m_pin;
     brain_pin_e active_pin = Gpio::Unassigned;
     pin_input_mode_e *m_mode;

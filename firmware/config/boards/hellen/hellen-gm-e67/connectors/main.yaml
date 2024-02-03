@@ -3,14 +3,14 @@ pins:
 #
 # some AUX apparently?
 #
-  - pin: J4_4
+  - pin: J4_4_broken
     # H144_OUT_PWM5
     id: C9
     class: outputs
     ts_name: J4_4 Wastegate Solenoid
     function: Wastegate Solenoid
 
-  - pin: J4_4
+  - pin: J4_4_broken2
     # H144_OUT_IO1
     id: D3
     class: outputs
@@ -491,10 +491,11 @@ pins:
 #
 
 info:
-  id: GM-E67
+  cid: GM-E67
   title: Hellen GM E67
   name: Hellen GM E67
   board_url: https://rusefi.com/s/gm-e67
+  directory: hellen/hellen-gm-e67
   image:
     file: main.jpg
   pins:

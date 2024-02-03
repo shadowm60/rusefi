@@ -16,60 +16,32 @@
 #include "hellen_meta.h"
 
 static void setInjectorPins() {
-	engineConfiguration->injectionPins[0] = H144_LS_1;
-	engineConfiguration->injectionPins[1] = H144_LS_2;
-	engineConfiguration->injectionPins[2] = H144_LS_3;
-	engineConfiguration->injectionPins[3] = H144_LS_4;
-	engineConfiguration->injectionPins[4] = H144_LS_5;
-	engineConfiguration->injectionPins[5] = H144_LS_6;
-
-	// Disable remainder
-	for (int i = 6; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
+	engineConfiguration->injectionPins[0] = Gpio::H144_LS_1;
+	engineConfiguration->injectionPins[1] = Gpio::H144_LS_2;
+	engineConfiguration->injectionPins[2] = Gpio::H144_LS_3;
+	engineConfiguration->injectionPins[3] = Gpio::H144_LS_4;
+	engineConfiguration->injectionPins[4] = Gpio::H144_LS_5;
+	engineConfiguration->injectionPins[5] = Gpio::H144_LS_6;
 }
 
 static void setIgnitionPins() {
-	engineConfiguration->ignitionPins[0] = H144_IGN_1;
-	engineConfiguration->ignitionPins[1] = H144_IGN_2;
-	engineConfiguration->ignitionPins[2] = H144_IGN_3;
-	engineConfiguration->ignitionPins[3] = H144_IGN_4;
-	engineConfiguration->ignitionPins[4] = H144_IGN_5;
-	engineConfiguration->ignitionPins[5] = H144_IGN_6;
-	
-	// disable remainder
-	for (int i = 6; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	// pin input +12 from Main Relay
-	engineConfiguration->vbattAdcChannel = EFI_ADC_5; // 4T
-
-	engineConfiguration->adcVcc = 3.29f;
+	engineConfiguration->ignitionPins[0] = Gpio::H144_IGN_1;
+	engineConfiguration->ignitionPins[1] = Gpio::H144_IGN_2;
+	engineConfiguration->ignitionPins[2] = Gpio::H144_IGN_3;
+	engineConfiguration->ignitionPins[3] = Gpio::H144_IGN_4;
+	engineConfiguration->ignitionPins[4] = Gpio::H144_IGN_5;
+	engineConfiguration->ignitionPins[5] = Gpio::H144_IGN_6;
 }
 
 static void setupDefaultSensorInputs() {
 	// trigger inputs
-	engineConfiguration->triggerInputPins[0] = H144_IN_CRANK;
+	engineConfiguration->triggerInputPins[0] = Gpio::H144_IN_CRANK;
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
 	// Direct hall-only cam input
-	engineConfiguration->camInputs[0] = H144_IN_CAM;
+	engineConfiguration->camInputs[0] = Gpio::H144_IN_CAM;
 	// todo: remove from default since 4 cylinder does not use it
 	// todo: this requires unit test change
-	engineConfiguration->camInputs[1 * CAMS_PER_BANK] = H144_IN_D_AUX4;
+	engineConfiguration->camInputs[1 * CAMS_PER_BANK] = Gpio::H144_IN_D_AUX4;
 
 	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
 
@@ -77,25 +49,21 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->mafAdcChannel = H144_IN_O2S;
 	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2;
 
-	engineConfiguration->afr.hwChannel = EFI_ADC_1;
-
 	engineConfiguration->clt.adcChannel = H144_IN_CLT;
 
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
 void setBoardConfigOverrides() {
-	setHellen144LedPins();
-	setupVbatt();
+	setHellenVbatt();
 	setHellenSdCardSpi3();
 
-	engineConfiguration->etbIo[0].directionPin1 = H144_OUT_PWM7;
-	engineConfiguration->etbIo[0].directionPin2 = H144_OUT_PWM6;
+	engineConfiguration->etbIo[0].directionPin1 = Gpio::H144_OUT_PWM7;
+	engineConfiguration->etbIo[0].directionPin2 = Gpio::H144_OUT_PWM6;
 	engineConfiguration->etbIo[0].controlPin = Gpio::D13; // ETB_EN out_pwm1
 	engineConfiguration->etb_use_two_wires = true;
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 }
 
 /**
@@ -103,14 +71,13 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
 	engineConfiguration->displayLogicLevelsInEngineSniffer = true;
-	engineConfiguration->isSdCardEnabled = true;
 
 	engineConfiguration->enableSoftwareKnock = true;
 	engineConfiguration->canNbcType = CAN_BUS_NBC_NONE; // none because handled by Lua!
@@ -120,7 +87,7 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->fuelPumpPin = Gpio::D12;	// OUT_IO9 // 113 Fuel Pump Relay
 	engineConfiguration->idle.solenoidPin = Gpio::Unassigned;
 //	engineConfiguration->fanPin = Gpio::D12;	// OUT_PWM8
-	engineConfiguration->mainRelayPin = Gpio::G14;	// pin: 111a, OUT_IO3
+	engineConfiguration->mainRelayPin = Gpio::H144_OUT_IO3;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
@@ -137,8 +104,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->fanOnTemperature = 85;
 	engineConfiguration->fanOffTemperature = 81;
 
-	engineConfiguration->useETBforIdleControl = true;
-	engineConfiguration->etbIdleThrottleRange = 10;
 	engineConfiguration->cutFuelOnHardLimit = false;
 	engineConfiguration->idlePidRpmUpperLimit = 300;
 	engineConfiguration->mapErrorDetectionTooLow = 10;
@@ -152,14 +117,12 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
 	engineConfiguration->injectionMode = IM_SEQUENTIAL;
 
-	engineConfiguration->luaOutputPins[0] = H144_OUT_IO4; // 104 ETB Relay
-	engineConfiguration->luaOutputPins[1] = H144_OUT_PWM2; // aux LS1, upstream oxygen heaters
-//	engineConfiguration->auxAnalogInputs[0] = EFI_ADC_10; // aux analog input 1, upstream oxygen signal
+	engineConfiguration->luaOutputPins[0] = Gpio::H144_OUT_IO4; // 104 ETB Relay
+	engineConfiguration->luaOutputPins[1] = Gpio::H144_OUT_PWM2; // aux LS1, upstream oxygen heaters
 
 	setPPSCalibration(0.75, 4.45, 0.43, 2.20);
 
 	engineConfiguration->startUpFuelPumpDuration = 4;
-	engineConfiguration->postCrankingFactor = 1.05;
 
     setEtbPID(6.1350, 87.7182, 0.0702);
 

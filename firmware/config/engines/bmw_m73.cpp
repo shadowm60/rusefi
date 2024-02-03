@@ -90,20 +90,20 @@ void m73engine() {
 	// 13641435991 injector
 	engineConfiguration->injector.flow = 180; // cc/min, who knows if this number is real - no good source of info
 
-	engineConfiguration->specs.cylindersCount = 12;
-	engineConfiguration->specs.displacement = 5.4;
+	engineConfiguration->cylindersCount = 12;
+	engineConfiguration->displacement = 5.4;
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_BMW);
 	strcpy(engineConfiguration->engineCode, "M73");
-	engineConfiguration->specs.firingOrder = FO_1_7_5_11_3_9_6_12_2_8_4_10;
+	engineConfiguration->firingOrder = FO_1_7_5_11_3_9_6_12_2_8_4_10;
 	engineConfiguration->fuelAlgorithm = LM_ALPHA_N;
 	engineConfiguration->canNbcType = CAN_BUS_NBC_NONE;
 
-	engineConfiguration->vvtMode[0] = VVT_FIRST_HALF;
+	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 
 	engineConfiguration->globalTriggerAngleOffset = 90;
 	setCrankOperationMode();
 	// todo: that's not right, should be 60/2 without VW
-	engineConfiguration->trigger.type = TT_60_2_VW;
+	engineConfiguration->trigger.type = trigger_type_e::TT_60_2_VW;
 
 	// this large engine seems to crank at around only 150 RPM? And happily idle at 400RPM?
 	engineConfiguration->cranking.rpm = 350;
@@ -271,15 +271,19 @@ void setEngineBMW_M73_Proteus() {
 	engineConfiguration->clt.adcChannel = PROTEUS_IN_ANALOG_TEMP_4;
 
 
-	// Gpio::E0:  "Lowside 14"
-	engineConfiguration->starterControlPin = Gpio::E0;
-	// Gpio::E12: "Digital 3"
-	engineConfiguration->startStopButtonPin = Gpio::E12;
+	engineConfiguration->starterControlPin = Gpio::PROTEUS_LS_14;
+	engineConfiguration->startStopButtonPin = PROTEUS_DIGITAL_3;
 	engineConfiguration->startStopButtonMode = PI_PULLUP;
+	engineConfiguration->fuelPumpPin = Gpio::PROTEUS_LS_16;
+	engineConfiguration->fanPin = Gpio::PROTEUS_LS_15;
+	engineConfiguration->mainRelayPin = Gpio::PROTEUS_LS_13;
+
+    engineConfiguration->map.sensor.hwChannel = PROTEUS_IN_ANALOG_VOLT_8; // M73 adapter board
+    engineConfiguration->map.sensor.type = MT_MPX4250A;
 
 	// tps and pps
+#if EFI_ELECTRONIC_THROTTLE_BODY
 	setProteusHitachiEtbDefaults();
-
-	engineConfiguration->useETBforIdleControl = true;
+#endif // EFI_ELECTRONIC_THROTTLE_BODY
 }
 #endif // HW_PROTEUS

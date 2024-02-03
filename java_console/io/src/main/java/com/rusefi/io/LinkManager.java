@@ -9,8 +9,8 @@ import com.rusefi.binaryprotocol.BinaryProtocolState;
 import com.rusefi.core.EngineState;
 import com.rusefi.io.serial.BufferedSerialIoStream;
 import com.rusefi.io.serial.StreamConnector;
-import com.rusefi.io.stream.PCanIoStream;
-import com.rusefi.io.stream.SocketCANIoStream;
+import com.rusefi.io.can.PCanIoStream;
+import com.rusefi.io.can.SocketCANIoStream;
 import com.rusefi.io.tcp.TcpConnector;
 import com.rusefi.io.tcp.TcpIoStream;
 import com.rusefi.util.IoUtils;
@@ -37,9 +37,9 @@ public class LinkManager implements Closeable {
     public static final String SOCKET_CAN = "SocketCAN";
 
     @NotNull
-    public static LogLevel LOG_LEVEL = LogLevel.INFO;
+    public static final LogLevel LOG_LEVEL = LogLevel.INFO;
 
-    public static LinkDecoder ENCODER = new LinkDecoder() {
+    public static final LinkDecoder ENCODER = new LinkDecoder() {
         @Override
         public String unpack(String packedLine) {
             return packedLine;
@@ -57,8 +57,9 @@ public class LinkManager implements Closeable {
     private boolean needPullData = true;
     private boolean needPullText = true;
     private boolean needPullLiveData = true;
-    public final MessagesListener messageListener = (source, message) -> System.out.println(source + ": " + message);
+    public final MessagesListener messageListener = (source, message) -> log.info(source + ": " + message);
     private Thread communicationThread;
+    private boolean isDisconnectedByUser;
 
     public LinkManager() {
         Future<?> future = submit(() -> {
@@ -178,6 +179,16 @@ public class LinkManager implements Closeable {
         return this;
     }
 
+    public void disconnect() {
+        isDisconnectedByUser = true;
+        close();
+    }
+
+    public void reconnect() {
+        isDisconnectedByUser = false;
+        restart();
+    }
+
     public enum LogLevel {
         INFO,
         DEBUG,
@@ -191,12 +202,11 @@ public class LinkManager implements Closeable {
     public final LinkedBlockingQueue<Runnable> COMMUNICATION_QUEUE = new LinkedBlockingQueue<>();
     /**
      * All request/responses to underlying controller are happening on this single-threaded executor in a FIFO manner
-     *
      */
     public final ExecutorService COMMUNICATION_EXECUTOR = new ThreadPoolExecutor(1, 1,
             0L, TimeUnit.MILLISECONDS,
             COMMUNICATION_QUEUE,
-            new NamedThreadFactory("communication executor"));
+            new NamedThreadFactory("ECU Communication Executor", true));
 
     public void assertCommunicationThread() {
         if (Thread.currentThread() != communicationThread) {
@@ -246,10 +256,11 @@ public class LinkManager implements Closeable {
             Callable<IoStream> streamFactory = new Callable<IoStream>() {
                 @Override
                 public IoStream call() {
-                    messageListener.postMessage(getClass(), "Opening port: " + port);
+                    messageListener.postMessage(getClass(), "Opening TCP port: " + port);
                     try {
                         return TcpIoStream.open(port);
                     } catch (Throwable e) {
+                        log.error("TCP error " + e);
                         stateListener.onConnectionFailed("Error " + e);
                         return null;
                     }
@@ -299,7 +310,8 @@ public class LinkManager implements Closeable {
     }
 
     public void restart() {
-        ConnectionStatusLogic.INSTANCE.setValue(ConnectionStatusValue.NOT_CONNECTED);
+        if (isDisconnectedByUser)
+            return;
         close(); // Explicitly kill the connection (call connectors destructor??????)
 
         String[] ports = getCommPorts();
@@ -312,8 +324,10 @@ public class LinkManager implements Closeable {
 
     @Override
     public void close() {
-        if (connector != null)
+        ConnectionStatusLogic.INSTANCE.setValue(ConnectionStatusValue.NOT_CONNECTED);
+        if (connector != null) {
             connector.stop();
+        }
         isStarted = false; // Connector is dead and cant be in started state (Otherwise the Exception will raised)
     }
 

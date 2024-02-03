@@ -8,8 +8,7 @@ import com.rusefi.livedata.LiveDataParserSandbox;
 import com.rusefi.livedata.ParseResult;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -18,7 +17,7 @@ import java.util.TreeMap;
 
 import static com.rusefi.CodeWalkthrough.TRUE_CONDITION;
 import static com.rusefi.ui.LiveDataPane.CPP_SUFFIX;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
@@ -40,7 +39,7 @@ public class LiveDataParserTest {
                 "}\n";
 
         SourceCodePainter painter = run(name -> null, sourceCode);
-        verify(painter, times(7)).paintBackground(eq(CodeWalkthrough.ACTIVE_STATEMENT), any());
+        verify(painter, times(6)).paintBackground(eq(CodeWalkthrough.ACTIVE_STATEMENT), any());
     }
 
     @Test

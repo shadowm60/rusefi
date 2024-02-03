@@ -49,7 +49,7 @@
  *
  *
  * @section sec_timers Timers
- * At the moment rusEfi is build using 5 times:
+ * At the moment rusEfi is build using 5 timers:
  * <BR>1) 1MHz microsecond_timer.cpp
  * <BR>2) 10KHz fast ADC callback pwmpcb_fast adc_inputs.cpp
  * <BR>3) slow ADC callback pwmpcb_slow adc_inputs.cpp
@@ -96,11 +96,10 @@
  *
  * @section config Persistent Configuration
  *
- * Definition of configuration data structure:  
- * integration/rusefi_config.txt  
+ * Definition of configuration data structure:
+ * integration/rusefi_config.txt
  * This file has a lot of information and instructions in its comment header.
- * in order to use CONFIG macro you need EXTERN_CONFIG and include engine_configuration.h
- * Please note that due to TunerStudio protocol it's important to have the total structure size in synch between the firmware and TS .ini file -
+ * Please note that due to TunerStudio protocol it's important to have the total structure size in sync between the firmware and TS .ini file -
  * just to make sure that this is not forgotten the size of the structure is hard-coded as PAGE_0_SIZE constant. There is always some 'unused' fields added in advance so that
  * one can add some fields without the pain of increasing the total configuration page size.
  * <br>See flash_main.cpp
@@ -184,18 +183,19 @@ void runRusEfi() {
 	checkLastBootError();
 #endif
 
-#ifdef STM32F7
-	void sys_dual_bank(void);
-	addConsoleAction("dual_bank", sys_dual_bank);
-#endif
-
 #if defined(STM32F4) || defined(STM32F7)
 //	addConsoleAction("stm32_stop", stm32_stop);
 	addConsoleAction("stm32_standby", stm32_standby);
 #endif
 
 	addConsoleAction(CMD_REBOOT, scheduleReboot);
+#if EFI_DFU_JUMP
 	addConsoleAction(CMD_REBOOT_DFU, jump_to_bootloader);
+#endif /* EFI_DFU_JUMP */
+
+#if EFI_USE_OPENBLT
+	addConsoleAction(CMD_REBOOT_OPENBLT, jump_to_openblt);
+#endif
 
 	/**
 	 * we need to initialize table objects before default configuration can set values
@@ -205,6 +205,7 @@ void runRusEfi() {
 	// Perform hardware initialization that doesn't need configuration
 	initHardwareNoConfig();
 
+  // at the moment that's always hellen board ID
 	detectBoardType();
 
 #if EFI_ETHERNET
@@ -224,6 +225,8 @@ void runRusEfi() {
 	 */
 	initializeConsole();
 
+	checkLastResetCause();
+
 	// Read configuration from flash memory
 	loadConfiguration();
 
@@ -232,7 +235,9 @@ void runRusEfi() {
 #endif /* EFI_TUNER_STUDIO */
 
 	// Start hardware serial ports (including bluetooth, if present)
+#if EFI_TUNER_STUDIO
 	startSerialChannels();
+#endif // EFI_TUNER_STUDIO
 
 	runRusEfiWithConfig();
 
@@ -251,45 +256,17 @@ void runRusEfiWithConfig() {
 		return;
 	}
 
-	// Start this early - it will start LED blinking and such
-	startStatusThreads();
+	commonEarlyInit();
 
-	/**
-	 * Initialize hardware drivers
-	 */
-	initHardware();
-
-#if EFI_FILE_LOGGING
-	initMmcCard();
-#endif /* EFI_FILE_LOGGING */
-
-#if EFI_CAN_SERIAL
-	// needs to be called after initCan() inside initHardware()
-	startCanConsole();
-#endif /* EFI_CAN_SERIAL */
-
-#if HW_CHECK_ALWAYS_STIMULATE
-	// we need a special binary for final assembly check. We cannot afford to require too much software or too many steps
-	// to be executed at the place of assembly
-	enableTriggerStimulator();
-#endif // HW_CHECK_ALWAYS_STIMULATE
-
-#if EFI_LUA
-	startLua();
-#endif // EFI_LUA
 
 	// Config could be completely bogus - don't start anything else!
 	if (validateConfig()) {
-		initStatusLoop();
 		/**
 		 * Now let's initialize actual engine control logic
 		 * todo: should we initialize some? most? controllers before hardware?
 		 */
-		initEngineController();
+		initRealHardwareEngineController();
 
-	#if EFI_ENGINE_EMULATOR
-		initEngineEmulator();
-	#endif
 
 		// This has to happen after RegisteredOutputPins are init'd: otherwise no change will be detected, and no init will happen
 		rememberCurrentConfiguration();

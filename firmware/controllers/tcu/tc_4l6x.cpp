@@ -4,30 +4,30 @@
 
 #if EFI_TCU
 Gm4l6xTransmissionController gm4l6xTransmissionController;
-static SimplePwm tccPwm("TCC Control"); 
-static SimplePwm pcPwm("Pressure Control"); 
-static SimplePwm shift32Pwm("3-2 Shift Control"); 
+static SimplePwm tccPwm("TCC Control");
+static SimplePwm pcPwm("Pressure Control");
+static SimplePwm shift32Pwm("3-2 Shift Control");
 
 void Gm4l6xTransmissionController::init() {
     for (size_t i = 0; i < efi::size(engineConfiguration->tcu_solenoid); i++) {
-        enginePins.tcuSolenoids[i].initPin("Transmission Solenoid", engineConfiguration->tcu_solenoid[i], &engineConfiguration->tcu_solenoid_mode[i]);
+        enginePins.tcuSolenoids[i].initPin("Transmission Solenoid", engineConfiguration->tcu_solenoid[i], engineConfiguration->tcu_solenoid_mode[i]);
     }
-		enginePins.tcuTccOnoffSolenoid.initPin("TCC On/Off Solenoid", engineConfiguration->tcu_tcc_onoff_solenoid, &engineConfiguration->tcu_tcc_onoff_solenoid_mode);
-		enginePins.tcuTccPwmSolenoid.initPin("TCC PWM Solenoid", engineConfiguration->tcu_tcc_pwm_solenoid, &engineConfiguration->tcu_tcc_pwm_solenoid_mode);
+		enginePins.tcuTccOnoffSolenoid.initPin("TCC On/Off Solenoid", engineConfiguration->tcu_tcc_onoff_solenoid, engineConfiguration->tcu_tcc_onoff_solenoid_mode);
+		enginePins.tcuTccPwmSolenoid.initPin("TCC PWM Solenoid", engineConfiguration->tcu_tcc_pwm_solenoid, engineConfiguration->tcu_tcc_pwm_solenoid_mode);
 		startSimplePwm(&tccPwm,
 									 "TCC",
 									 &engine->executor,
 									 &enginePins.tcuTccPwmSolenoid,
 									 engineConfiguration->tcu_tcc_pwm_solenoid_freq,
 									 0);
-		enginePins.tcuPcSolenoid.initPin("Pressure Control Solenoid", engineConfiguration->tcu_pc_solenoid_pin, &engineConfiguration->tcu_pc_solenoid_pin_mode);
+		enginePins.tcuPcSolenoid.initPin("Pressure Control Solenoid", engineConfiguration->tcu_pc_solenoid_pin, engineConfiguration->tcu_pc_solenoid_pin_mode);
 		startSimplePwm(&pcPwm,
 									 "Line Pressure",
 									 &engine->executor,
 									 &enginePins.tcuPcSolenoid,
 									 engineConfiguration->tcu_pc_solenoid_freq,
 									 0);
-		enginePins.tcu32Solenoid.initPin("3-2 Shift Solenoid", engineConfiguration->tcu_32_solenoid_pin, &engineConfiguration->tcu_32_solenoid_pin_mode);
+		enginePins.tcu32Solenoid.initPin("3-2 Shift Solenoid", engineConfiguration->tcu_32_solenoid_pin, engineConfiguration->tcu_32_solenoid_pin_mode);
 		startSimplePwm(&shift32Pwm,
 									 "3-2 Solenoid",
 									 &engine->executor,
@@ -56,7 +56,7 @@ void Gm4l6xTransmissionController::update(gear_e gear) {
 
 	float time = isShiftCompleted();
 	if (time != 0) {
-		engine->outputChannels.lastShiftTime = time;
+		lastShiftTime = time;
 		isShifting = false;
 	}
 }
@@ -153,11 +153,11 @@ void Gm4l6xTransmissionController::set32State(gear_e gear) {
 		if (!vss.Valid) {
 			return;
 		}
-		uint8_t (*pcts)[sizeof(config->tcu_32SpeedBins)/sizeof(config->tcu_32SpeedBins[0])];
+		//huh?uint8_t (*pcts)[sizeof(config->tcu_32SpeedBins)/sizeof(config->tcu_32SpeedBins[0])];
 		int pct = interpolate2d(vss.Value, config->tcu_32SpeedBins, config->tcu_32Vals);
 		shift32Pwm.setSimplePwmDutyCycle(pct*0.01);
 	} else {
-		shift32Pwm.setSimplePwmDutyCycle(0);		
+		shift32Pwm.setSimplePwmDutyCycle(0);
 	}
 }
 

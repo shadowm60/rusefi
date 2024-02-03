@@ -1,12 +1,10 @@
 # Combine the related files for a specific platform and MCU.
 
 # Target ECU board design
-BOARDCPPSRC = $(BOARDS_DIR)/hellen/hellen-nb1/board_configuration.cpp
-BOARDINC = $(BOARDS_DIR)/hellen/hellen-nb1
-
+BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 # Set this if you want a default engine type other than normal hellen-nb1
 ifeq ($(VAR_DEF_ENGINE_TYPE),)
-  VAR_DEF_ENGINE_TYPE = -DDEFAULT_ENGINE_TYPE=HELLEN_NB1
+  VAR_DEF_ENGINE_TYPE = -DDEFAULT_ENGINE_TYPE=engine_type_e::HELLEN_NB1
 endif
 
 DDEFS += -DEFI_MAIN_RELAY_CONTROL=TRUE
@@ -19,5 +17,7 @@ include $(BOARDS_DIR)/hellen/hellen-common144.mk
 
 # Enable serial pins on expansion header
 DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
+DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_HELLEN_NB1
+SHORT_BOARD_NAME=hellen-nb1
 
-DDEFS += -DSHORT_BOARD_NAME=hellen-nb1
+DDEFS += -DHW_HELLEN_NB1=1

@@ -8,8 +8,7 @@
  * @author andreika <prometheus.pcb@gmail.com>
  */
 
-#ifndef EFIFEATURES_H_
-#define EFIFEATURES_H_
+#pragma once
 
 #define EFI_GPIO_HARDWARE TRUE
 
@@ -18,9 +17,6 @@
 #define EFI_TOOTH_LOGGER FALSE
 
 #define EFI_PWM_TESTER FALSE
-
-#define EFI_ENABLE_CRITICAL_ENGINE_STOP FALSE
-#define EFI_ENABLE_ENGINE_WARNING TRUE
 
 /**
  * if you have a 60-2 trigger, or if you just want better performance, you
@@ -75,7 +71,7 @@
 
 #define EFI_ALTERNATOR_CONTROL FALSE
 
-#define EFI_AUX_PID FALSE
+#define EFI_VVT_PID FALSE
 
 #define EFI_SIGNAL_EXECUTOR_SLEEP FALSE
 #define EFI_SIGNAL_EXECUTOR_ONE_TIMER TRUE
@@ -87,7 +83,7 @@
 
 #define TRIGGER_EXTREME_LOGGING FALSE
 
-#define EFI_INTERNAL_FLASH TRUE
+#define EFI_STORAGE_INT_FLASH TRUE
 
 /**
  * Flex Non Volatile Memory is faster than flash
@@ -145,8 +141,8 @@
 #define EFI_CJ125 FALSE
 #endif
 
-#if !defined(EFI_MEMS) || defined(__DOXYGEN__)
- #define EFI_MEMS FALSE
+#if !defined(EFI_ONBOARD_MEMS) || defined(__DOXYGEN__)
+ #define EFI_ONBOARD_MEMS FALSE
 #endif
 
 #define EFI_INTERNAL_ADC TRUE
@@ -169,10 +165,6 @@
  * Control the main power relay based on measured ignition voltage (Vbatt)
  */
 #define EFI_MAIN_RELAY_CONTROL TRUE
-
-#ifndef EFI_PWM
-#define EFI_PWM FALSE
-#endif
 
 #define EFI_VEHICLE_SPEED FALSE
 
@@ -271,18 +263,11 @@
 #define TS_CAN_AF PAL_MODE_ALTERNATIVE_CAN
 #define TS_CAN_DEVICE_SHORT_PACKETS_IN_ONE_FRAME
 
-#undef TS_PRIMARY_PORT
-#undef TS_SECONDARY_PORT
-
 #define EFI_USB_SERIAL TRUE
 #define EFI_CONSOLE_USB_DEVICE SDU1
 // Cypress uses a fake USB device that's just a plain channel
 #define SerialUSBDriver BaseChannel
 
-#define EFI_CONSOLE_TX_PORT GPIOA
-#define EFI_CONSOLE_TX_PIN 10
-#define EFI_CONSOLE_RX_PORT GPIOA
-#define EFI_CONSOLE_RX_PIN 11
 #define EFI_CONSOLE_AF 3
 
 #define TS_SERIAL_AF 2
@@ -312,9 +297,6 @@
 #define LED_ERROR_BRAIN_PIN_MODE INVERTED_OUTPUT
 
 #define EFI_WARNING_LED FALSE
-
-#undef CONSOLE_MODE_SWITCH_PORT
-#undef CONFIG_RESET_SWITCH_PORT
 
 /**
  * This is the size of the MemoryStream used by chvprintf
@@ -363,6 +345,8 @@
 #define RAM_UNUSED_SIZE 1
 #define CCM_UNUSED_SIZE 1
 
+#define EFI_BACKUP_SRAM FALSE
+
 #define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
 //#define EFI_PRINT_MESSAGES_TO_TERMINAL TRUE
 
@@ -379,7 +363,3 @@
 		chThdSleepMilliseconds(20); \
 	} \
 }
-
-
-
-#endif /* EFIFEATURES_H_ */

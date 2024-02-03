@@ -22,7 +22,6 @@
 // Less critical harware
 #define PRIO_SERVO (NORMALPRIO + 5)
 #define PRIO_STEPPER (NORMALPRIO + 5)
-#define PRIO_CJ125 (NORMALPRIO + 5)
 
 // Logging buffer flush is *slightly* above PRIO_CONSOLE so that we don't starve logging buffers during initialization and console commands
 #define PRIO_TEXT_LOG (NORMALPRIO + 4)
@@ -40,6 +39,7 @@
 #define PRIO_AUX_SERIAL NORMALPRIO
 #define PRIO_KNOCK_PROCESS (NORMALPRIO - 10)
 #define PRIO_HIP9011 (NORMALPRIO - 10)
+#define PRIO_BENCH_TEST (NORMALPRIO - 10)
 
 // These are intentionally low priority so they can't get in the way of anything else
 #define PRIO_FLASH_WRITE LOWPRIO + 20
@@ -49,3 +49,6 @@
 
 // Lua interpreter must be lowest priority, as the user's code may get stuck in an infinite loop
 #define PRIO_LUA LOWPRIO + 10
+
+// MAX31855 driver
+#define MAX31855_PRIO NORMALPRIO

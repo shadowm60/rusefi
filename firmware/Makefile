@@ -3,8 +3,6 @@
 # see setup_linux_environment.sh but Windows is also totally fine
 #
 
-.PHONY: openblt
-
 CHIBIOS = ChibiOS
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk
 RULESFILE = $(RULESPATH)/rules.mk
@@ -43,16 +41,9 @@ ifeq ($(DEBUG_LEVEL_OPT),)
   # Comment the above and uncomment the line below if you want to debug the firmware (it's difficult-to-impossible
   # to debug firmware with optimization enabled).
   # DEBUG_LEVEL_OPT = -O0 -ggdb -g
+  # without optimization many configurations do not fit into flash. Compiling without Lua is one of the way to get a debug image
+  # DEBUG_LEVEL_OPT += -DEFI_LUA=FALSE
 endif
-
-
-ifeq ($(CCACHE_DIR),)
-  $(info No CCACHE_DIR)
-else
-  $(info CCACHE_DIR is ${CCACHE_DIR})
-  CCPREFIX=ccache
-endif
-
 
 # Compiler options here.
 # yes we have two kinds of EXTRA_*PARAMS so that we can define those in two different places independently
@@ -81,6 +72,8 @@ endif
 # Hellen is one of the boards which cares
 USE_CPPOPT += -Wno-error=tautological-compare
 
+USE_CPPOPT += $(RUSEFI_CPPOPT)
+
 # Enable this if you want the linker to remove unused code and data
 ifeq ($(USE_LINK_GC),)
   USE_LINK_GC = yes
@@ -93,7 +86,13 @@ endif
 
 # Enable this if you want link time optimizations (LTO)
 ifeq ($(USE_LTO),)
-  USE_LTO = yes
+  # ChibiOS has not yet migrated to gcc12 syntax of '-flto' thus some weird code here
+  #
+  # drama: in case of 'syntax error near unexpected token' on Windows either comment out the two lines below
+  # or just more your GCC into a folder without spaces in the path like 'C:\stuff\arm-gcc-12.2'
+  #
+  USE_LTO = no
+  USE_OPT += -flto=auto
 endif
 
 # If enabled, this option allows to compile the application in THUMB mode.
@@ -108,13 +107,9 @@ endif
 
 # If enabled, this option makes the build process faster by not compiling
 # modules not used in the current configuration.
-# without USE_SMART_BUILD all ChibiOS (including all drivers) are builded. And all drivers includes get included.
+# without USE_SMART_BUILD all ChibiOS (including all drivers) are built. And all drivers includes get included.
 ifeq ($(USE_SMART_BUILD),)
   USE_SMART_BUILD = no
-endif
-
-ifeq ($(USE_BOOTLOADER),)
-  USE_BOOTLOADER = no
 endif
 
 ifeq ($(USE_OPENBLT),)
@@ -164,9 +159,13 @@ MAKEFLAGS += ${NUMJOBS}
 # Project, sources and paths
 #
 
-BOARDS_DIR = $(PROJECT_DIR)/config/boards
-
-include $(PROJECT_DIR)/config/boards/$(PROJECT_BOARD)/board.mk
+BOARDINC = $(BOARD_DIR)
+include $(BOARD_DIR)/board.mk
+BOARDCPPSRC += $(BOARDS_DIR)/board_id.cpp
+ifeq ($(SHORT_BOARD_NAME),)
+$(error SHORT_BOARD_NAME not set, something wrong with your board.mk file)
+endif
+DDEFS += -DSHORT_BOARD_NAME=$(SHORT_BOARD_NAME)
 
 # Include various ChibiOS mk files
 # Licensing files.
@@ -181,8 +180,13 @@ include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 include $(CHIBIOS)/os/rt/rt.mk
 include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
 # EX files (optional).
-ifneq ($(USE_LIS302),no)
-  include $(CHIBIOS)/os/ex/devices/ST/lis302dl.mk
+ifeq ($(EFI_ONBOARD_MEMS_LIS2DW12),yes)
+  DDEFS += -DEFI_ONBOARD_MEMS_LIS2DW12=TRUE
+  include $(CHIBIOS)/os/ex/devices/ST/lis2dw12.mk
+endif
+ifeq ($(EFI_ONBOARD_MEMS_LIS2DH12),yes)
+  DDEFS += -DEFI_ONBOARD_MEMS_LIS2DH12=TRUE
+  include $(CHIBIOS)/os/ex/devices/ST/lsm303agr.mk
 endif
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/cpp_wrappers/chcpp.mk
@@ -206,30 +210,24 @@ endif
 include $(PROJECT_DIR)/hw_layer/mass_storage/mass_storage.mk
 include $(PROJECT_DIR)/common.mk
 
-ifeq ($(BOOTLOADERINC),)
-  # include default bootloader code
-  BOOTLOADERINC= $(PROJECT_DIR)/bootloader/
-endif
-
-ifeq ($(USE_BOOTLOADER),yes)
-  include $(PROJECT_DIR)/bootloader/bootloader.mk
-endif
-
 ifeq ($(USE_OPENBLT),yes)
   # Reserve start of flash for OpenBLT
-  USE_OPT += -Wl,--defsym=BOOTLOADER=1
+  USE_OPT += -Wl,--defsym=HAS_BOOTLOADER=1
   DDEFS += -DEFI_USE_OPENBLT=TRUE
 endif
 
 $(info PROJECT_BOARD: $(PROJECT_BOARD))
+$(info BOARD_DIR:     $(BOARD_DIR))
 $(info PROJECT_CPU:   $(PROJECT_CPU))
+$(info SHORT_BOARD_NAME: $(SHORT_BOARD_NAME))
+$(info CPU_HWLAYER:   $(CPU_HWLAYER))
 $(info CONFDIR:       $(CONFDIR))
 $(info LDSCRIPT:      $(LDSCRIPT))
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-# check.c goes first to throw error as soon as possible
-CSRC =  check.c \
+# gcc_version_check.c goes first to throw error as soon as possible
+CSRC =  gcc_version_check.c \
   $(ALLCSRC) \
   $(BOARDSRC) \
   $(CHIBIOS_CONTRIB)/os/various/ramdisk.c \
@@ -237,15 +235,17 @@ CSRC =  check.c \
   $(DEV_SRC) \
   $(BOOTLOADERSRC) \
   ${HW_MASS_STORAGE_SRC_C} \
-  $(HW_LAYER_EMS) \
+  $(HW_LAYER) \
+  $(HW_LAYER_PORT) \
   $(HW_LAYER_DRIVERS_CORE) \
   $(HW_LAYER_DRIVERS) \
   $(RUSEFI_LIB_C) \
-  main_hardfault.c
+  $(PROJECT_DIR)/hw_layer/main_hardfault.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
 CPPSRC = \
+  configuration_check.cpp \
   $(ALLCPPSRC) \
   $(BOARDCPPSRC) \
   $(DEV_SRC_CPP) \
@@ -279,7 +279,7 @@ TCPPSRC =
 # List ASM source files here
 ASMXSRC = $(ALLXASMSRC) \
   $(RUSEFIASM) \
-  main_hardfault_asm.S
+  $(PROJECT_DIR)/hw_layer/main_hardfault_asm.S
 
 #
 # WARNING! order of variables is important here - for instance cypress own folders should go before default folders
@@ -289,18 +289,13 @@ INCDIR = \
   $(BOARDINC) \
   $(ALLINC) \
   $(TESTINC) \
-  $(BOOTLOADERINC) \
   $(CHIBIOS)/os/various \
-  $(CHIBIOS)/os/hal/lib/peripherals/sensors \
   $(RUSEFI_LIB_INC) \
   $(CONFDIR) \
   ext/FatFS \
   $(PROJECT_DIR)/hw_layer/mass_storage \
-  $(PROJECT_DIR)/hw_layer/serial_over_usb \
-  $(PROJECT_DIR)/hw_layer/lcd \
-  $(PROJECT_DIR)/hw_layer/mass_storage \
   $(HW_INC) \
-  development/hw_layer \
+  $(PROJECT_DIR)/development/hw_layer \
   development/test \
   $(CHIBIOS_CONTRIB)/os/various
 # contrib/os/various must go at the end because it also contains pid.h which conflicts with our pid.h
@@ -318,8 +313,8 @@ ifeq ($(CROSS_COMPILE),)
 else
   TRGT = $(CROSS_COMPILE)
 endif
-CC   = $(CCPREFIX) $(TRGT)gcc
-CPPC = $(CCPREFIX) $(TRGT)g++
+CC   = $(TRGT)gcc
+CPPC = $(TRGT)g++
 # Enable loading with g++ only if you need C++ runtime support.
 # NOTE: You can use C++ even without C++ support if you are careful. C++
 #       runtime support makes code size explode.
@@ -375,12 +370,6 @@ ULIBS = -lm --specs=nano.specs -Wl,--sort-section=alignment
 ##############################################################################
 
 include $(RULESFILE)
-
-openblt:
-	make -f $(PROJECT_DIR)/hw_layer/openblt/openblt.mk
-
-openblt_clean:
-	make -f $(PROJECT_DIR)/hw_layer/openblt/openblt.mk clean
 
 # Enable precompiled header
 include rusefi_pch.mk

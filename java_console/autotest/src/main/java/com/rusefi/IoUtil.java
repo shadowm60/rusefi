@@ -79,6 +79,17 @@ public class IoUtil {
         sendBlockingCommand(CMD_RPM + " " + rpm, commandQueue);
         long time = System.currentTimeMillis();
 
+        awaitRpm(rpm);
+
+        double actualRpm = SensorCentral.getInstance().getValue(Sensor.RPMValue);
+
+        if (!isCloseEnough(rpm, actualRpm))
+            throw new IllegalStateException("rpm change did not happen: " + rpm + ", actual " + actualRpm);
+//        sendCommand(Fields.CMD_RESET_ENGINE_SNIFFER);
+        log.info("AUTOTEST RPM change [" + rpm + "] executed in " + (System.currentTimeMillis() - time));
+    }
+
+    public static void awaitRpm(int rpm) {
         final CountDownLatch rpmLatch = new CountDownLatch(1);
 
         SensorCentral.ListenerToken listenerToken = SensorCentral.getInstance().addListener(Sensor.RPMValue, actualRpm -> {
@@ -95,30 +106,27 @@ public class IoUtil {
 
         // We don't need to listen to RPM anymore
         listenerToken.remove();
-
-        double actualRpm = SensorCentral.getInstance().getValue(Sensor.RPMValue);
-
-        if (!isCloseEnough(rpm, actualRpm))
-            throw new IllegalStateException("rpm change did not happen: " + rpm + ", actual " + actualRpm);
-//        sendCommand(Fields.CMD_RESET_ENGINE_SNIFFER);
-        log.info("AUTOTEST RPM change [" + rpm + "] executed in " + (System.currentTimeMillis() - time));
     }
 
-    static void waitForFirstResponse() throws InterruptedException {
-        log.info("Let's give it some time to start...");
+    private static void waitForFirstResponse() throws InterruptedException {
         final CountDownLatch startup = new CountDownLatch(1);
         long waitStart = System.currentTimeMillis();
 
         ISensorCentral.ListenerToken listener = SensorCentral.getInstance().addListener(Sensor.RPMValue, value -> startup.countDown());
-        startup.await(5, TimeUnit.SECONDS);
+        boolean haveResponse = startup.await(60, TimeUnit.SECONDS);
+        if (!haveResponse)
+            throw new IllegalStateException("No response from simulator");
         listener.remove();
-        FileLog.MAIN.logLine("Got first signal in " + (System.currentTimeMillis() - waitStart));
+        FileLog.MAIN.logLine("Got first signal in " + (System.currentTimeMillis() - waitStart) + "ms");
     }
 
-    static void connectToSimulator(LinkManager linkManager, boolean startProcess) throws InterruptedException {
+    public static void connectToSimulator(LinkManager linkManager, boolean startProcess) throws InterruptedException {
         if (startProcess) {
-            if (!TcpConnector.getAvailablePorts().isEmpty())
-                throw new IllegalStateException("Port already binded on startup?");
+            if (FileLog.isWindows()) {
+                // this check seems not to work on Linux
+                if (!TcpConnector.getAvailablePorts().isEmpty())
+                    throw new IllegalStateException("Port already binded on startup?");
+            }
             SimulatorExecHelper.startSimulator();
         }
 

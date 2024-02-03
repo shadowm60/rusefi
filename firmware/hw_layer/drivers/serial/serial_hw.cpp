@@ -33,10 +33,6 @@ static void auxInfo() {
 }
 
 void enableAuxSerial() {
-	engineConfiguration->auxSerialTxPin = engineConfiguration->auxSerialTxPin;
-	engineConfiguration->auxSerialRxPin = engineConfiguration->auxSerialRxPin;
-	engineConfiguration->auxSerialSpeed = engineConfiguration->auxSerialSpeed;
-	
 	uartCfg.speed = engineConfiguration->auxSerialSpeed;
 	sdStart(AUX_SERIAL_DEVICE, &uartCfg);
 
@@ -73,12 +69,12 @@ void initAuxSerial(void) {
 
 	// Validate pins 
 	if (isSerialTXEnabled && !isValidSerialTxPin(engineConfiguration->auxSerialTxPin)) {
-		firmwareError(OBD_PCM_Processor_Fault, "unexpected aux TX pin");
+		criticalError("unexpected aux TX pin");
 		return;
 	}
 
 	if (isSerialRXEnabled && !isValidSerialRxPin(engineConfiguration->auxSerialRxPin)) {
-		firmwareError(OBD_PCM_Processor_Fault, "unexpected aux RX pin");
+		criticalError("unexpected aux RX pin");
 		return;
 	}
 

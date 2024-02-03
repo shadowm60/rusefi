@@ -7,11 +7,11 @@
 
 #pragma once
 
-#include "engine_configuration_generated_structures.h"
+#include "generated_lookup_engine_configuration.h"
 
 typedef struct {
 	int version;
 	int size;
 	persistent_config_s persistentConfiguration;
-	uint32_t value;
+	uint32_t crc;
 } persistent_config_container_s;

@@ -76,7 +76,7 @@ static void obdSendPacket(int mode, int PID, int numBytes, uint32_t iValue, size
 #define _1_MODE 1
 
 static void obdSendValue(int mode, int PID, int numBytes, float value, size_t busIndex) {
-	efiAssertVoid(CUSTOM_ERR_6662, numBytes <= 2, "invalid numBytes");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6662, numBytes <= 2, "invalid numBytes");
 	int iValue = (int)efiRound(value, 1.0f);
 	// clamp to uint8_t (0..255) or uint16_t (0..65535)
 	iValue = maxI(minI(iValue, (numBytes == 1) ? 255 : 65535), 0);
@@ -156,16 +156,14 @@ static void handleGetDataRequest(const CANRxFrame& rx, size_t busIndex) {
 		obdSendValue(_1_MODE, pid, 1, Sensor::getOrZero(SensorType::Tps1) * ODB_TPS_BYTE_PERCENT, busIndex);	// (A*100/255)
 		break;
 	case PID_FUEL_AIR_RATIO_1: {
-		float lambda = Sensor::getOrZero(SensorType::Lambda1);
-		// phi = 1 / lambda
-		float phi = clampF(0, 1 / lambda, 1.99f);
+		float lambda = clampF(0, Sensor::getOrZero(SensorType::Lambda1), 1.99f);
 
-		uint16_t scaled = phi * 32768;
+		uint16_t scaled = lambda * 32768;
 
 		obdSendPacket(1, pid, 4, scaled << 16, busIndex);
 		break;
 	} case PID_FUEL_RATE: {
-		float gPerSecond = engine->engineState.fuelConsumption.getConsumptionGramPerSecond();
+		float gPerSecond = engine->module<TripOdometer>()->getConsumptionGramPerSecond();
 		float gPerHour = gPerSecond * 3600;
 		float literPerHour = gPerHour * 0.00139f;
 		obdSendValue(_1_MODE, pid, 2, literPerHour * 20.0f, busIndex);	//	L/h.	(A*256+B)/20
@@ -176,7 +174,7 @@ static void handleGetDataRequest(const CANRxFrame& rx, size_t busIndex) {
 	}
 }
 
-static void handleDtcRequest(int numCodes, int *dtcCode) {
+static void handleDtcRequest(int numCodes, ObdCode* dtcCode) {
 	// TODO: this appears to be unfinished?
 	UNUSED(numCodes);
 	UNUSED(dtcCode);

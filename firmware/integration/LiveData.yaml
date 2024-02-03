@@ -10,19 +10,48 @@
 # at the moment new line would need to be added into StateDictionary.java manually todo: Add code generation of StateDictionary.java
 #
 # see gen_live_documentation.sh which is the main generation script
-# todo: what is sequence of events in terms of 'live_data_e' code generation?
 #
 Usages:
+#  output_channels always goes first at least because it has protocol version at well-known offset
   - name: output_channels
+    cppFileName: status_loop
     java: TsOutputs.java
     folder: console/binary
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     constexpr: "engine->outputChannels"
+
+  - name: fuel_computer
+    java: FuelComputer.java
+    folder: controllers/algo/fuel
+    prepend: integration/rusefi_config_shared.txt
+    constexpr: "engine->fuelComputer"
+    conditional_compilation: "EFI_ENGINE_CONTROL"
+
+  - name: ignition_state
+    cppFileName: advance_map
+    java: IgnitionState.java
+    folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
+    constexpr: "engine->ignitionState"
 
   - name: knock_controller
     java: KnockController.java
     folder: controllers/engine_cycle
+    prepend: integration/rusefi_config_shared.txt
     output_name: knock
+    constexpr: "___engine.module<KnockController>()"
+    isPtr: true
+
+  - name: tcu_controller
+    java: TcuController.java
+    folder: controllers/tcu
+    prepend: integration/rusefi_config_shared.txt
+    conditional_compilation: "EFI_TCU"
+
+  - name: throttle_model
+    java: ThrottleModel.java
+    folder: controllers/math
+    output_name: throttle_model
 
   - name: high_pressure_fuel_pump
     java: HighPressureFuelPump.java
@@ -32,44 +61,49 @@ Usages:
   - name: injector_model
     java: InjectorModel.java
     folder: controllers/algo/fuel
-
-  - name: fuel_computer
-    java: FuelComputer.java
-    folder: controllers/algo/fuel
-    prepend: integration/rusefi_config.txt
-    constexpr: "engine->fuelComputer"
+    prepend: integration/rusefi_config_shared.txt
 
   - name: launch_control_state
+    cppFileName: launch_control
     java: LaunchControl.java
     folder: controllers/algo
 
   - name: antilag_system_state
+    cppFileName: antilag_system
     java: AntilagSystem.java
     folder: controllers/algo
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     output_name: als
 
   - name: boost_control
     java: BoostControl.java
     folder: controllers/actuators
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     output_name: boost
+    constexpr: "___engine.module<BoostController>()"
+    isPtr: true
+    conditional_compilation: "EFI_BOOST_CONTROL"
 
   - name: ac_control
     java: AcControl.java
     folder: controllers/actuators
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     output_name: ac
+    engineModule: AcController
 
   - name: fan_control
     java: FanControl.java
     folder: controllers/actuators
     output_name: [ "fan1", "fan2" ]
+    constexpr: "___engine.module<FanControl1>()"
+    isPtr: true
 
   - name: fuel_pump_control
+    cppFileName: fuel_pump
     java: FuelPump.java
     folder: controllers/actuators
     output_name: fuelPump
+    engineModule: FuelPumpController
 
   - name: main_relay
     java: MainRelay.java
@@ -82,51 +116,88 @@ Usages:
   #   folder: util/math
 
   - name: engine_state
+    cppFileName: engine
     java: EngineState.java
     folder: controllers/algo
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     constexpr: "engine->engineState"
 
   - name: tps_accel_state
+    cppFileName: accel_enrichment
     java: TpsAccelState.java
     folder: controllers/algo
+    prepend: integration/rusefi_config_shared.txt
 
   - name: trigger_central
     java: TriggerCentral.java
     folder: controllers/trigger
     withCDefines: true
+# something special about 'error: "ts_show_vbatt" redefined'' why is trigger.h special?
+#    prepend: integration/rusefi_config.txt
     constexpr: "engine->triggerCentral"
+    conditional_compilation: "EFI_SHAFT_POSITION_INPUT"
 
   - name: trigger_state
+    cppFileName: trigger_decoder
     java: TriggerState.java
     folder: controllers/trigger
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
     output_name: [ "trg", "vvt1i", "vvt1e", "vvt2i", "vvt2e" ]
 
   - name: trigger_state_primary
+    cppFileName: trigger_decoder
     java: TriggerStatePrimary.java
     folder: controllers/trigger
-    prepend: integration/rusefi_config.txt
+    prepend: integration/rusefi_config_shared.txt
 
   - name: wall_fuel_state
+    cppFileName: wall_fuel
     java: WallFuelState.java
     folder: controllers/algo
 
   - name: idle_state
+    cppFileName: idle_thread
     java: IdleState.java
     folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    constexpr: "___engine.module<IdleController>().unmock()"
     output_name: idle
-
-  - name: ignition_state
-    java: IgnitionState.java
-    folder: controllers/algo
+# working around unmock() in simulator
+    conditional_compilation: "EFI_PROD_CODE && EFI_IDLE_CONTROL"
 
   - name: electronic_throttle
     java: ElectronicThrottle.java
     folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
     output_name: [ "etb1", "etb2" ]
 
   - name: wideband_state
+    cppFileName: AemXSeriesLambda
     java: WidebandController.java
     folder: controllers/sensors/
     output_name: [ "wb1", "wb2" ]
+
+  - name: dc_motors
+    java: DcMotors.java
+    folder: controllers/actuators
+    prepend: integration/rusefi_config_shared.txt
+    constexpr: "engine->dc_motors"
+
+  - name: sent_state
+    cppFileName: sent
+    java: SentState.java
+    folder: controllers/sensors
+    prepend: integration/rusefi_config_shared.txt
+
+  - name: vvt
+    java: VvtState.java
+    folder: controllers/actuators
+    constexpr: "___engine.module<VvtController1>()"
+    isPtr: true
+    conditional_compilation: "EFI_VVT_PID"
+
+  - name: lambda_monitor
+    java: LambdaMonitor.java
+    folder: controllers/math
+    constexpr: "___engine.lambdaMonitor"
+    conditional_compilation: "EFI_SHAFT_POSITION_INPUT"

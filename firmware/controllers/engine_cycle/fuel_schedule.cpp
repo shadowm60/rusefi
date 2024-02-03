@@ -4,37 +4,46 @@
  * Handles injection scheduling
  */
 
-#include "global.h"
-#include <rusefi/arrays.h>
-#include <rusefi/isnan.h>
-#include "fuel_schedule.h"
-#include "event_registry.h"
-#include "fuel_schedule.h"
-#include "trigger_decoder.h"
-#include "engine_math.h"
-
-// dependency injection
-#include "engine_state.h"
-#include "rpm_calculator_api.h"
-// end of injection
+#include "pch.h"
 
 #if EFI_ENGINE_CONTROL
 
-void turnInjectionPinHigh(InjectionEvent *event) {
+void turnInjectionPinHigh(uintptr_t arg) {
 	efitick_t nowNt = getTimeNowNt();
-	for (int i = 0;i < MAX_WIRES_COUNT;i++) {
+
+	// clear last bit to recover the pointer
+	InjectionEvent *event = reinterpret_cast<InjectionEvent*>(arg & ~(1UL));
+
+	// extract last bit
+	bool stage2Active = arg & 1;
+
+	for (size_t i = 0; i < efi::size(event->outputs); i++) {
 		InjectorOutputPin *output = event->outputs[i];
 
 		if (output) {
 			output->open(nowNt);
 		}
 	}
+
+	if (stage2Active) {
+		for (size_t i = 0; i < efi::size(event->outputsStage2); i++) {
+			InjectorOutputPin *output = event->outputsStage2[i];
+
+			if (output) {
+				output->open(nowNt);
+			}
+		}
+	}
 }
 
 FuelSchedule::FuelSchedule() {
 	for (int cylinderIndex = 0; cylinderIndex < MAX_CYLINDER_COUNT; cylinderIndex++) {
-		elements[cylinderIndex].ownIndex = cylinderIndex;
+		elements[cylinderIndex].setIndex(cylinderIndex);
 	}
+}
+
+WallFuel& InjectionEvent::getWallFuel() {
+	return wallFuel;
 }
 
 void FuelSchedule::invalidate() {
@@ -55,11 +64,11 @@ static float getInjectionAngleCorrection(float fuelMs, float oneDegreeUs) {
 		return 0;
 	}
 
-	efiAssert(CUSTOM_ERR_ASSERT, !cisnan(fuelMs), "NaN fuelMs", false);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, !cisnan(fuelMs), "NaN fuelMs", false);
 
 	angle_t injectionDurationAngle = MS2US(fuelMs) / oneDegreeUs;
-	efiAssert(CUSTOM_ERR_ASSERT, !cisnan(injectionDurationAngle), "NaN injectionDurationAngle", false);
-	assertAngleRange(injectionDurationAngle, "injectionDuration_r", CUSTOM_INJ_DURATION);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, !cisnan(injectionDurationAngle), "NaN injectionDurationAngle", false);
+	assertAngleRange(injectionDurationAngle, "injectionDuration_r", ObdCode::CUSTOM_INJ_DURATION);
 
 	if (mode == InjectionTimingMode::Center) {
 		// Center of injection is half-corrected for duration
@@ -76,7 +85,7 @@ InjectionEvent::InjectionEvent() {
 
 // Returns the start angle of this injector in engine coordinates (0-720 for a 4 stroke),
 // or unexpected if unable to calculate the start angle due to missing information.
-expected<float> InjectionEvent::computeInjectionAngle(int cylinderIndex) const {
+expected<float> InjectionEvent::computeInjectionAngle() const {
 	floatus_t oneDegreeUs = getEngineRotationState()->getOneDegreeUs(); // local copy
 	if (cisnan(oneDegreeUs)) {
 		// in order to have fuel schedule we need to have current RPM
@@ -96,15 +105,18 @@ expected<float> InjectionEvent::computeInjectionAngle(int cylinderIndex) const {
 	}
 
 	angle_t openingAngle = injectionOffset - injectionDurationAngle;
-	assertAngleRange(openingAngle, "openingAngle_r", CUSTOM_ERR_6554);
+	assertAngleRange(openingAngle, "openingAngle_r", ObdCode::CUSTOM_ERR_6554);
+	wrapAngle(openingAngle, "addFuel#1", ObdCode::CUSTOM_ERR_6555);
+	// TODO: should we log per-cylinder injection timing? #76
+	getTunerStudioOutputChannels()->injectionOffset = openingAngle;
 
 	// Convert from cylinder-relative to cylinder-1-relative
-	openingAngle += getCylinderAngle(cylinderIndex, cylinderNumber);
+	openingAngle += getPerCylinderFiringOrderOffset(ownIndex, cylinderNumber);
 
-	efiAssert(CUSTOM_ERR_ASSERT, !cisnan(openingAngle), "findAngle#3", false);
-	assertAngleRange(openingAngle, "findAngle#a33", CUSTOM_ERR_6544);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, !cisnan(openingAngle), "findAngle#3", false);
+	assertAngleRange(openingAngle, "findAngle#a33", ObdCode::CUSTOM_ERR_6544);
 
-	wrapAngle2(openingAngle, "addFuel#2", CUSTOM_ERR_6555, getEngineCycle(getEngineRotationState()->getOperationMode()));
+	wrapAngle(openingAngle, "addFuel#2", ObdCode::CUSTOM_ERR_6555);
 
 #if EFI_UNIT_TEST
 	printf("registerInjectionEvent openingAngle=%.2f inj %d\r\n", openingAngle, cylinderNumber);
@@ -113,11 +125,16 @@ expected<float> InjectionEvent::computeInjectionAngle(int cylinderIndex) const {
 	return openingAngle;
 }
 
-bool InjectionEvent::updateInjectionAngle(int cylinderIndex) {
-	auto result = computeInjectionAngle(cylinderIndex);
+bool InjectionEvent::updateInjectionAngle() {
+	auto result = computeInjectionAngle();
 
 	if (result) {
-		injectionStartAngle = result.Value;
+		// If injector duty cycle is high, lock injection SOI so that we
+		// don't miss injections at or above 100% duty
+		if (getEngineState()->shouldUpdateInjectionTiming) {
+			injectionStartAngle = result.Value;
+		}
+
 		return true;
 	} else {
 		return false;
@@ -127,74 +144,69 @@ bool InjectionEvent::updateInjectionAngle(int cylinderIndex) {
 /**
  * @returns false in case of error, true if success
  */
-bool FuelSchedule::addFuelEventsForCylinder(int i) {
-	InjectionEvent *ev = &elements[i];
-
-	bool updatedAngle = ev->updateInjectionAngle(i);
+bool InjectionEvent::update() {
+	bool updatedAngle = updateInjectionAngle();
 
 	if (!updatedAngle) {
 		return false;
 	}
 
 	injection_mode_e mode = getCurrentInjectionMode();
-
-	// We need two outputs if:
-	// - we are running batch fuel, and have "use two wire batch" enabled
-	// - running mode is sequential, but cranking mode is batch, so we should run two wire batch while cranking
-	//     (if we didn't, only half of injectors would fire while cranking)
-	bool isTwoWireBatch = engineConfiguration->twoWireBatchInjection || (engineConfiguration->injectionMode == IM_SEQUENTIAL);
+	engine->outputChannels.currentInjectionMode = static_cast<uint8_t>(mode);
 
 	int injectorIndex;
 	if (mode == IM_SIMULTANEOUS || mode == IM_SINGLE_POINT) {
 		// These modes only have one injector
 		injectorIndex = 0;
-	} else if (mode == IM_SEQUENTIAL || (mode == IM_BATCH && isTwoWireBatch)) {
+	} else if (mode == IM_SEQUENTIAL || mode == IM_BATCH) {
 		// Map order index -> cylinder index (firing order)
-		injectorIndex = getCylinderId(i) - 1;
-	} else if (mode == IM_BATCH) {
-		// Loop over the first half of the firing order twice
-		injectorIndex = i % (engineConfiguration->specs.cylindersCount / 2);
+		injectorIndex = ID2INDEX(getCylinderId(ownIndex));
 	} else {
-		firmwareError(CUSTOM_OBD_UNEXPECTED_INJECTION_MODE, "Unexpected injection mode %d", mode);
+		firmwareError(ObdCode::CUSTOM_OBD_UNEXPECTED_INJECTION_MODE, "Unexpected injection mode %d", mode);
 		injectorIndex = 0;
 	}
 
 	InjectorOutputPin *secondOutput;
+	InjectorOutputPin* secondOutputStage2;
 
-	if (mode == IM_BATCH && isTwoWireBatch) {
+	if (mode == IM_BATCH) {
 		/**
 		 * also fire the 2nd half of the injectors so that we can implement a batch mode on individual wires
 		 */
 		// Compute the position of this cylinder's twin in the firing order
 		// Each injector gets fired as a primary (the same as sequential), but also
 		// fires the injector 360 degrees later in the firing order.
-		int secondOrder = (i + (engineConfiguration->specs.cylindersCount / 2)) % engineConfiguration->specs.cylindersCount;
-		int secondIndex = getCylinderId(secondOrder) - 1;
+		int secondOrder = (ownIndex + (engineConfiguration->cylindersCount / 2)) % engineConfiguration->cylindersCount;
+		int secondIndex = ID2INDEX(getCylinderId(secondOrder));
 		secondOutput = &enginePins.injectors[secondIndex];
+		secondOutputStage2 = &enginePins.injectorsStage2[secondIndex];
 	} else {
 		secondOutput = nullptr;
+		secondOutputStage2 = nullptr;
 	}
 
 	InjectorOutputPin *output = &enginePins.injectors[injectorIndex];
-	bool isSimultaneous = mode == IM_SIMULTANEOUS;
 
-	ev->outputs[0] = output;
-	ev->outputs[1] = secondOutput;
-	ev->isSimultaneous = isSimultaneous;
+	outputs[0] = output;
+	outputs[1] = secondOutput;
+	isSimultaneous = mode == IM_SIMULTANEOUS;
 	// Stash the cylinder number so we can select the correct fueling bank later
-	ev->cylinderNumber = injectorIndex;
+	cylinderNumber = injectorIndex;
+
+	outputsStage2[0] = &enginePins.injectorsStage2[injectorIndex];
+	outputsStage2[1] = secondOutputStage2;
 
 	if (!isSimultaneous && !output->isInitialized()) {
 		// todo: extract method for this index math
-		warning(CUSTOM_OBD_INJECTION_NO_PIN_ASSIGNED, "no_pin_inj #%s", output->name);
+		warning(ObdCode::CUSTOM_OBD_INJECTION_NO_PIN_ASSIGNED, "no_pin_inj #%s", output->getName());
 	}
 
 	return true;
 }
 
 void FuelSchedule::addFuelEvents() {
-	for (size_t cylinderIndex = 0; cylinderIndex < engineConfiguration->specs.cylindersCount; cylinderIndex++) {
-		bool result = addFuelEventsForCylinder(cylinderIndex);
+	for (size_t cylinderIndex = 0; cylinderIndex < engineConfiguration->cylindersCount; cylinderIndex++) {
+		bool result = elements[cylinderIndex].update();
 
 		if (!result) {
 			invalidate();
@@ -206,14 +218,14 @@ void FuelSchedule::addFuelEvents() {
 	isReady = true;
 }
 
-void FuelSchedule::onTriggerTooth(int rpm, efitick_t nowNt, float currentPhase, float nextPhase) {
+void FuelSchedule::onTriggerTooth(efitick_t nowNt, float currentPhase, float nextPhase) {
 	// Wait for schedule to be built - this happens the first time we get RPM
 	if (!isReady) {
 		return;
 	}
 
-	for (size_t i = 0; i < engineConfiguration->specs.cylindersCount; i++) {
-		elements[i].onTriggerTooth(rpm, nowNt, currentPhase, nextPhase);
+	for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
+		elements[i].onTriggerTooth(nowNt, currentPhase, nextPhase);
 	}
 }
 

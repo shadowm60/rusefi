@@ -3,6 +3,7 @@
 #include "rusefi_types.h"
 
 #include "port_mpu_util.h"
+#include "mpu_watchdog.h"
 
 #ifdef __cplusplus
 
@@ -12,6 +13,7 @@ void jump_to_bootloader();
 #if EFI_USE_OPENBLT
 void jump_to_openblt();
 #endif
+void causeHardFault();
 bool allowFlashWhileRunning();
 
 bool ramReadProbe(volatile const char *read_address);
@@ -21,6 +23,15 @@ bool isStm32F42x();
 
 // ADC
 #if HAL_USE_ADC
+
+adc_channel_e getAdcChannel(brain_pin_e pin);
+brain_pin_e getAdcChannelBrainPin(const char *msg, adc_channel_e hwChannel);
+
+// deprecated - migrate to 'getAdcChannelBrainPin'
+ioportid_t getAdcChannelPort(const char *msg, adc_channel_e hwChannel);
+// deprecated - migrate to 'getAdcChannelBrainPin'
+int getAdcChannelPin(adc_channel_e hwChannel);
+
 void portInitAdc();
 float getMcuTemperature();
 // Convert all slow ADC inputs.  Returns true if the conversion succeeded, false if a failure occured.
@@ -32,10 +43,14 @@ bool readSlowAnalogInputs(adcsample_t* convertedSamples);
 bool isValidCanTxPin(brain_pin_e pin);
 bool isValidCanRxPin(brain_pin_e pin);
 CANDriver* detectCanDevice(brain_pin_e pinRx, brain_pin_e pinTx);
+void canHwInfo(CANDriver* cand);
 #endif // HAL_USE_CAN
 
+// Serial
+#if EFI_AUX_SERIAL
 bool isValidSerialTxPin(brain_pin_e pin);
 bool isValidSerialRxPin(brain_pin_e pin);
+#endif //EFI_AUX_SERIAL
 
 // SPI
 #if HAL_USE_SPI
@@ -45,6 +60,7 @@ void initSpiModule(SPIDriver *driver, brain_pin_e sck, brain_pin_e miso,
 		int mosiMode,
 		int misoMode);
 
+void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin);
 void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin);
 void turnOnSpi(spi_device_e device);
 #endif // HAL_USE_SPI
@@ -75,6 +91,27 @@ typedef enum {
 
 BOR_Level_t BOR_Get(void);
 BOR_Result_t BOR_Set(BOR_Level_t BORValue);
+
+// Reset Cause
+typedef enum {
+	Reset_Cause_Unknown = 0,
+	Reset_Cause_IWatchdog,		// Independent hardware watchdog (we use it)
+	Reset_Cause_WWatchdog,		// Window watchdog
+	Reset_Cause_Soft_Reset,		// NVIC_SystemReset or by debugger
+	Reset_Cause_NRST_Pin,		// Reset from NRST pin
+	Reset_Cause_Illegal_Mode,	// Reset after illegal Stop, Standby or Shutdown mode entry
+	Reset_Cause_BOR,			// BOR reset
+	Reset_Cause_Firewall,		// Firewall reset
+	Reset_Cause_Option_Byte,	// Option byte load reset
+} Reset_Cause_t;
+
+Reset_Cause_t getMCUResetCause();
+const char *getMCUResetCause(Reset_Cause_t cause);
+
+#ifdef AT32F4XX
+int at32GetMcuType(uint32_t id, const char **pn, const char **package, uint32_t *flashSize);
+int at32GetRamSizeKb(void);
+#endif
 
 extern "C"
 {

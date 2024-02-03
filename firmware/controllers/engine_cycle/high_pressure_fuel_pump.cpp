@@ -31,6 +31,9 @@
 #include "fuel_computer.h"
 
 #if EFI_HPFP
+#if !EFI_SHAFT_POSITION_INPUT
+	fail("EFI_SHAFT_POSITION_INPUT required to have EFI_EMULATE_POSITION_SENSORS")
+#endif
 
 // A constant we use; doesn't seem important to hoist into engineConfiguration.
 static constexpr int rpm_spinning_cutoff = 60; // Below this RPM, we don't run the logic
@@ -70,7 +73,7 @@ angle_t HpfpLobe::findNextLobe() {
 // As a percent of the full pump stroke
 float HpfpQuantity::calcFuelPercent(int rpm) {
 	float fuel_requested_cc_per_cycle =
-		engine->engineState.injectionMass[0] * (1.f / fuelDensity) * engineConfiguration->specs.cylindersCount;
+		engine->engineState.injectionMass[0] * (1.f / fuelDensity) * engineConfiguration->cylindersCount;
 	float fuel_requested_cc_per_lobe = fuel_requested_cc_per_cycle / engineConfiguration->hpfpCamLobes;
 	return 100.f *
 		fuel_requested_cc_per_lobe / engineConfiguration->hpfpPumpVolume +
@@ -79,12 +82,25 @@ float HpfpQuantity::calcFuelPercent(int rpm) {
 			      engineConfiguration->hpfpCompensationRpmBins, rpm);
 }
 
+static float getLoad() {
+    switch(engineConfiguration->fuelAlgorithm) {
+    // TODO: allow other load axis, like we claim to
+    case LM_ALPHA_N:
+        return Sensor::getOrZero(SensorType::DriverThrottleIntent);
+    default:
+       return Sensor::getOrZero(SensorType::Map);
+    }
+}
+
 float HpfpQuantity::calcPI(int rpm, float calc_fuel_percent) {
-	m_pressureTarget_kPa = std::max<float>(
-		m_pressureTarget_kPa - (engineConfiguration->hpfpTargetDecay *
-					(FAST_CALLBACK_PERIOD_MS / 1000.)),
+	float load = getLoad();
+
+	float possibleValue = m_pressureTarget_kPa - (engineConfiguration->hpfpTargetDecay *
+			(FAST_CALLBACK_PERIOD_MS / 1000.));
+
+	m_pressureTarget_kPa = std::max<float>(possibleValue,
 		interpolate3d(engineConfiguration->hpfpTarget,
-			      engineConfiguration->hpfpTargetLoadBins, Sensor::getOrZero(SensorType::Map), // TODO: allow other load axis, like we claim to
+			      engineConfiguration->hpfpTargetLoadBins, load,
 			      engineConfiguration->hpfpTargetRpmBins, rpm));
 
 	auto fuelPressure = Sensor::get(SensorType::FuelPressureHigh);
@@ -122,6 +138,8 @@ angle_t HpfpQuantity::pumpAngleFuel(int rpm, HpfpController *model) {
 	model->fuel_requested_percent = calcFuelPercent(rpm);
 
 	model->fuel_requested_percent_pi = calcPI(rpm, model->fuel_requested_percent);
+	// todo: streamline this logging field see 'calcPI' comment
+	model->m_pressureTarget_kPa = m_pressureTarget_kPa;
 	// Apply PI control
 	float fuel_requested_percentTotal = model->fuel_requested_percent + model->fuel_requested_percent_pi;
 
@@ -137,7 +155,7 @@ void HpfpController::onFastCallback() {
 	int rpm = Sensor::getOrZero(SensorType::Rpm);
 
 	isHpfpInactive = rpm < rpm_spinning_cutoff ||
-		    engineConfiguration->hpfpCamLobes == 0 ||
+		    !isGdiEngine() ||
 		    engineConfiguration->hpfpPumpVolume == 0 ||
 		    !enginePins.hpfpValve.isInitialized();
 	// What conditions can we not handle?
@@ -147,7 +165,7 @@ void HpfpController::onFastCallback() {
 		m_deadtime = 0;
 	} else {
 #if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
-		efiAssertVoid(OBD_PCM_Processor_Fault, engine->triggerCentral.triggerShape.getSize() > engineConfiguration->hpfpCamLobes * 6, "Too few trigger tooth for this number of HPFP lobes");
+		criticalAssertVoid(engine->triggerCentral.triggerShape.getSize() > engineConfiguration->hpfpCamLobes * 6, "Too few trigger tooth for this number of HPFP lobes");
 #endif // EFI_PROD_CODE
 		// Convert deadtime from ms to degrees based on current RPM
 		float deadtime_ms = interpolate2d(
@@ -167,8 +185,10 @@ void HpfpController::onFastCallback() {
 	}
 }
 
+#define HPFP_CONTROLLER "hpfp"
+
 void HpfpController::pinTurnOn(HpfpController *self) {
-	enginePins.hpfpValve.setHigh();
+	enginePins.hpfpValve.setHigh(HPFP_CONTROLLER);
 
 	// By scheduling the close after we already open, we don't have to worry if the engine
 	// stops, the valve will be turned off in a certain amount of time regardless.
@@ -179,7 +199,7 @@ void HpfpController::pinTurnOn(HpfpController *self) {
 }
 
 void HpfpController::pinTurnOff(HpfpController *self) {
-	enginePins.hpfpValve.setLow();
+	enginePins.hpfpValve.setLow(HPFP_CONTROLLER);
 
 	self->scheduleNextCycle();
 }
@@ -197,24 +217,37 @@ void HpfpController::scheduleNextCycle() {
 	angleAboveMin = angle_requested > engineConfiguration->hpfpMinAngle;
 	if (angleAboveMin) {
 		di_nextStart = lobe - angle_requested - m_deadtime;
+		wrapAngle(di_nextStart, "di_nextStart", ObdCode::CUSTOM_ERR_6557);
+
 
 		/**
 		 * We are good to use just one m_event instance because new events are scheduled when we turn off valve.
 		 */
 		engine->module<TriggerScheduler>()->schedule(
+		    "hpfp",
 			&m_event,
 			di_nextStart,
 			{ pinTurnOn, this });
 
 		// Off will be scheduled after turning the valve on
 	} else {
+	    wrapAngle(lobe, "lobe", ObdCode::CUSTOM_ERR_6557);
 		// Schedule this, even if we aren't opening the valve this time, since this
 		// will schedule the next lobe.
 		// todo: would it have been cleaner to schedule 'scheduleNextCycle' directly?
 		engine->module<TriggerScheduler>()->schedule(
+		    "hpfp",
 			&m_event, lobe,
 			{ pinTurnOff, this });
 	}
 }
 
 #endif // EFI_HPFP
+
+bool isGdiEngine() {
+#if EFI_PROD_CODE
+    return enginePins.hpfpValve.isInitialized();
+#else
+    return engineConfiguration->hpfpCamLobes > 0;
+#endif
+}

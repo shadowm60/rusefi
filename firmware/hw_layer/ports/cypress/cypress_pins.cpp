@@ -11,8 +11,6 @@
 
 #if EFI_GPIO_HARDWARE
 
-#define PORT_SIZE 16
-
 static ioportid_t ports[] = {
 	GPIOA,
 	GPIOB,
@@ -27,44 +25,70 @@ static ioportid_t ports[] = {
 	GPIOK,
 };
 
-static brain_pin_e portMap[16] = { 
+static brain_pin_e portMap[16] = {
 	Gpio::A0, Gpio::B0, Gpio::C0, Gpio::D0, Gpio::E0, Gpio::F0, Gpio::Invalid, Gpio::G0, Gpio::Invalid, Gpio::Invalid, Gpio::H0, Gpio::I0, Gpio::J0, Gpio::Invalid, Gpio::Invalid, Gpio::K0
 };
 
 #include "pin_repository.h"
 #include "io_pins.h"
 
+ioportid_t * getGpioPorts() {
+    return ports;
+}
+
+int getBrainPinIndex(brain_pin_e brainPin) {
+	return (brainPin - Gpio::A0) % PORT_SIZE;
+}
+
+ioportid_t getBrainPinPort(brain_pin_e brainPin) {
+	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
+}
+
 /**
  * @deprecated - use hwPortname() instead
  */
 const char *portname(ioportid_t GPIOx) {
 	if (GPIOx == GPIOA)
-		return "P0";
-	if (GPIOx == GPIOB)
-		return "P1";
-	if (GPIOx == GPIOC)
-		return "P2";
-	if (GPIOx == GPIOD)
-		return "P3";
-	if (GPIOx == GPIOE)
-		return "P4";
-	if (GPIOx == GPIOF)
-		return "P5";
-	if (GPIOx == GPIOG)
-		return "P7";
-	if (GPIOx == GPIOH)
 		return "PA";
-	if (GPIOx == GPIOI)
+	if (GPIOx == GPIOB)
 		return "PB";
-	if (GPIOx == GPIOJ)
+	if (GPIOx == GPIOC)
 		return "PC";
-	if (GPIOx == GPIOK)
+	if (GPIOx == GPIOD)
+		return "PD";
+#if defined(GPIOF)
+	if (GPIOx == GPIOE)
+		return "PE";
+#endif /* GPIOE */
+#if defined(GPIOF)
+	if (GPIOx == GPIOF)
 		return "PF";
+#endif /* GPIOF */
+#if defined(GPIOG)
+	if (GPIOx == GPIOG)
+		return "PG";
+#endif /* GPIOG */
+#if defined(GPIOH)
+	if (GPIOx == GPIOH)
+		return "PH";
+#endif /* GPIOH */
+#if defined(GPIOI)
+	if (GPIOx == GPIOI)
+		return "PI";
+#endif /* GPIOI */
+#if defined(GPIOJ_BASE)
+	if (GPIOx == GPIOJ)
+		return "PJ";
+#endif /* GPIOJ_BASE */
+#if defined(GPIOK_BASE)
+	if (GPIOx == GPIOK)
+		return "PK";
+#endif /* GPIOK_BASE */
 	return "unknown";
 }
 
 static int getPortIndex(ioportid_t port) {
-	efiAssert(CUSTOM_ERR_ASSERT, port != NULL, "null port", -1);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, port != NULL, "null port", -1);
 	if (port == GPIOA)
 		return 0;
 	if (port == GPIOB)
@@ -73,57 +97,67 @@ static int getPortIndex(ioportid_t port) {
 		return 2;
 	if (port == GPIOD)
 		return 3;
+#if defined(GPIOF)
 	if (port == GPIOE)
 		return 4;
+#endif /* GPIOE */
+#if defined(GPIOF)
 	if (port == GPIOF)
 		return 5;
+#endif /* GPIOF */
+#if defined(GPIOG)
 	if (port == GPIOG)
 		return 6;
+#endif /* GPIOG */
+#if defined(GPIOH)
 	if (port == GPIOH)
 		return 7;
+#endif /* GPIOH */
+#if defined(GPIOI)
 	if (port == GPIOI)
 		return 8;
+#endif /* STM32_HAS_GPIOI */
+#if defined(GPIOJ_BASE)
 	if (port == GPIOJ)
 		return 9;
+#endif /* GPIOJ_BASE */
+#if defined(GPIOK_BASE)
 	if (port == GPIOK)
 		return 10;
-	firmwareError(CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
+#endif /* GPIOK_BASE */
+	firmwareError(ObdCode::CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
 	return -1;
 }
 
-ioportid_t getBrainPinPort(brain_pin_e brainPin) {
-	return ports[(brainPin - Gpio::A0) / PORT_SIZE];
-}
-
-int getBrainPinIndex(brain_pin_e brainPin) {
-	return (brainPin - Gpio::A0) % PORT_SIZE;
-}
-
-int getBrainPinIndex(ioportid_t port, ioportmask_t pin) {
+int getPortPinIndex(ioportid_t port, ioportmask_t pin) {
 	int portIndex = getPortIndex(port);
 	return portIndex * PORT_SIZE + pin;
 }
 
 ioportid_t getHwPort(const char *msg, brain_pin_e brainPin) {
+	(void)msg;
+
 	if (!isBrainPinValid(brainPin)) {
-		firmwareError(CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
+/*
+ *  https://github.com/dron0gus please help
+		firmwareError(ObdCode::CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
+ */
 		return GPIO_NULL;
 	}
-	return ports[(brainPin - Gpio::A0) / PORT_SIZE];
+	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
 }
 
 /**
  * this method returns the numeric part of pin name. For instance, for PC13 this would return '13'
  */
-ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin)
-{
+ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin) {
 	if (!isBrainPinValid(brainPin))
 			return EFI_ERROR_CODE;
 
 	if (brain_pin_is_onchip(brainPin))
 		return getBrainPinIndex(brainPin);
 
-	firmwareError(CUSTOM_ERR_INVALID_PIN, "%s: Invalid on-chip brain_pin_e: %d", msg, brainPin);
+	firmwareError(ObdCode::CUSTOM_ERR_INVALID_PIN, "%s: Invalid on-chip Gpio: %d", msg, brainPin);
 	return EFI_ERROR_CODE;
 }
 
@@ -145,6 +179,7 @@ brain_pin_e parseBrainPin(const char *str) {
 	} else if (port >= 'A' && port <= 'Z') {
 		port = 10 + (port - 'A');
 	} else if (port >= '0' && port <= '9') {
+// cypress-specific code
 		port = 0 + (port - '0');
 	} else {
 		return Gpio::Invalid;

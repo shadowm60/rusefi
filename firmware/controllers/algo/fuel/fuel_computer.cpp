@@ -8,6 +8,8 @@
 #include "fuel_math.h"
 #include "fuel_computer.h"
 
+#if EFI_ENGINE_CONTROL
+
 mass_t FuelComputerBase::getCycleFuel(mass_t airmass, int rpm, float load) {
 	load = getTargetLambdaLoadAxis(load);
 	
@@ -76,7 +78,9 @@ float IFuelComputer::getLoadOverride(float defaultLoad, load_override_e override
 		// TPS/pedal default to 100% - failed TPS goes rich
 		case AFR_Tps: return Sensor::get(SensorType::Tps1).value_or(100);
 		case AFR_AccPedal: return Sensor::get(SensorType::AcceleratorPedal).value_or(100);
-		case AFR_CylFilling: return 100 * sdAirMassInOneCylinder / getStandardAirCharge();
+		case AFR_CylFilling: return normalizedCylinderFilling;
 		default: return 0;
 	}
 }
+
+#endif // EFI_ENGINE_CONTROL

@@ -1,22 +1,34 @@
 # Combine the related files for a specific platform and MCU.
 
 # Target ECU board design
-BOARDCPPSRC = $(BOARDS_DIR)/hellen/alphax-8chan/board_configuration.cpp
-BOARDINC = $(BOARDS_DIR)/hellen/alphax-8chan
-
+BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 DDEFS += -DEFI_MAIN_RELAY_CONTROL=TRUE
 
-# This board has trigger scope hardware!
-DDEFS += -DTRIGGER_SCOPE
-
 # Add them all together
-DDEFS += -DFIRMWARE_ID=\"AlphaX-8chan\"
 DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE -DSTM32_ADC_USE_ADC3=TRUE
 
-DDEFS += -DADC_MUX_PIN=Gpio::B3
+# MM176_GP9
+DDEFS += -DADC_MUX_PIN=Gpio::F2
 
-include $(BOARDS_DIR)/hellen/hellen-common144.mk
+include $(BOARDS_DIR)/hellen/hellen-common176.mk
 
-DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
+ifeq ($(PROJECT_CPU),ARCH_STM32F7)
+  SHORT_BOARD_NAME=alphax-8chan_f7
+	# TODO: why do I struggle to fit into flash? compare with Proteus
+	DDEFS += -DCH_DBG_ENABLE_ASSERTS=FALSE
+	DDEFS += -DENABLE_PERF_TRACE=FALSE
+    USE_OPT += -Wl,--defsym=FLASH_SIZE=768k
+else ifeq ($(PROJECT_CPU),ARCH_STM32F4)
+  SHORT_BOARD_NAME=alphax-8chan
+    # This board has trigger scope hardware!
+    DDEFS += -DTRIGGER_SCOPE
+    # serial ports only on F4
+	DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
+else
+$(error Unsupported PROJECT_CPU [$(PROJECT_CPU)])
+endif
+DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_8CHAN
 
-DDEFS += -DSHORT_BOARD_NAME=alphax-8chan
+DDEFS += -DHW_HELLEN_8CHAN=1
+
+ONBOARD_MEMS_TYPE=LIS2DH12

@@ -2,6 +2,7 @@ package com.rusefi;
 
 import com.rusefi.enum_reader.Value;
 import com.rusefi.util.LazyFile;
+import com.rusefi.util.LazyFileImpl;
 import com.rusefi.util.SystemOut;
 
 import java.io.*;
@@ -20,7 +21,7 @@ public class EnumToString {
     /**
      * same header for .cpp and .h
      */
-    private final static StringBuilder commonFilesHeader = new StringBuilder("// by enum2string.jar tool " +
+    private final static StringBuilder commonFilesHeader = new StringBuilder("// by enum_to_string.jar tool " +
             "on " + new Date() + "\n" +
             "// see also gen_config_and_enums.bat\n" +
             "\n" +
@@ -67,11 +68,11 @@ public class EnumToString {
     }
 
     private void writeCppAndHeaderFiles(String outFileName) throws IOException {
-        LazyFile bw = new LazyFile(outFileName + ".cpp");
+        LazyFile bw = new LazyFileImpl(outFileName + ".cpp");
         bw.write(cppFileContent.toString());
         bw.close();
 
-        bw = new LazyFile(outFileName + ".h");
+        bw = new LazyFileImpl(outFileName + ".h");
         bw.write(headerFileContent.toString());
         bw.close();
     }
@@ -84,10 +85,10 @@ public class EnumToString {
         commonFilesHeader.insert(0, "// " + LazyFile.LAZY_FILE_TAG + " from " + f.getName() + " ");
 
         includesSection.append("#include \"" + f.getName() + "\"\n");
-        enumsReader.read(new FileReader(f));
+        enumsReader.read(new FileReader(f), new VariableRegistry(), false);
     }
 
-    public EnumToString outputData(EnumsReader enumsReader) {
+    public void outputData(EnumsReader enumsReader) {
         SystemOut.println("Preparing output for " + enumsReader.getEnums().size() + " enums\n");
 
         for (Map.Entry<String, EnumsReader.EnumState> e : enumsReader.getEnums().entrySet()) {
@@ -101,7 +102,6 @@ public class EnumToString {
                 headerFileContent.append("#endif //__cplusplus\n");
         }
         SystemOut.println("EnumToString: " + headerFileContent.length() + " bytes of content\n");
-        return this;
     }
 
     private static String makeCode(String enumName, EnumsReader.EnumState enumState) {

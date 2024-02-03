@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on (unknown script) controllers/algo/tps_accel_state.txt Sun Apr 17 20:27:25 UTC 2022
+// this section was generated automatically by rusEFI tool config_definition_base.jar based on (unknown script) controllers/algo/tps_accel_state.txt Thu Dec 21 21:47:23 UTC 2023
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -6,14 +6,17 @@
 // start of tps_accel_state_s
 struct tps_accel_state_s {
 	/**
+	 * Fuel: TPS AE from
 	 * offset 0
 	 */
 	percent_t tpsFrom = (percent_t)0;
 	/**
+	 * Fuel: TPS AE to
 	 * offset 4
 	 */
 	percent_t tpsTo = (percent_t)0;
 	/**
+	 * Fuel: TPS AE change
 	 * offset 8
 	 */
 	percent_t deltaTps = (percent_t)0;
@@ -26,21 +29,25 @@ struct tps_accel_state_s {
 	 */
 	float valueFromTable = (float)0;
 	/**
+	 * Fuel: TPS AE Active
 	offset 20 bit 0 */
 	bool isAboveAccelThreshold : 1 {};
 	/**
 	offset 20 bit 1 */
 	bool isBelowDecelThreshold : 1 {};
 	/**
+	 * Fuel: TPS AE: reset time
 	offset 20 bit 2 */
 	bool isTimeToResetAccumulator : 1 {};
 	/**
 	offset 20 bit 3 */
 	bool isFractionalEnrichment : 1 {};
 	/**
+	 * Fuel: TPS AE: below threshold
 	offset 20 bit 4 */
 	bool belowEpsilon : 1 {};
 	/**
+	 * Fuel: TPS AE: too short
 	offset 20 bit 5 */
 	bool tooShort : 1 {};
 	/**
@@ -149,4 +156,4 @@ struct tps_accel_state_s {
 static_assert(sizeof(tps_accel_state_s) == 48);
 
 // end
-// this section was generated automatically by rusEFI tool ConfigDefinition.jar based on (unknown script) controllers/algo/tps_accel_state.txt Sun Apr 17 20:27:25 UTC 2022
+// this section was generated automatically by rusEFI tool config_definition_base.jar based on (unknown script) controllers/algo/tps_accel_state.txt Thu Dec 21 21:47:23 UTC 2023

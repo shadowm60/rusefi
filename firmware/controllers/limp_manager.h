@@ -7,12 +7,12 @@
 // Keep this list in sync with fuelIgnCutCodeList in rusefi.input!
 enum class ClearReason : uint8_t {
 	None, // 0
-	Fatal,
-	Settings,
+	Fatal, // 1
+	Settings, // 2
 	HardLimit, // 3
 	FaultRevLimit,
 	BoostCut, // 5
-	OilPressure,
+	OilPressure, // 6
 	StopRequested, // 7
 	EtbProblem, // 8
 	LaunchCut, // 9
@@ -21,6 +21,11 @@ enum class ClearReason : uint8_t {
 	EnginePhase, // 12
 	KickStart, // 13
 	IgnitionOff, // 14
+	Lua, // 15
+	ACR, // 16 - Harley Automatic Compression Release
+	LambdaProtection, // 17
+	GdiComms,
+	PleaseBrake,
 
 	// Keep this list in sync with fuelIgnCutCodeList in rusefi.input!
 	// todo: add a code generator between ClearReason and fuelIgnCutCodeList in rusefi.input
@@ -28,16 +33,16 @@ enum class ClearReason : uint8_t {
 
 enum class TpsState : uint8_t {
 	None, // 0
-	EngineStopped,
-	TpsError,
+	EngineStopped, // 1
+	TpsError, // 2
 	PpsError, // 3
-	IntermittentTps,
-	PidJitter,
+	IntermittentTps, // 4
+	PidJitter, // 5
 	Lua, // 6
-	Manual,
-	NotConfigured,
+	Manual, // 7
+	NotConfigured, // 8
 	Redundancy, // 9
-	IntermittentPps,
+	IntermittentPps, // 10
 	// keep this list in sync with etbCutCodeList in rusefi.input!
 };
 
@@ -51,10 +56,10 @@ public:
 		}
 	}
 
-	void clear(ClearReason clearReason) {
+	void clear(ClearReason p_clearReason) {
 		if (m_value) {
 			m_value = false;
-			this->clearReason = clearReason;
+			clearReason = p_clearReason;
 		}
 	}
 
@@ -81,9 +86,13 @@ class Hysteresis {
 public:
 	// returns true if value > rising, false if value < falling, previous if falling < value < rising.
 	bool test(float value, float rising, float falling) {
-		if (value > rising) {
+		return test(value > rising, value < falling);
+	}
+
+	bool test (bool risingCondition, bool fallingCondition) {
+		if (risingCondition) {
 			m_state = true;
-		} else if (value < falling) {
+		} else if (fallingCondition) {
 			m_state = false;
 		}
 
@@ -110,11 +119,18 @@ public:
 	LimpState allowInjection() const;
 	LimpState allowIgnition() const;
 
+	float getTimeSinceAnyCut() const;
+
 	bool allowTriggerInput() const;
+
+	void updateRevLimit(int rpm);
+	angle_t getLimitingTimingRetard() const;
+	float getLimitingFuelCorrection() const;
 
 	// Other subsystems call these APIs to indicate a problem has occurred
 	void reportEtbProblem();
 	void fatalError();
+	Timer gdiComms;
 
 private:
 	void setFaultRevLimit(int limit);
@@ -138,8 +154,23 @@ private:
 
 	// Ignition switch state
 	bool m_ignitionOn = false;
+
+	angle_t m_timingRetard = 0;
+	float m_fuelCorrection = 1.0f;
+
+	// todo: migrate to engineState->desiredRpmLimit to get this variable logged
+	float m_revLimit;
+	float resumeRpm;
+
+	// Tracks how long since a cut (ignition or fuel) was active for any reason
+	Timer m_lastCutTime;
+
+	// Tracks how long injector duty has been over the sustained limit
+	Timer m_injectorDutySustainedTimer;
 };
 
+#if EFI_ENGINE_CONTROL
 LimpManager * getLimpManager();
+#endif // EFI_ENGINE_CONTROL
 
 

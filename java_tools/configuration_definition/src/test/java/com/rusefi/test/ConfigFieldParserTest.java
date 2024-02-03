@@ -1,18 +1,11 @@
 package com.rusefi.test;
 
-import com.rusefi.ConfigField;
-import com.rusefi.ReaderState;
-import com.rusefi.TypesHelper;
-import com.rusefi.VariableRegistry;
-import com.rusefi.output.BaseCHeaderConsumer;
-import com.rusefi.output.ConfigStructure;
-import com.rusefi.output.JavaFieldsConsumer;
-import com.rusefi.output.TSProjectConsumer;
-import org.junit.Test;
+import com.rusefi.*;
+import com.rusefi.output.*;
+import com.rusefi.parse.TypesHelper;
+import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Andrey Belomutskiy, (c) 2013-2020
@@ -22,28 +15,28 @@ public class ConfigFieldParserTest {
 
     @Test
     public void testByteArray() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         {
-            ConfigField cf = ConfigField.parse(state, "uint8_t[8] field");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "uint8_t[8] field");
             assertEquals(cf.getType(), "uint8_t");
             assertEquals(cf.getArraySizes().length, 1);
             assertEquals(cf.getArraySizes()[0], 8);
             assertEquals(cf.getSize(null), 8);
-            assertFalse("isIterate", cf.isIterate());
+            assertFalse(cf.isIterate(), "isIterate");
         }
     }
 
     @Test
     public void testByte3dArray() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         {
-            ConfigField cf = ConfigField.parse(state, "uint8_t[8 x 16] field");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "uint8_t[8 x 16] field");
             assertEquals(cf.getType(), "uint8_t");
             assertEquals(cf.getArraySizes().length, 2);
             assertEquals(cf.getArraySizes()[0], 8);
             assertEquals(cf.getArraySizes()[1], 16);
             assertEquals(cf.getSize(null), 128);
-            assertFalse("isIterate", cf.isIterate());
+            assertFalse(cf.isIterate(), "isIterate");
         }
     }
 
@@ -53,7 +46,7 @@ public class ConfigFieldParserTest {
                 "floatms_t afr_type;PID dTime;\"ms\",      1.0,      0,       0, 3000,      0, noMsqSave\n" +
                 "percent_t afr_typet;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -62,17 +55,32 @@ public class ConfigFieldParserTest {
                 "; total TS size = 8\n", tsProjectConsumer.getContent());
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testSameFieldTwice() {
+    @Test
+    public void testArray2D() {
         String test = "struct pid_s\n" +
-                "int afr_type1;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
-                "int afr_type2;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
-                "int afr_type1;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "int[3 x 1] afr_type;PID dTime;\"ms\",      1.0,      0,       0, 3000,      0, noMsqSave\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
+
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        state.readBufferedReader(test, tsProjectConsumer);
+        assertEquals("afr_type = array, S32, 0, [1x3], \"ms\", 1, 0, 0, 3000, 0, noMsqSave\n" +
+                "; total TS size = 12\n", tsProjectConsumer.getContent());
+    }
+
+    @Test
+    public void testSameFieldTwice() {
+      assertThrows(IllegalStateException.class, () -> {
+        String test = "struct pid_s\n" +
+          "int afr_type1;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+          "int afr_type2;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+          "int afr_type1;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+          "end_struct\n";
+        ReaderStateImpl state = new ReaderStateImpl();
 
         BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
         state.readBufferedReader(test, consumer);
+      });
     }
 
     @Test
@@ -84,7 +92,7 @@ public class ConfigFieldParserTest {
                 "ego_sensor_e afr_type2;\n" +
                 "int16_t int\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -103,7 +111,7 @@ public class ConfigFieldParserTest {
                 "ego_sensor_e afr_type2;\n" +
                 "int8_t int\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -122,7 +130,7 @@ public class ConfigFieldParserTest {
                 "ego_sensor_e2 afr_type1;\n" +
                 "ego_sensor_e2 afr_type2;\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -140,7 +148,7 @@ public class ConfigFieldParserTest {
                 "int8_t int2\n" +
                 "ego_sensor_e4 afr_type3;\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -158,15 +166,15 @@ public class ConfigFieldParserTest {
                 "\tint16_t periodMs2;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
                 "\tint periodSec2;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
                 "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
         state.readBufferedReader(test, (javaFieldsConsumer));
 
         assertEquals(16, TypesHelper.getElementSize(state, "pid_s"));
 
-        ConfigStructure structure = state.structures.get("pid_s");
-        ConfigField firstField = structure.cFields.get(0);
+        ConfigStructure structure = state.getStructures().get("pid_s");
+        ConfigField firstField = structure.getcFields().get(0);
         assertEquals("ms", firstField.getUnits());
     }
 
@@ -179,7 +187,7 @@ public class ConfigFieldParserTest {
                 "\tuint8_t[6] autoscale rpmBins;;\"rpm\", 1, 0, 0, 12000, 0\n" +
                 "\tuint8_t[6] autoscale values;;\"volts\", 1, 0, 0, 2.5, 2\n" +
                 "end_struct\n\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
         state.readBufferedReader(test, (javaFieldsConsumer));
@@ -196,16 +204,18 @@ public class ConfigFieldParserTest {
                 "#define ERROR_BUFFER_SIZE \"***\"\n" +
                 "end_struct\n" +
                 "";
-        new ReaderState().readBufferedReader(test);
+        new ReaderStateImpl().readBufferedReader(test);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void invalidDefine() {
+      assertThrows(IllegalStateException.class, () -> {
         String test = "struct pid_s\n" +
-                VariableRegistry.DEFINE + " show show_Hellen121vag_presets true\n" +
-                "end_struct\n" +
-                "";
-        new ReaderState().readBufferedReader(test);
+          VariableRegistry.DEFINE + " show show_Hellen121vag_presets true\n" +
+          "end_struct\n" +
+          "";
+        new ReaderStateImpl().readBufferedReader(test);
+      });
     }
 
     @Test
@@ -218,12 +228,12 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "";
 
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         state.readBufferedReader(test);
 
         assertEquals("#define ERROR_BUFFER_COUNT 120\n" +
                 "#define ERROR_BUFFER_SIZE 120\n" +
-                "#define RESULT 14400\n", state.variableRegistry.getDefinesSection());
+                "#define RESULT 14400\n", state.getVariableRegistry().getDefinesSection());
     }
     @Test
     public void expressionInMultiplier() {
@@ -235,7 +245,7 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "";
 
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
 
         state.readBufferedReader(test, tsProjectConsumer);
@@ -248,7 +258,7 @@ public class ConfigFieldParserTest {
 
     @Test
     public void useCustomType() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         String test = "struct pid_s\n" +
                 "#define ERROR_BUFFER_SIZE 120\n" +
                 "\tcustom critical_error_message_t @@ERROR_BUFFER_SIZE@@ string, ASCII, @OFFSET@, @@ERROR_BUFFER_SIZE@@\n" +
@@ -267,8 +277,61 @@ public class ConfigFieldParserTest {
     }
 
     @Test
+    public void alignmentTestJava() {
+        ReaderStateImpl state = new ReaderStateImpl();
+        String test = "struct pid_s\n" +
+                "\tint16_t periodMs;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "\tint8_t periodByte;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "\tfloat periodFloat;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "end_struct\n" +
+                "";
+
+        JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
+        BaseCHeaderConsumer cConsumer = new BaseCHeaderConsumer();
+
+        state.readBufferedReader(test, javaFieldsConsumer, cConsumer);
+
+        assertEquals("\tpublic static final Field PERIODMS = Field.create(\"PERIODMS\", 0, FieldType.INT16).setScale(1.0).setBaseOffset(0);\n" +
+                        "\tpublic static final Field PERIODBYTE = Field.create(\"PERIODBYTE\", 2, FieldType.INT8).setScale(1.0).setBaseOffset(0);\n" +
+                        "\tpublic static final Field ALIGNMENTFILL_AT_3 = Field.create(\"ALIGNMENTFILL_AT_3\", 3, FieldType.INT8).setScale(1.0).setBaseOffset(0);\n" +
+                        "\tpublic static final Field PERIODFLOAT = Field.create(\"PERIODFLOAT\", 4, FieldType.FLOAT).setBaseOffset(0);\n",
+                javaFieldsConsumer.getContent());
+
+        assertEquals("// start of pid_s\n" +
+                "struct pid_s {\n" +
+                "\t/**\n" +
+                "\t * PID dTime\n" +
+                "\t * units: ms\n" +
+                "\t * offset 0\n" +
+                "\t */\n" +
+                "\tint16_t periodMs = (int16_t)0;\n" +
+                "\t/**\n" +
+                "\t * PID dTime\n" +
+                "\t * units: ms\n" +
+                "\t * offset 2\n" +
+                "\t */\n" +
+                "\tint8_t periodByte = (int8_t)0;\n" +
+                "\t/**\n" +
+                "\t * need 4 byte alignment\n" +
+                "\t * units: units\n" +
+                "\t * offset 3\n" +
+                "\t */\n" +
+                "\tuint8_t alignmentFill_at_3[1];\n" +
+                "\t/**\n" +
+                "\t * PID dTime\n" +
+                "\t * units: ms\n" +
+                "\t * offset 4\n" +
+                "\t */\n" +
+                "\tfloat periodFloat = (float)0;\n" +
+                "};\n" +
+                "static_assert(sizeof(pid_s) == 8);\n" +
+                "\n",
+                cConsumer.getContent());
+    }
+
+    @Test
     public void testDefineChar() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         String test =
                 "#define SD_r 'r'\n" +
                         "";
@@ -278,12 +341,12 @@ public class ConfigFieldParserTest {
 
         assertEquals("\tpublic static final char SD_r = 'r';\n" +
                         "",
-                state.variableRegistry.getJavaConstants());
+                state.getVariableRegistry().getJavaConstants());
     }
 
     @Test
     public void testDefine() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         String test =
                 "#define ERROR_BUFFER_SIZE 120\n" +
                         "#define ERROR_BUFFER_SIZE_H 0x120\n" +
@@ -295,21 +358,21 @@ public class ConfigFieldParserTest {
         assertEquals("\tpublic static final int ERROR_BUFFER_SIZE = 120;\n" +
                         "\tpublic static final int ERROR_BUFFER_SIZE_H = 0x120;\n" +
                         "",
-                state.variableRegistry.getJavaConstants());
+                state.getVariableRegistry().getJavaConstants());
     }
 
     @Test
     public void testFsioVisible() {
         {
-            ReaderState state = new ReaderState();
-            ConfigField cf = ConfigField.parse(state, "int fsio_visible field");
+            ReaderStateImpl state = new ReaderStateImpl();
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int field");
             assertEquals(cf.getType(), "int");
-            assertTrue(cf.isFsioVisible());
-            assertEquals("Name", cf.getName(), "field");
+
+            assertEquals(cf.getName(), "field", "Unexpected Field Name");
         }
 
         {
-            ReaderState state = new ReaderState();
+            ReaderStateImpl state = new ReaderStateImpl();
             String test = "struct pid_s\n" +
                     "\tint16_t fsio_visible offset;Linear addition to PID logic;\"\",      1,      0,       -1000, 1000,      0\n" +
                     "\tint16_t periodMs;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
@@ -360,7 +423,7 @@ public class ConfigFieldParserTest {
 
                 "";
         BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
         state.readBufferedReader(test, consumer, javaFieldsConsumer);
         assertEquals("\tpublic static final Field BYTE1 = Field.create(\"BYTE1\", 0, FieldType.INT8).setScale(1.0).setBaseOffset(0);\n" +
@@ -372,134 +435,134 @@ public class ConfigFieldParserTest {
                         "\tpublic static final Field PERIODMS = Field.create(\"PERIODMS\", 12, FieldType.BIT, 0).setBaseOffset(0);\n",
                 javaFieldsConsumer.getContent());
         assertEquals("// start of pid_s\n" +
-                "struct pid_s {\n" +
-                "\t/**\n" +
-                "\t * offset 0\n" +
-                "\t */\n" +
-                "\tint8_t byte1 = (int8_t)0;\n" +
-                "\t/**\n" +
-                "\t * need 4 byte alignment\n" +
-                "\tunits\n" +
-                "\t * offset 1\n" +
-                "\t */\n" +
-                "\tuint8_t alignmentFill_at_1[1];\n" +
-                "\t/**\n" +
-                "\t * offset 2\n" +
-                "\t */\n" +
-                "\tint16_t short = (int16_t)0;\n" +
-                "\t/**\n" +
-                "\t * offset 4\n" +
-                "\t */\n" +
-                "\tint int2 = (int)0;\n" +
-                "\t/**\n" +
-                "\t * offset 8\n" +
-                "\t */\n" +
-                "\tint8_t byte2 = (int8_t)0;\n" +
-                "\t/**\n" +
-                "\t * need 4 byte alignment\n" +
-                "\tunits\n" +
-                "\t * offset 9\n" +
-                "\t */\n" +
-                "\tuint8_t alignmentFill_at_9[3];\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 0 */\n" +
-                "\tbool periodMs : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 1 */\n" +
-                "\tbool unusedBit_7_1 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 2 */\n" +
-                "\tbool unusedBit_7_2 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 3 */\n" +
-                "\tbool unusedBit_7_3 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 4 */\n" +
-                "\tbool unusedBit_7_4 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 5 */\n" +
-                "\tbool unusedBit_7_5 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 6 */\n" +
-                "\tbool unusedBit_7_6 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 7 */\n" +
-                "\tbool unusedBit_7_7 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 8 */\n" +
-                "\tbool unusedBit_7_8 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 9 */\n" +
-                "\tbool unusedBit_7_9 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 10 */\n" +
-                "\tbool unusedBit_7_10 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 11 */\n" +
-                "\tbool unusedBit_7_11 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 12 */\n" +
-                "\tbool unusedBit_7_12 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 13 */\n" +
-                "\tbool unusedBit_7_13 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 14 */\n" +
-                "\tbool unusedBit_7_14 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 15 */\n" +
-                "\tbool unusedBit_7_15 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 16 */\n" +
-                "\tbool unusedBit_7_16 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 17 */\n" +
-                "\tbool unusedBit_7_17 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 18 */\n" +
-                "\tbool unusedBit_7_18 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 19 */\n" +
-                "\tbool unusedBit_7_19 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 20 */\n" +
-                "\tbool unusedBit_7_20 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 21 */\n" +
-                "\tbool unusedBit_7_21 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 22 */\n" +
-                "\tbool unusedBit_7_22 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 23 */\n" +
-                "\tbool unusedBit_7_23 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 24 */\n" +
-                "\tbool unusedBit_7_24 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 25 */\n" +
-                "\tbool unusedBit_7_25 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 26 */\n" +
-                "\tbool unusedBit_7_26 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 27 */\n" +
-                "\tbool unusedBit_7_27 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 28 */\n" +
-                "\tbool unusedBit_7_28 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 29 */\n" +
-                "\tbool unusedBit_7_29 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 30 */\n" +
-                "\tbool unusedBit_7_30 : 1 {};\n" +
-                "\t/**\n" +
-                "\toffset 12 bit 31 */\n" +
-                "\tbool unusedBit_7_31 : 1 {};\n" +
-                "};\n" +
-                "static_assert(sizeof(pid_s) == 16);\n" +
-                "\n", consumer.getContent());
+            "struct pid_s {\n" +
+            "\t/**\n" +
+            "\t * offset 0\n" +
+            "\t */\n" +
+            "\tint8_t byte1 = (int8_t)0;\n" +
+            "\t/**\n" +
+            "\t * need 4 byte alignment\n" +
+            "\t * units: units\n" +
+            "\t * offset 1\n" +
+            "\t */\n" +
+            "\tuint8_t alignmentFill_at_1[1];\n" +
+            "\t/**\n" +
+            "\t * offset 2\n" +
+            "\t */\n" +
+            "\tint16_t short = (int16_t)0;\n" +
+            "\t/**\n" +
+            "\t * offset 4\n" +
+            "\t */\n" +
+            "\tint int2 = (int)0;\n" +
+            "\t/**\n" +
+            "\t * offset 8\n" +
+            "\t */\n" +
+            "\tint8_t byte2 = (int8_t)0;\n" +
+            "\t/**\n" +
+            "\t * need 4 byte alignment\n" +
+            "\t * units: units\n" +
+            "\t * offset 9\n" +
+            "\t */\n" +
+            "\tuint8_t alignmentFill_at_9[3];\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 0 */\n" +
+            "\tbool periodMs : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 1 */\n" +
+            "\tbool unusedBit_7_1 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 2 */\n" +
+            "\tbool unusedBit_7_2 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 3 */\n" +
+            "\tbool unusedBit_7_3 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 4 */\n" +
+            "\tbool unusedBit_7_4 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 5 */\n" +
+            "\tbool unusedBit_7_5 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 6 */\n" +
+            "\tbool unusedBit_7_6 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 7 */\n" +
+            "\tbool unusedBit_7_7 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 8 */\n" +
+            "\tbool unusedBit_7_8 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 9 */\n" +
+            "\tbool unusedBit_7_9 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 10 */\n" +
+            "\tbool unusedBit_7_10 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 11 */\n" +
+            "\tbool unusedBit_7_11 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 12 */\n" +
+            "\tbool unusedBit_7_12 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 13 */\n" +
+            "\tbool unusedBit_7_13 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 14 */\n" +
+            "\tbool unusedBit_7_14 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 15 */\n" +
+            "\tbool unusedBit_7_15 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 16 */\n" +
+            "\tbool unusedBit_7_16 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 17 */\n" +
+            "\tbool unusedBit_7_17 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 18 */\n" +
+            "\tbool unusedBit_7_18 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 19 */\n" +
+            "\tbool unusedBit_7_19 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 20 */\n" +
+            "\tbool unusedBit_7_20 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 21 */\n" +
+            "\tbool unusedBit_7_21 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 22 */\n" +
+            "\tbool unusedBit_7_22 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 23 */\n" +
+            "\tbool unusedBit_7_23 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 24 */\n" +
+            "\tbool unusedBit_7_24 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 25 */\n" +
+            "\tbool unusedBit_7_25 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 26 */\n" +
+            "\tbool unusedBit_7_26 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 27 */\n" +
+            "\tbool unusedBit_7_27 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 28 */\n" +
+            "\tbool unusedBit_7_28 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 29 */\n" +
+            "\tbool unusedBit_7_29 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 30 */\n" +
+            "\tbool unusedBit_7_30 : 1 {};\n" +
+            "\t/**\n" +
+            "\toffset 12 bit 31 */\n" +
+            "\tbool unusedBit_7_31 : 1 {};\n" +
+            "};\n" +
+            "static_assert(sizeof(pid_s) == 16);\n" +
+            "\n", consumer.getContent());
     }
 
     @Test
@@ -510,21 +573,21 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "";
         BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
         state.readBufferedReader(test, consumer, javaFieldsConsumer);
         assertEquals("\tpublic static final Field FIELD1 = Field.create(\"FIELD1\", 0, FieldType.INT).setScale(0.01).setBaseOffset(0);\n",
                 javaFieldsConsumer.getContent());
         assertEquals("// start of pid_s\n" +
-                "struct pid_s {\n" +
-                "\t/**\n" +
-                "\tratio\n" +
-                "\t * offset 0\n" +
-                "\t */\n" +
-                "\tscaled_channel<int, 100, 1> field[ERROR_BUFFER_SIZE];\n" +
-                "};\n" +
-                "static_assert(sizeof(pid_s) == 4);\n" +
-                "\n", consumer.getContent());
+            "struct pid_s {\n" +
+            "\t/**\n" +
+            "\t * units: ratio\n" +
+            "\t * offset 0\n" +
+            "\t */\n" +
+            "\tscaled_channel<int, 100, 1> field[ERROR_BUFFER_SIZE];\n" +
+            "};\n" +
+            "static_assert(sizeof(pid_s) == 4);\n" +
+            "\n", consumer.getContent());
     }
 
     @Test
@@ -539,36 +602,36 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "";
         BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         state.readBufferedReader(test, consumer);
         assertEquals("// start of struct_s\n" +
-                        "struct struct_s {\n" +
-                        "\t/**\n" +
-                        "\t * offset 0\n" +
-                        "\t */\n" +
-                        "\tint int2 = (int)0;\n" +
-                        "};\n" +
-                        "static_assert(sizeof(struct_s) == 4);\n" +
-                        "\n" +
-                        "// start of pid_s\n" +
-                        "struct pid_s {\n" +
-                        "\t/**\n" +
-                        "\t * offset 0\n" +
-                        "\t */\n" +
-                        "\tint8_t byte1 = (int8_t)0;\n" +
-                        "\t/**\n" +
-                        "\t * need 4 byte alignment\n" +
-                        "\tunits\n" +
-                        "\t * offset 1\n" +
-                        "\t */\n" +
-                        "\tuint8_t alignmentFill_at_1[3];\n" +
-                        "\t/**\n" +
-                        "\t * offset 4\n" +
-                        "\t */\n" +
-                        "\tstruct_s struct;\n" +
-                        "};\n" +
-                        "static_assert(sizeof(pid_s) == 8);\n" +
-                        "\n",
+                "struct struct_s {\n" +
+                "\t/**\n" +
+                "\t * offset 0\n" +
+                "\t */\n" +
+                "\tint int2 = (int)0;\n" +
+                "};\n" +
+                "static_assert(sizeof(struct_s) == 4);\n" +
+                "\n" +
+                "// start of pid_s\n" +
+                "struct pid_s {\n" +
+                "\t/**\n" +
+                "\t * offset 0\n" +
+                "\t */\n" +
+                "\tint8_t byte1 = (int8_t)0;\n" +
+                "\t/**\n" +
+                "\t * need 4 byte alignment\n" +
+                "\t * units: units\n" +
+                "\t * offset 1\n" +
+                "\t */\n" +
+                "\tuint8_t alignmentFill_at_1[3];\n" +
+                "\t/**\n" +
+                "\t * offset 4\n" +
+                "\t */\n" +
+                "\tstruct_s struct;\n" +
+                "};\n" +
+                "static_assert(sizeof(pid_s) == 8);\n" +
+                "\n",
                 consumer.getContent());
     }
 
@@ -581,72 +644,72 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "";
         BaseCHeaderConsumer consumer = new BaseCHeaderConsumer();
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         state.readBufferedReader(test, consumer);
         assertEquals("// start of pid_s\n" +
-                        "struct pid_s {\n" +
-                        "\t/**\n" +
-                        "\t * offset 0\n" +
-                        "\t */\n" +
-                        "\tint8_t byte1 = (int8_t)0;\n" +
-                        "\t/**\n" +
-                        "\t * offset 1\n" +
-                        "\t */\n" +
-                        "\tint8_t byte2 = (int8_t)0;\n" +
-                        "\t/**\n" +
-                        "\t * need 4 byte alignment\n" +
-                        "\tunits\n" +
-                        "\t * offset 2\n" +
-                        "\t */\n" +
-                        "\tuint8_t alignmentFill_at_2[2];\n" +
-                        "};\n" +
-                        "static_assert(sizeof(pid_s) == 4);\n" +
-                        "\n",
+                "struct pid_s {\n" +
+                "\t/**\n" +
+                "\t * offset 0\n" +
+                "\t */\n" +
+                "\tint8_t byte1 = (int8_t)0;\n" +
+                "\t/**\n" +
+                "\t * offset 1\n" +
+                "\t */\n" +
+                "\tint8_t byte2 = (int8_t)0;\n" +
+                "\t/**\n" +
+                "\t * need 4 byte alignment\n" +
+                "\t * units: units\n" +
+                "\t * offset 2\n" +
+                "\t */\n" +
+                "\tuint8_t alignmentFill_at_2[2];\n" +
+                "};\n" +
+                "static_assert(sizeof(pid_s) == 4);\n" +
+                "\n",
                 consumer.getContent());
     }
 
     @Test
     public void testParseLine() {
-        ReaderState state = new ReaderState();
-        assertNull(ConfigField.parse(state, "int"));
+        ReaderStateImpl state = new ReaderStateImpl();
+        assertNull(ConfigFieldImpl.parse(state, "int"));
         {
-            ConfigField cf = ConfigField.parse(state, "int field");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int field");
             assertEquals(cf.getType(), "int");
-            assertEquals("Name", cf.getName(), "field");
+            assertEquals(cf.getName(), "field", "Name");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "int_4 fie4_ld");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int_4 fie4_ld");
             assertEquals(cf.getType(), "int_4");
             assertEquals(cf.getName(), "fie4_ld");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "int_8 fi_eld;comm_;ts,1,1");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int_8 fi_eld;comm_;ts,1,1");
             assertEquals(cf.getType(), "int_8");
             assertEquals(cf.getName(), "fi_eld");
-            assertEquals("Comment", cf.getComment(), "comm_");
+            assertEquals(cf.getComment(), "comm_", "Comment");
             assertEquals(cf.getTsInfo(), "ts,1,1");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "int[3 iterate] field");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int[3 iterate] field");
             assertEquals(cf.getType(), "int");
             assertEquals(cf.getArraySizes().length, 1);
             assertEquals(cf.getArraySizes()[0], 3);
-            assertTrue("isIterate", cf.isIterate());
+            assertTrue(cf.isIterate(), "isIterate");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "int16_t crankingRpm;This,. value controls what RPM values we consider 'cranking' (any RPM below 'crankingRpm')\\nAnything above 'crankingRpm' would be 'running'");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int16_t crankingRpm;This,. value controls what RPM values we consider 'cranking' (any RPM below 'crankingRpm')\\nAnything above 'crankingRpm' would be 'running'");
             assertEquals(cf.getName(), "crankingRpm");
             assertEquals(cf.getArraySizes().length, 0);
             assertEquals(cf.getType(), "int16_t");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "MAP_sensor_config_s map");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "MAP_sensor_config_s map");
             assertEquals(cf.getName(), "map");
             assertEquals(cf.getArraySizes().length, 0);
             assertEquals(cf.getType(), "MAP_sensor_config_s");
         }
         {
-            ConfigField cf = ConfigField.parse(state, "MAP_sensor_config_s map;@see hasMapSensor\\n@see isMapAveragingEnabled");
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "MAP_sensor_config_s map;@see hasMapSensor\\n@see isMapAveragingEnabled");
             assertEquals(cf.getName(), "map");
             assertEquals(cf.getArraySizes().length, 0);
             assertEquals(cf.getType(), "MAP_sensor_config_s");
@@ -656,12 +719,12 @@ public class ConfigFieldParserTest {
 
     @Test
     public void testParseSize() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         assertEquals(4, state.parseSize("4", ""));
 
         assertEquals(12, state.parseSize("4*3", ""));
 
-        state.variableRegistry.register("var", 256);
+        state.getVariableRegistry().register("var", 256);
 
         assertEquals(512, state.parseSize("2*@@var@@", ""));
         assertEquals(512, state.parseSize("2x@@var@@", ""));
@@ -678,7 +741,7 @@ public class ConfigFieldParserTest {
                 "end_struct\n" +
                 "pid_s pid;comment\n" +
         "end_struct\n";
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
 
         TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
         state.readBufferedReader(test, tsProjectConsumer);
@@ -690,16 +753,16 @@ public class ConfigFieldParserTest {
         assertEquals(
                 "\tpid_afr_type = \"PID dTime\"\n" +
                 "\tpid_isForcedInduction = \"Does the vehicle have a turbo or supercharger?\"\n" +
-                        "\tpid_enableFan1WithAc = \"Turn on this fan when AC is on.\"\n", tsProjectConsumer.getSettingContextHelp().toString());
+                        "\tpid_enableFan1WithAc = \"Turn on this fan when AC is on.\"\n", tsProjectConsumer.getSettingContextHelpForUnitTest());
     }
 
     @Test
     public void testUnquote() {
-        assertEquals("x", ConfigField.unquote("\"x\""));
+        assertEquals("x", ConfigFieldImpl.unquote("\"x\""));
         // leave broken opening-only quote!
-        assertEquals("\"x", ConfigField.unquote("\"x"));
+        assertEquals("\"x", ConfigFieldImpl.unquote("\"x"));
 // this does not look great let's document this corner case for now
         assertEquals("x\"\n" +
-                "\"y", ConfigField.unquote("\"x\"\n\"y\""));
+                "\"y", ConfigFieldImpl.unquote("\"x\"\n\"y\""));
     }
 }

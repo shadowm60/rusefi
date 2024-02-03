@@ -52,7 +52,6 @@ static void comp_shaft_callback(COMPDriver *comp) {
 	uint32_t status = comp_lld_get_status(comp);
 	int isPrimary = (comp == EFI_COMP_PRIMARY_DEVICE);
 
-	trigger_event_e signal;
 	if (status & COMP_IRQ_RISING) {
 		hwHandleShaftSignal(isPrimary ? 0 : 1, true, stamp);
 		// shift the threshold down a little bit to avoid false-triggering (threshold hysteresis)
@@ -87,11 +86,9 @@ static COMPConfig comp_shaft_cfg = {
 
 static bool isCompEnabled = false;
 
-void turnOnTriggerInputPins() {
+void onEcuStartTriggerImplementation() {
 	compInit();
 	compStart(EFI_COMP_PRIMARY_DEVICE, &comp_shaft_cfg);
-
-	applyNewTriggerInputPins();
 }
 
 static int getDacValue(uint8_t voltage) {
@@ -99,8 +96,7 @@ static int getDacValue(uint8_t voltage) {
 	return (int)efiRound(maxDacValue * (float)voltage * VOLTAGE_1_BYTE_PACKING_DIV / engineConfiguration->adcVcc, 1.0f);
 }
 
-void startTriggerInputPins(void) {
-	//efiAssertVoid(CUSTOM_ERR_, !isCompEnabled, "isCompEnabled");
+void startTriggerInputPins() {
 	if (isCompEnabled) {
 		efiPrintf("startTIPins(): already enabled!");
 		return;
@@ -139,7 +135,7 @@ void startTriggerInputPins(void) {
 	isCompEnabled = true;
 }
 
-void stopTriggerInputPins(void) {
+void stopTriggerInputPins() {
 	if (!isCompEnabled) {
 		efiPrintf("stopTIPins(): already disabled!");
 		return;

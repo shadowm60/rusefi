@@ -18,7 +18,7 @@ using ::testing::_;
 using ICP = IIdleController::Phase;
 
 TEST(idle_v2, timingPid) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	engineConfiguration->useIdleTimingPidControl = true;
@@ -26,6 +26,7 @@ TEST(idle_v2, timingPid) {
 	engineConfiguration->idleTimingPid.pFactor = 0.1;
 	engineConfiguration->idleTimingPid.minValue = -10;
 	engineConfiguration->idleTimingPid.maxValue = 10;
+	engineConfiguration->idleTimingSoftEntryTime = 0.0f;
 	dut.init();
 
 	// Check that out of idle mode it doesn't do anything
@@ -50,7 +51,7 @@ TEST(idle_v2, timingPid) {
 }
 
 TEST(idle_v2, testTargetRpm) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	for (size_t i = 0; i < efi::size(config->cltIdleRpmBins); i++) {
@@ -63,7 +64,7 @@ TEST(idle_v2, testTargetRpm) {
 }
 
 TEST(idle_v2, testDeterminePhase) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	// TPS threshold 5% for easy test
@@ -108,7 +109,7 @@ TEST(idle_v2, testDeterminePhase) {
 }
 
 TEST(idle_v2, crankingOpenLoop) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	engineConfiguration->crankingIACposition = 50;
@@ -133,7 +134,7 @@ TEST(idle_v2, crankingOpenLoop) {
 }
 
 TEST(idle_v2, runningOpenLoopBasic) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	engineConfiguration->manIdlePosition = 50;
@@ -143,12 +144,12 @@ TEST(idle_v2, runningOpenLoopBasic) {
 		config->cltIdleCorr[i] = i * 0.1f;
 	}
 
-	EXPECT_FLOAT_EQ(5, dut.getRunningOpenLoop(0, 10, 0));
-	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(0, 50, 0));
+	EXPECT_FLOAT_EQ(5, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
+	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 50, 0));
 }
 
 TEST(idle_v2, runningFanAcBump) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	engineConfiguration->manIdlePosition = 50;
@@ -162,31 +163,31 @@ TEST(idle_v2, runningFanAcBump) {
 	enginePins.fanRelay.setValue(0);
 
 	// Should be base position
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(0, 10, 0));
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
 
 	// Turn on AC!
 	engine->module<AcController>()->acButtonState = true;
-	EXPECT_FLOAT_EQ(50 + 9, dut.getRunningOpenLoop(0, 10, 0));
+	EXPECT_FLOAT_EQ(50 + 9, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
 	engine->module<AcController>()->acButtonState = false;
 
 	// Turn the fan on!
 	enginePins.fanRelay.setValue(1);
-	EXPECT_FLOAT_EQ(50 + 7, dut.getRunningOpenLoop(0, 10, 0));
+	EXPECT_FLOAT_EQ(50 + 7, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
 	enginePins.fanRelay.setValue(0);
 
 	// Turn on the other fan!
 	enginePins.fanRelay2.setValue(1);
-	EXPECT_FLOAT_EQ(50 + 3, dut.getRunningOpenLoop(0, 10, 0));
+	EXPECT_FLOAT_EQ(50 + 3, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
 
 	// Turn on everything!
 	engine->module<AcController>()->acButtonState = true;
 	enginePins.fanRelay.setValue(1);
 	enginePins.fanRelay2.setValue(1);
-	EXPECT_FLOAT_EQ(50 + 9 + 7 + 3, dut.getRunningOpenLoop(0, 10, 0));
+	EXPECT_FLOAT_EQ(50 + 9 + 7 + 3, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 10, 0));
 }
 
 TEST(idle_v2, runningOpenLoopTpsTaper) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	// Zero out base tempco table
@@ -198,17 +199,57 @@ TEST(idle_v2, runningOpenLoopTpsTaper) {
 	engineConfiguration->idlePidDeactivationTpsThreshold = 10;
 
 	// Check in-bounds points
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(0, 0, 0));
-	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(0, 0, 5));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(0, 0, 10));
+	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 0));
+	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 5));
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 10));
 
 	// Check out of bounds - shouldn't leave the interval [0, 10]
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(0, 0, -5));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(0, 0, 20));
+	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, -5));
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 0, 0, 20));
+}
+
+extern int timeNowUs;
+
+TEST(idle_v2, runningOpenLoopTpsTaperWithDashpot) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	IdleController dut;
+
+	// Zero out base tempco table
+	setArrayValues(config->cltIdleCorr, 0.0f);
+
+	// Add 50% idle position
+	engineConfiguration->iacByTpsTaper = 50;
+	// At 10% TPS
+	engineConfiguration->idlePidDeactivationTpsThreshold = 10;
+
+	// set hold and decay time
+	engineConfiguration->iacByTpsHoldTime = 10;	// 10 secs
+	engineConfiguration->iacByTpsDecayTime = 10;	// 10 secs
+
+	// save the lastTimeRunningUs time - let it be the start of the hold phase
+	timeNowUs += 5'000'000;
+	// full throttle = max.iac
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Running, 0, 0, 100));
+
+	// jump to the end of the 'hold' phase of dashpot
+	timeNowUs += 10'000'000;
+
+	// change the state to idle (release the pedal) - but still 100% max.iac!
+    EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
+    // now we're in the middle of decay
+    timeNowUs += 5'000'000;
+    // 50% decay (50% of 50 is 25)
+    EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
+    // now the decay is finished
+    timeNowUs += 5'000'000;
+    // no correction
+    EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 0));
+    // still react to the pedal
+    EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(ICP::Idling, 0, 0, 10));
 }
 
 TEST(idle_v2, runningOpenLoopRpmTaper) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	// Zero out base tempco table
@@ -221,22 +262,22 @@ TEST(idle_v2, runningOpenLoopRpmTaper) {
 	engineConfiguration->idlePidRpmUpperLimit = 1500;
 
 	// Check in-bounds points
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(1500, 0, 0));
-	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(1750, 0, 0));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(2000, 0, 0));
+	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 1500, 0, 0));
+	EXPECT_FLOAT_EQ(25, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 1750, 0, 0));
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 2000, 0, 0));
 
 	// Check out of bounds - shouldn't leave the interval [1500, 2000]
-	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(200, 0, 0));
-	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(3000, 0, 0));
+	EXPECT_FLOAT_EQ(0, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 200, 0, 0));
+	EXPECT_FLOAT_EQ(50, dut.getRunningOpenLoop(IIdleController::Phase::Cranking, 3000, 0, 0));
 }
 
 struct MockOpenLoopIdler : public IdleController {
 	MOCK_METHOD(float, getCrankingOpenLoop, (float clt), (const, override));
-	MOCK_METHOD(float, getRunningOpenLoop, (float rpm, float clt, SensorResult tps), (override));
+	MOCK_METHOD(float, getRunningOpenLoop, (IIdleController::Phase phase, float rpm, float clt, SensorResult tps), (override));
 };
 
 TEST(idle_v2, testOpenLoopCranking) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<MockOpenLoopIdler> dut;
 
 	engineConfiguration->overrideCrankingIacSetting = true;
@@ -248,10 +289,11 @@ TEST(idle_v2, testOpenLoopCranking) {
 }
 
 TEST(idle_v2, openLoopRunningTaper) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<MockOpenLoopIdler> dut;
 
-	EXPECT_CALL(dut, getRunningOpenLoop(0, 30, SensorResult(0))).WillRepeatedly(Return(25));
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::CrankToIdleTaper, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
+	EXPECT_CALL(dut, getRunningOpenLoop(ICP::Running, 0, 30, SensorResult(0))).WillRepeatedly(Return(25));
 	EXPECT_CALL(dut, getCrankingOpenLoop(30)).WillRepeatedly(Return(75));
 
 	// 0 cycles - no taper yet, pure cranking value
@@ -272,7 +314,7 @@ TEST(idle_v2, openLoopRunningTaper) {
 }
 
 TEST(idle_v2, getCrankingTaperFraction) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<MockOpenLoopIdler> dut;
 
 	engineConfiguration->afterCrankingIACtaperDuration = 500;
@@ -300,7 +342,7 @@ TEST(idle_v2, getCrankingTaperFraction) {
 }
 
 TEST(idle_v2, openLoopCoastingTable) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 
 	// enable & configure feature
@@ -317,7 +359,7 @@ TEST(idle_v2, openLoopCoastingTable) {
 extern int timeNowUs;
 
 TEST(idle_v2, closedLoopBasic) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 	dut.init();
 
@@ -344,7 +386,7 @@ TEST(idle_v2, closedLoopBasic) {
 }
 
 TEST(idle_v2, closedLoopDeadzone) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	IdleController dut;
 	dut.init();
 
@@ -380,7 +422,7 @@ struct IntegrationIdleMock : public IdleController {
 };
 
 TEST(idle_v2, IntegrationManual) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<IntegrationIdleMock> dut;
 
 	SensorResult expectedTps = 1;
@@ -411,7 +453,7 @@ TEST(idle_v2, IntegrationManual) {
 }
 
 TEST(idle_v2, IntegrationAutomatic) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<IntegrationIdleMock> dut;
 
 	engineConfiguration->idleMode = IM_AUTO;
@@ -447,7 +489,7 @@ TEST(idle_v2, IntegrationAutomatic) {
 }
 
 TEST(idle_v2, IntegrationClamping) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	StrictMock<IntegrationIdleMock> dut;
 
 	engineConfiguration->idleMode = IM_AUTO;

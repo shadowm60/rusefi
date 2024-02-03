@@ -22,11 +22,15 @@ extern bool verboseMode;
 #endif /* EFI_UNIT_TEST */
 
 EventQueue::EventQueue(efitick_t lateDelay)
-	: lateDelay(lateDelay)
+	: m_lateDelay(lateDelay)
 {
 	for (size_t i = 0; i < efi::size(m_pool); i++) {
 		tryReturnScheduling(&m_pool[i]);
 	}
+
+#if EFI_PROD_CODE
+	getTunerStudioOutputChannels()->schedulingUsedCount = 0;
+#endif
 }
 
 scheduling_s* EventQueue::getFreeScheduling() {
@@ -73,10 +77,8 @@ bool EventQueue::insertTask(scheduling_s *scheduling, efitick_t timeX, action_s 
 		}
 	}
 
-#if EFI_UNIT_TEST
 	assertListIsSorted();
-#endif /* EFI_UNIT_TEST */
-	efiAssert(CUSTOM_ERR_ASSERT, action.getCallback() != NULL, "NULL callback", false);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, action.getCallback() != NULL, "NULL callback", false);
 
 // please note that simulator does not use this code at all - simulator uses signal_executor_sleep
 
@@ -93,33 +95,27 @@ bool EventQueue::insertTask(scheduling_s *scheduling, efitick_t timeX, action_s 
 	scheduling->momentX = timeX;
 	scheduling->action = action;
 
-	if (head == NULL || timeX < head->momentX) {
+	if (!m_head || timeX < m_head->momentX) {
 		// here we insert into head of the linked list
-		LL_PREPEND2(head, scheduling, nextScheduling_s);
-#if EFI_UNIT_TEST
+		LL_PREPEND2(m_head, scheduling, nextScheduling_s);
 		assertListIsSorted();
-#endif /* EFI_UNIT_TEST */
 		return true;
 	} else {
 		// here we know we are not in the head of the list, let's find the position - linear search
-		scheduling_s *insertPosition = head;
+		scheduling_s *insertPosition = m_head;
 		while (insertPosition->nextScheduling_s != NULL && insertPosition->nextScheduling_s->momentX < timeX) {
 			insertPosition = insertPosition->nextScheduling_s;
 		}
 
 		scheduling->nextScheduling_s = insertPosition->nextScheduling_s;
 		insertPosition->nextScheduling_s = scheduling;
-#if EFI_UNIT_TEST
 		assertListIsSorted();
-#endif /* EFI_UNIT_TEST */
 		return false;
 	}
 }
 
 void EventQueue::remove(scheduling_s* scheduling) {
-#if EFI_UNIT_TEST
-		assertListIsSorted();
-#endif /* EFI_UNIT_TEST */
+	assertListIsSorted();
 
 	// Special case: event isn't scheduled, so don't cancel it
 	if (!scheduling->action) {
@@ -127,17 +123,17 @@ void EventQueue::remove(scheduling_s* scheduling) {
 	}
 
 	// Special case: empty list, nothing to do
-	if (!head) {
+	if (!m_head) {
 		return;
 	}
 
 	// Special case: is the item to remove at the head?
-	if (scheduling == head) {
-		head = head->nextScheduling_s;
+	if (scheduling == m_head) {
+		m_head = m_head->nextScheduling_s;
 		scheduling->nextScheduling_s = nullptr;
 		scheduling->action = {};
 	} else {
-		auto prev = head;	// keep track of the element before the one to remove, so we can link around it
+		auto prev = m_head;	// keep track of the element before the one to remove, so we can link around it
 		auto current = prev->nextScheduling_s;
 
 		// Find our element
@@ -148,11 +144,11 @@ void EventQueue::remove(scheduling_s* scheduling) {
 
 		// Walked off the end, this is an error since this *should* have been scheduled
 		if (!current) {
-			firmwareError(OBD_PCM_Processor_Fault, "EventQueue::remove didn't find element");
+			firmwareError(ObdCode::OBD_PCM_Processor_Fault, "EventQueue::remove didn't find element");
 			return;
 		}
 
-		efiAssertVoid(OBD_PCM_Processor_Fault, current == scheduling, "current not equal to scheduling");
+		efiAssertVoid(ObdCode::OBD_PCM_Processor_Fault, current == scheduling, "current not equal to scheduling");
 
 		// Link around the removed item
 		prev->nextScheduling_s = current->nextScheduling_s;
@@ -162,9 +158,7 @@ void EventQueue::remove(scheduling_s* scheduling) {
 		current->action = {};
 	}
 
-#if EFI_UNIT_TEST
 	assertListIsSorted();
-#endif /* EFI_UNIT_TEST */
 }
 
 /**
@@ -174,8 +168,8 @@ void EventQueue::remove(scheduling_s* scheduling) {
  * @return Get the timestamp of the soonest pending action, skipping all the actions in the past
  */
 expected<efitick_t> EventQueue::getNextEventTime(efitick_t nowX) const {
-	if (head != NULL) {
-		if (head->momentX <= nowX) {
+	if (m_head) {
+		if (m_head->momentX <= nowX) {
 			/**
 			 * We are here if action timestamp is in the past. We should rarely be here since this 'getNextEventTime()' is
 			 * always invoked by 'scheduleTimerCallback' which is always invoked right after 'executeAllPendingActions' - but still,
@@ -184,9 +178,9 @@ expected<efitick_t> EventQueue::getNextEventTime(efitick_t nowX) const {
 			 * looks like we end up here after 'writeconfig' (which freezes the firmware) - we are late
 			 * for the next scheduled event
 			 */
-			return nowX + lateDelay;
+			return nowX + m_lateDelay;
 		} else {
-			return head->momentX;
+			return m_head->momentX;
 		}
 	}
 
@@ -207,9 +201,7 @@ int EventQueue::executeAll(efitick_t now) {
 
 	int executionCounter = 0;
 
-#if EFI_UNIT_TEST
 	assertListIsSorted();
-#endif
 
 	bool didExecute;
 	do {
@@ -223,7 +215,7 @@ int EventQueue::executeAll(efitick_t now) {
 bool EventQueue::executeOne(efitick_t now) {
 	// Read the head every time - a previously executed event could
 	// have inserted something new at the head
-	scheduling_s* current = head;
+	scheduling_s* current = m_head;
 
 	// Queue is empty - bail
 	if (!current) {
@@ -236,7 +228,7 @@ bool EventQueue::executeOne(efitick_t now) {
 	// resetting the timer and scheduling an new interrupt is greater than just
 	// waiting for the time to arrive.  On current CPUs, this is reasonable to set
 	// around 10 microseconds.
-	if (current->momentX > now + lateDelay) {
+	if (current->momentX > now + m_lateDelay) {
 		return false;
 	}
 
@@ -248,7 +240,7 @@ bool EventQueue::executeOne(efitick_t now) {
 	}
 
 	// step the head forward, unlink this element, clear scheduled flag
-	head = current->nextScheduling_s;
+	m_head = current->nextScheduling_s;
 	current->nextScheduling_s = nullptr;
 
 	// Grab the action but clear it in the event so we can reschedule from the action's execution
@@ -268,38 +260,36 @@ bool EventQueue::executeOne(efitick_t now) {
 		action.execute();
 	}
 
-#if EFI_UNIT_TEST
-	// (tests only) Ensure we didn't break anything
 	assertListIsSorted();
-#endif
-
 	return true;
 }
 
 int EventQueue::size(void) const {
 	scheduling_s *tmp;
 	int result;
-	LL_COUNT2(head, tmp, result, nextScheduling_s);
+	LL_COUNT2(m_head, tmp, result, nextScheduling_s);
 	return result;
 }
 
 void EventQueue::assertListIsSorted() const {
-	scheduling_s *current = head;
+#if EFI_UNIT_TEST || EFI_SIMULATOR
+	scheduling_s *current = m_head;
 	while (current != NULL && current->nextScheduling_s != NULL) {
-		efiAssertVoid(CUSTOM_ERR_6623, current->momentX <= current->nextScheduling_s->momentX, "list order");
+		efiAssertVoid(ObdCode::CUSTOM_ERR_6623, current->momentX <= current->nextScheduling_s->momentX, "list order");
 		current = current->nextScheduling_s;
 	}
+#endif // EFI_UNIT_TEST || EFI_SIMULATOR
 }
 
 scheduling_s * EventQueue::getHead() {
-	return head;
+	return m_head;
 }
 
 // todo: reduce code duplication with another 'getElementAtIndexForUnitText'
 scheduling_s *EventQueue::getElementAtIndexForUnitText(int index) {
 	scheduling_s * current;
 
-	LL_FOREACH2(head, current, nextScheduling_s)
+	LL_FOREACH2(m_head, current, nextScheduling_s)
 	{
 		if (index == 0)
 			return current;
@@ -311,10 +301,10 @@ scheduling_s *EventQueue::getElementAtIndexForUnitText(int index) {
 
 void EventQueue::clear(void) {
 	// Flush the queue, resetting all scheduling_s as though we'd executed them
-	while(head) {
-		auto x = head;
+	while(m_head) {
+		auto x = m_head;
 		// link next element to head
-		head = x->nextScheduling_s;
+		m_head = x->nextScheduling_s;
 
 		// Reset this element
 		x->momentX = 0;
@@ -322,5 +312,5 @@ void EventQueue::clear(void) {
 		x->action = {};
 	}
 
-	head = nullptr;
+	m_head = nullptr;
 }

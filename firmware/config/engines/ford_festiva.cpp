@@ -66,18 +66,14 @@ static const uint8_t racingFestivaVeTable[16][16] = {
 void setFordEscortGt() {
 	common079721_2351();
 
-	engineConfiguration->trigger.type = TT_MAZDA_DOHC_1_4;
-
-	setFrankenso_01_LCD(engineConfiguration);
-	setFrankenso0_1_joystick(engineConfiguration);
-
-	setDensoTODO(config);
+	engineConfiguration->trigger.type = trigger_type_e::TT_MAZDA_DOHC_1_4;
 
 	engineConfiguration->globalFuelCorrection = 0.75;
-	engineConfiguration->specs.displacement = 1.839;
+	engineConfiguration->displacement = 1.839;
 	setAlgorithm(LM_SPEED_DENSITY);
 
-	static const uint16_t veRpmBins[] = 
+#if (IGN_RPM_COUNT == DEFAULT_IGN_LOAD_COUNT) && (IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT)
+	static const uint16_t veRpmBins[] =
 	{
 		800,
 		1200,
@@ -98,9 +94,8 @@ void setFordEscortGt() {
 	};
 
 	copyArray(config->veRpmBins, veRpmBins);
-
-
 	copyTable(config->veTable, racingFestivaVeTable);
+#endif
 
 //	engineConfiguration->triggerInputPins[0] = Gpio::C6; // 2G YEL/BLU
 //	engineConfiguration->triggerInputPins[1] = Gpio::A5; // 2E White CKP
@@ -146,9 +141,6 @@ void setFordEscortGt() {
 	setSingleCoilDwell();
 	engineConfiguration->ignitionMode = IM_ONE_COIL;
 
-	engineConfiguration->triggerSimulatorPinModes[0] = OM_OPENDRAIN;
-	engineConfiguration->triggerSimulatorPinModes[1] = OM_OPENDRAIN;
-
 	// individual coils
 	// W6  PC9
 	// W8  PC7
@@ -159,7 +151,6 @@ void setFordEscortGt() {
 	engineConfiguration->ignitionPins[1] = Gpio::C7;
 	engineConfiguration->ignitionPins[2] = Gpio::E8;
 	engineConfiguration->ignitionPins[3] = Gpio::E12;
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
 
@@ -184,15 +175,13 @@ void setFordEscortGt() {
 
 
 	// 40% idle is good default
-	engineConfiguration->idle.solenoidFrequency = 300;
 	engineConfiguration->idle.solenoidPin = Gpio::B9;
 
 	engineConfiguration->malfunctionIndicatorPin = Gpio::E5;
-	engineConfiguration->malfunctionIndicatorPinMode = OM_DEFAULT;
 
 	engineConfiguration->tunerStudioSerialSpeed = 19200;
 
-	commonFrankensoAnalogInputs(engineConfiguration);
+	commonFrankensoAnalogInputs();
 	setCommonNTCSensor(&engineConfiguration->clt, 2700);
 	setCommonNTCSensor(&engineConfiguration->iat, 2700);
 
@@ -209,6 +198,7 @@ void setFordEscortGt() {
 	// todo: 8.2 or 10k?
 	engineConfiguration->vbattDividerCoeff = ((float) (10 + 33)) / 10 * 2;
 
+#if (IGN_RPM_COUNT == DEFAULT_IGN_RPM_COUNT) && (IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT)
 	// VICS solenoid
 	static const uint16_t ignitionRpmBins[] =
 	{
@@ -232,7 +222,6 @@ void setFordEscortGt() {
 
 	copyArray(config->ignitionRpmBins, ignitionRpmBins);
 
-#if IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT
 	copyTable(config->ignitionTable, racingFestivaIgnitionTable);
 #endif
 

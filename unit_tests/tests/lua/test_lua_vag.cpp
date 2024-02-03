@@ -2,23 +2,6 @@
 #include "rusefi_lua.h"
 #include "lua_lib.h"
 
-// XOR of the array, skipping target index
-#define VAG_CHECKSUM " \
-function xorChecksum(data, targetIndex) \
-	local index = 1 \
-	local result = 0 \
-	while data[index] ~= nil do \
-		if index ~= targetIndex then \
-			result = result ~ data[index] \
-		end \
-		index = index + 1 \
-	end \
-	data[targetIndex] = result \
-	return result \
-end \
-"
-
-
 TEST(LuaVag, Checksum) {
 	const char* realdata = VAG_CHECKSUM R"(
 
@@ -33,7 +16,7 @@ TEST(LuaVag, Checksum) {
 
 // LSB (Least Significant Byte comes first) "Intel"
 TEST(LuaVag, packMotor1) {
-	const char* realdata = PRINT_ARRAY ARRAY_EQUALS SET_TWO_BYTES R"(
+	const char* realdata = PRINT_ARRAY ARRAY_EQUALS SET_TWO_BYTES_LSB R"(
 
 	function testFunc()
 		engineTorque = 15.21
@@ -46,7 +29,7 @@ TEST(LuaVag, packMotor1) {
 		canMotor1 = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 
 		canMotor1[2] = engineTorque / 0.39
-		setTwoBytes(canMotor1, 2, rpm / 0.25)
+		setTwoBytesLsb(canMotor1, 2, rpm / 0.25)
 		canMotor1[5] = innerTorqWithoutExt / 0.4
  		canMotor1[6] = tps / 0.4
 		canMotor1[7] = torqueLoss / 0.39
@@ -134,7 +117,7 @@ TEST(LuaVag, unpackMotor1_torq_req) {
 #define realMotor3Packet "\ndata = { 0x00, 0x62, 0xFA, 0xDA, 0x22, 0x00, 0x00, 0xFA}\n "
 
 TEST(LuaVag, packMotor3) {
-	const char* script = SET_BIT_RANGE_LSB PRINT_ARRAY ARRAY_EQUALS SET_TWO_BYTES R"(
+	const char* script = SET_BIT_RANGE_LSB PRINT_ARRAY ARRAY_EQUALS SET_TWO_BYTES_LSB R"(
 
 	function testFunc()
 		tps = 100
@@ -246,6 +229,12 @@ TEST(LuaVag, unpackMotor3_iat) {
 	)";
 
     EXPECT_NEAR_M3(testLuaReturnsNumberOrNil(script).value_or(0), 25.5);
+}
+
+TEST(Vag, unpackMotor3_desired_wheel_torque) {
+  uint8_t data[] = { 0x00, 0x62, 0xFA, 0xDA, 0x22, 0x00, 0x00, 0xFA};
+
+  EXPECT_NEAR_M3(getBitRangeLsb(data, 24, 12) * 0.39, 284.7);
 }
 
 TEST(LuaVag, unpackMotor3_desired_wheel_torque) {

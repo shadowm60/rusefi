@@ -19,7 +19,7 @@
 #define MC33810_OUTPUTS				8
 #define MC33810_DIRECT_OUTPUTS		8
 
-/* DOTO: add irq support */
+/* TODO: add irq support */
 #define MC33810_POLL_INTERVAL_MS	100
 
 struct mc33810_config {
@@ -39,3 +39,6 @@ struct mc33810_config {
 };
 
 int mc33810_add(brain_pin_e base, unsigned int index, const mc33810_config *cfg);
+
+/* debug */
+void mc33810_req_init();

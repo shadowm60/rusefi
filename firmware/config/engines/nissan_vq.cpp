@@ -9,15 +9,15 @@
 
 #include "nissan_vq.h"
 #include "hellen_meta.h"
+#include "defaults.h"
 
 #define NISSAN_VQ_VVT_OFFSET 157
 
 void setHellen121nissanQR() {
-	engineConfiguration->trigger.type = TT_NISSAN_QR25;
+	engineConfiguration->trigger.type = trigger_type_e::TT_NISSAN_QR25;
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
-	engineConfiguration->specs.displacement = 2;
+	setInline4();
+	engineConfiguration->displacement = 2;
 	strcpy(engineConfiguration->engineCode, "QR");
 
 	engineConfiguration->camInputs[1 * CAMS_PER_BANK] = Gpio::Unassigned;
@@ -31,26 +31,19 @@ void setHellen121nissanQR() {
 
 }
 
-void setHellen121nissanVQ() {
-    #include "nissan_vq.lua"
+static void setNissanVqEngineConfig() {
+	setNissanMAF0031();
+	engineConfiguration->trigger.type = trigger_type_e::TT_NISSAN_VQ35;
 
-	engineConfiguration->trigger.type = TT_NISSAN_VQ35;
-
-	setNissanMAF0031(config);
-
-	engineConfiguration->specs.cylindersCount = 6;
-	engineConfiguration->specs.firingOrder = FO_1_2_3_4_5_6;
-	engineConfiguration->specs.displacement = 4;
+	engineConfiguration->cylindersCount = 6;
+	engineConfiguration->firingOrder = FO_1_2_3_4_5_6;
+	engineConfiguration->displacement = 4;
 	strcpy(engineConfiguration->engineCode, "VQ");
 
 	engineConfiguration->vvtMode[0] = VVT_NISSAN_VQ;
 
-	// we have this here and not in board_configuration.cpp so that unit test would get this value
-	engineConfiguration->invertCamVVTSignal = true;
-
 	engineConfiguration->vvtOffsets[0 * CAMS_PER_BANK] = NISSAN_VQ_VVT_OFFSET;
 	engineConfiguration->vvtOffsets[1 * CAMS_PER_BANK] = NISSAN_VQ_VVT_OFFSET + NISSAN_VQ_CAM_OFFSET;
-
 
 	// VVT closed loop
 	engineConfiguration->auxPid[0].pFactor = 2;
@@ -60,19 +53,35 @@ void setHellen121nissanVQ() {
 //	engineConfiguration->auxPid[0].minValue = 20;
 //	engineConfiguration->auxPid[0].maxValue = 90;
 
+	engineConfiguration->cranking.baseFuel = 35;
+}
+
+void setHellen121nissanVQ() {
+    #include "nissan_vq.lua"
+
+    setNissanVqEngineConfig();
+
+	// we have this here and not in board_configuration.cpp so that unit test would get this value
+	engineConfiguration->invertCamVVTSignal = true;
+
 #if HW_HELLEN
 	engineConfiguration->vvtPins[0 * CAMS_PER_BANK] = H176_LS_7;
 	engineConfiguration->vvtPins[1 * CAMS_PER_BANK] = H176_LS_8;
 #endif
+}
 
-	engineConfiguration->cranking.baseFuel = 35;
+void setProteusNissanVQ() {
+    setNissanVqEngineConfig();
+
+    // open question if that's a board setting or engine setting
+	engineConfiguration->invertCamVVTSignal = true;
 }
 
 void setHellen121nissanAltimaN16() {
 	// https://en.wikipedia.org/wiki/Nissan_QG_engine
 	// https://en.wikipedia.org/wiki/N-VCT
 	setHellen121nissanQR();
-	engineConfiguration->specs.displacement = 1.8;
+	engineConfiguration->displacement = 1.8;
 	strcpy(engineConfiguration->engineCode, "N16");
 
 }

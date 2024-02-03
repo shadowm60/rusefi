@@ -10,8 +10,6 @@
 
 #if EFI_TUNER_STUDIO
 
-void sendErrorCode(TsChannelBase *tsChannel, uint8_t code);
-
 static constexpr size_t getTunerStudioPageSize() {
 	return TOTAL_CONFIG_SIZE;
 }
@@ -35,7 +33,11 @@ bool validateOffsetCount(size_t offset, size_t count, TsChannelBase* tsChannel) 
 // the ECU.  Forcing a reboot will force TS to re-read the tune CRC,
 bool rebootForPresetPending = false;
 
-static efitick_t prevRequestTimeNt = 0;
+static Timer channelsRequestTimer;
+
+int getSecondsSinceChannelsRequest() {
+    return channelsRequestTimer.getElapsedSeconds();
+}
 
 /**
  * @brief 'Output' command sends out a snapshot of current values
@@ -43,16 +45,15 @@ static efitick_t prevRequestTimeNt = 0;
  */
 void TunerStudio::cmdOutputChannels(TsChannelBase* tsChannel, uint16_t offset, uint16_t count) {
 	if (offset + count > TS_TOTAL_OUTPUT_SIZE) {
-		efiPrintf("TS: Version Mismatch? Too much outputs requested %d/%d/%d", offset, count,
+		efiPrintf("TS: Version Mismatch? Too much outputs requested offset=%d + count=%d/total=%d", offset, count,
 				sizeof(TunerStudioOutputChannels));
 		sendErrorCode(tsChannel, TS_RESPONSE_OUT_OF_RANGE);
 		return;
 	}
 
 	if (offset < BLOCKING_FACTOR) {
-		efitick_t nowNt = getTimeNowNt();
-		engine->outputChannels.outputRequestPeriod = nowNt - prevRequestTimeNt;
-		prevRequestTimeNt = nowNt;
+		engine->outputChannels.outputRequestPeriod = channelsRequestTimer.getElapsedUs();
+		channelsRequestTimer.reset();
 	}
 
 	tsState.outputChannelsCommandCounter++;

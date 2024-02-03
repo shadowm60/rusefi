@@ -1,31 +1,27 @@
-# https://github.com/rusefi/rusefi/blob/master/firmware/config/boards/hellen/hellen_meta.h
+meta: config/boards/hellen_meta.h
 
 pins:
   - pin: P66
-    # LOW3 IO1
-    id: D3
+    meta: H144_OUT_IO1
     class: outputs
-    ts_name: Aux P66
+    ts_name: Aux ___
 
   - pin: P67
-    # LOW4 IO2
-    id: A9
+    meta: H144_OUT_IO2
     class: outputs
-    ts_name: Aux P67
+    ts_name: Aux ___
 
   - pin: P68
-    # LOW6 IO4
-    id: G5
+    meta: H144_OUT_IO4
     class: outputs
-    ts_name: Aux P68
+    ts_name: Aux ___
 
   - pin: K1
     function: GND
     type: gnd
 
   - pin: K2
-    # VIGN PA5
-    id: EFI_ADC_5
+    meta: H144_IN_VBATT
     class: analog_inputs
     ts_name: K2 Ignition Key Voltage
     function: V ign
@@ -35,7 +31,7 @@ pins:
     type: gnd
 
   - pin: K4
-    function: V raw
+    function: +12v from main relay
 
   - pin: K5
     function: GND
@@ -46,8 +42,7 @@ pins:
 
   - pin: K10
     function: K10 presure sensor
-    # IN_MAP2
-    id: EFI_ADC_11
+    meta: H144_IN_MAP2
     class: analog_inputs
     ts_name: K10 Sensor
 
@@ -65,10 +60,9 @@ pins:
     function: Analog Ground
 
   - pin: K15
-# cam2  IN_AUX4
-    id: [A7]
-    function: Cam Sensor
-    class: [event_inputs]
+    meta: H144_IN_D_AUX4
+    function: 'Cam Sensor (2014: yellow)'
+    class: event_inputs
     ts_name: Cam - K15
 
   - pin: K16
@@ -77,21 +71,18 @@ pins:
 
   - pin: K17b
     function: Crank Sensor
-    # IN_CRANK AIN24 A24
-    id: [B1]
-    class: [event_inputs]
+    meta: H144_IN_CRANK
+    class: event_inputs
     ts_name: Crank - K17 rev B
 
   - pin: K17c
-    function: Crank Sensor
-    # H144_IN_SENS2
-    id: [F4]
-    class: [event_inputs]
+    function: "Crank Sensor (2014: pink)"
+    meta: H144_IN_SENS2
+    class: event_inputs
     ts_name: Crank - K17 rev C
 
   - pin: K21
-    # H144_IN_O2S
-    id: EFI_ADC_0
+    meta: H144_IN_O2S
     class: analog_inputs
     ts_name: K21 Ambient Temperature
     function: Ambient Temperature
@@ -100,28 +91,28 @@ pins:
     ts_name: BK2 Wastegate Position - 22
 
   - pin: K25
-    id: G7
+    meta: H144_LS_1
     class: outputs
     ts_name: INJ_1 k25
     function: Injector 1
     type: inj
 
   - pin: K26
-    id: G8
+    meta: H144_LS_2
     class: outputs
     ts_name: INJ_2 k26
     function: Injector 2
     type: inj
 
   - pin: K27
-    id: D11
+    meta: H144_LS_3
     class: outputs
     ts_name: INJ_3 k27
     function: Injector 3
     type: inj
 
   - pin: K28
-    id: D10
+    meta: H144_LS_4
     class: outputs
     ts_name: INJ_4 k28
     function: Injector 4
@@ -132,22 +123,19 @@ pins:
     type: 5v
 
   - pin: K31
-# IN_MAP1 AIN9
-    id: EFI_ADC_10
+    meta: H144_IN_MAP1
     class: analog_inputs
-    ts_name: Map Sensor K31
+    ts_name: Map Sensor ___
     function: Manifold Pressure Sensor
 
   - pin: K32
-# IN_AUX1 AIN23 PB0
-    id: EFI_ADC_8
+    meta: H144_IN_AUX1
     class: analog_inputs
     ts_name: TPS 2
     function: TPS 2 sensor input
 
   - pin: K33
-# IN_CLT AIN11
-    id: EFI_ADC_12
+    meta: H144_IN_CLT
     class: analog_inputs
     ts_name: CLT
     function: CLT
@@ -156,8 +144,7 @@ pins:
     function: Analog Ground
 
   - pin: K35
-# IN_AUX2 AIN21 PC4
-    id: EFI_ADC_14
+    meta: H144_IN_AUX2
     class: analog_inputs
     ts_name: PPS 2
     function: PPS 2 sensor input
@@ -173,8 +160,7 @@ pins:
     function: Analog Ground
 
   - pin: K40
-    # H144_IN_VSS
-    id: F11
+    meta: H144_IN_VSS
     class: event_inputs
     ts_name: K40 VSS
     function: Vehicle Speed Sensor
@@ -187,58 +173,52 @@ pins:
     function: Analog Ground
 
   - pin: K47
-    # H144_LS_7
-    id: F13
+    meta: H144_LS_7
     class: outputs
-    ts_name: K47 BK1 Wastegate Solenoid
+    ts_name: ___ BK1 Wastegate Solenoid
     function: BK1 Wastegate Solenoid
 
-  - pin: K48
-    # H144_LS_8
-    id: F14
-    class: outputs
-    ts_name: K48 LS1
-    function: K48 Low Side 1
-
   - pin: K53
-    # IN_IAT AIN14 PC3
-    id: EFI_ADC_13
+    meta: H144_IN_IAT
     class: analog_inputs
     ts_name: IAT
-    function: IAT
+    function: 'IAT (2014: green)'
+
+  - pin: K54
+    meta: H144_IN_MAP3
+    class: analog_inputs
+    ts_name: ___ A/C pressure
+    function: A/C pressure
 
   - pin: K57
-    function: Analog Ground
+    function: 'Analog Ground (2014: green)'
 
   - pin: K58
-# IN_O2S2 AIN12 PA1 EFI_ADC_1
-    id: EFI_ADC_1
+    meta: H144_IN_O2S2
     class: analog_inputs
-    ts_name: K58 Oil Temp
-    function: Oil Temperature
+    ts_name: ___ Oil Temp
+    function: 'Oil Temperature (2014: blue/orange)'
 
   - pin: K59
-    function: Analog Ground
+    function: 'Analog Ground (2014: black)'
 
   - pin: K60
-    function: sensor +5v feed
+    function: 'sensor +5v feed (2014: grey)'
     type: 5v
 
   - pin: K61
-    function: Analog Ground
+    function: 'Analog Ground (2014: yellow)'
 
   - pin: K62b
-# cam1 IN_CAM
-    id: [A6]
+    meta: H144_IN_CAM
     function: Cam Sensor
-    class: [event_inputs]
+    class: event_inputs
     ts_name: Cam - K62 rev B
 
   - pin: K62c
-    # H144_IN_SENS3
-    id: [F5]
-    function: Cam Sensor
-    class: [event_inputs]
+    meta: H144_IN_SENS3
+    function: "Cam Sensor (2014: white)"
+    class: event_inputs
     ts_name: Cam - K62 rev C
 
   - pin: K63
@@ -246,40 +226,35 @@ pins:
     type: 5v
 
   - pin: K64
-# H144_OUT_IO3
-    id: G14
+    meta: H144_OUT_IO3
     class: outputs
-    ts_name: Main Relay K64
+    ts_name: Main Relay ___
     function: Main relay control
     type: ls
 
   - pin: K65
-    # H144_OUT_IO7
-    id: G3
+    meta: H144_OUT_IO7
     class: outputs
     ts_name: Fan Relay Low
     function: Fan relay low
 
-  - pin: K65
-    # H144_LS_5
-    id: D9
+  - pin: K66
+    meta: H144_LS_5
     class: outputs
     ts_name: VVT1
     function: VVT1
 
   - pin: K68
-    # H144_LS_6
-    id: F12
+    meta: H144_LS_6
     class: outputs
     ts_name: VVT2
     function: VVT2
 
 
   - pin: K70
-# H144_OUT_IO9
-    id: G13
+    meta: H144_OUT_IO9
     class: outputs
-    ts_name: Fuel Pump K70
+    ts_name: Fuel Pump ___
     function: Fuel Pump Relay
     type: ls
 
@@ -303,14 +278,13 @@ pins:
     function: Analog Ground
 
   - pin: K80
-# IN_TPS AIN17 PA4
-    id: EFI_ADC_4
+    meta: H144_IN_TPS
     class: analog_inputs
     ts_name: TPS 1
     function: TPS 1 sensor input
 
   - pin: K82
-    id: EFI_ADC_3
+    meta: H144_IN_PPS
     class: analog_inputs
     ts_name: PPS 1
     function: PPS 1 sensor input
@@ -319,36 +293,33 @@ pins:
     function: Analog Ground
 
   - pin: K86
-    # H144_OUT_PWM7
-    id: D15
+    meta: H144_OUT_PWM7
     class: outputs
     ts_name: Tacho
     function: Tachometer
 
   - pin: K87
-    # H144_OUT_IO10
-    id: G12
+    meta: H144_OUT_IO10
     class: outputs
     ts_name: K87 AC Relay
     function: A/C Relay
     type: ls
 
   - pin: K88
-    # H144_OUT_IO8
-    id: G4
+    meta: H144_OUT_IO8
     class: outputs
     ts_name: Fan Relay HI
     function: Fan relay high
 
   - pin: K92
-    # H144_OUT_PWM8
-    id: D12
+    meta: H144_OUT_PWM8
     class: outputs
+    type: ls
     ts_name: MIL
     function: Check Engine Light
 
   - pin: A1
-    id: E3
+    meta: H144_IGN_4
     class: outputs
     ts_name: Coil 4
     function: Coil 4
@@ -361,30 +332,28 @@ pins:
     function: Ground
 
   - pin: A16
-    id: E5
+    meta: H144_IGN_2
     class: outputs
     ts_name: Coil 2
     function: Coil 2
     type: ign
 
   - pin: A29
-    # H144_IN_RES3
-    id: F8
+    meta: H144_IN_RES3
     class: switch_inputs
     ts_name: A29 Brake Input
     function: Brake Switch
 
 
   - pin: A31
-    id: C13
+    meta: H144_IGN_1
     class: outputs
     ts_name: Coil 1
     function: Coil 1
     type: ign
 
   - pin: A43
-# H144_IN_RES2
-    id: F10
+    meta: H144_IN_RES2
     class: switch_inputs
     ts_name: A43 Clutch Input
     function: Clutch Input
@@ -393,15 +362,14 @@ pins:
     function: BK2 DC Wastegate Pos
 
   - pin: A46
-    id: E4
+    meta: H144_IGN_3
     class: outputs
     ts_name: Coil 3
     function: Coil 3
     type: ign
 
   - pin: A57
-    # H144_IN_RES1
-    id: F9
+    meta: H144_IN_RES1
     class: switch_inputs
     ts_name: A57 AC Request
     function: AC Request Switch
@@ -411,7 +379,9 @@ pins:
 
 info:
   board_url: https://github.com/rusefi/rusefi/wiki/Hellen-154-Hyundai
+  directory: hellen/hellen154hyundai
   title: Hellen 154 Hyundai
+  order: 0
   image:
     file: main.jpg
   pins:

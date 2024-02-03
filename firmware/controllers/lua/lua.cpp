@@ -17,9 +17,16 @@
 #define LUA_USER_HEAP 1
 #endif // LUA_USER_HEAP
 
+//#ifdef PERSISTENT_LOCATION_TODO
+//#define LUA_HEAD_RAM_SECTION CCM_OPTIONAL
+//#endif
+
 static char luaUserHeap[LUA_USER_HEAP]
 #ifdef EFI_HAS_EXT_SDRAM
 SDRAM_OPTIONAL
+#endif
+#ifdef LUA_HEAD_RAM_SECTION
+LUA_HEAD_RAM_SECTION
 #endif
 ;
 
@@ -29,6 +36,7 @@ public:
 
 	size_t m_memoryUsed = 0;
 	size_t m_size;
+	char* m_buffer;
 
 	void* alloc(size_t n) {
 		return chHeapAlloc(&m_heap, n);
@@ -41,15 +49,17 @@ public:
 public:
 	template<size_t TSize>
 	Heap(char (&buffer)[TSize])
-		: m_size(TSize)
 	{
-		chHeapObjectInit(&m_heap, buffer, TSize);
+		reinit(buffer, TSize);
 	}
 
-	void reinit(char *buffer, size_t m_size) {
-		efiAssertVoid(OBD_PCM_Processor_Fault, m_memoryUsed == 0, "Too late to reinit Lua heap");
-		chHeapObjectInit(&m_heap, buffer, m_size);
-		this->m_size = m_size;
+	void reinit(char *buffer, size_t size) {
+		criticalAssertVoid(m_memoryUsed == 0, "Too late to reinit Lua heap");
+
+		m_size = size;
+		m_buffer = buffer;
+
+		reset();
 	}
 
 	void* realloc(void* ptr, size_t osize, size_t nsize) {
@@ -88,9 +98,22 @@ public:
 	size_t used() const {
 		return m_memoryUsed;
 	}
+
+	// Use only in case of emergency - obliterates all heap objects and starts over
+	void reset() {
+		chHeapObjectInit(&m_heap, m_buffer, m_size);
+		m_memoryUsed = 0;
+	}
 };
 
 static Heap userHeap(luaUserHeap);
+
+static void printLuaMemoryInfo() {
+	auto heapSize = userHeap.size();
+	auto memoryUsed = userHeap.used();
+	float pct = 100.0f * memoryUsed / heapSize;
+	efiPrintf("Lua memory heap usage: %d / %d bytes = %.1f%%", memoryUsed, heapSize, pct);
+}
 
 static void* myAlloc(void* /*ud*/, void* ptr, size_t osize, size_t nsize) {
 	if (engineConfiguration->debugMode == DBG_LUA) {
@@ -145,13 +168,13 @@ static LuaHandle setupLuaState(lua_Alloc alloc) {
 	LuaHandle ls = lua_newstate(alloc, NULL);
 
 	if (!ls) {
-		firmwareError(OBD_PCM_Processor_Fault, "Failed to start Lua interpreter");
+		criticalError("Failed to start Lua interpreter");
 
 		return nullptr;
 	}
 
 	lua_atpanic(ls, [](lua_State* l) {
-		firmwareError(OBD_PCM_Processor_Fault, "Lua panic: %s", lua_tostring(l, -1));
+		criticalError("Lua panic: %s", lua_tostring(l, -1));
 
 		// hang the lua thread
 		while (true) ;
@@ -186,6 +209,10 @@ static bool loadScript(LuaHandle& ls, const char* scriptStr) {
 	}
 
 	efiPrintf(TAG "script loaded successfully!");
+
+#if EFI_PROD_CODE
+	printLuaMemoryInfo();
+#endif // EFI_PROD_CODE
 
 	return true;
 }
@@ -308,6 +335,11 @@ static bool runOneLua(lua_Alloc alloc, const char* script) {
 		chThdSleep(TIME_US2I(luaTickPeriodUs));
 		engine->outputChannels.luaLastCycleDuration = (getTimeNowNt() - beforeNt);
 		engine->outputChannels.luaInvocationCounter++;
+
+		engine->engineState.luaDigitalState0 = getAuxDigital(0);
+		engine->engineState.luaDigitalState1 = getAuxDigital(1);
+		engine->engineState.luaDigitalState2 = getAuxDigital(2);
+		engine->engineState.luaDigitalState3 = getAuxDigital(3);
 	}
 
 	resetLua();
@@ -318,6 +350,15 @@ static bool runOneLua(lua_Alloc alloc, const char* script) {
 void LuaThread::ThreadTask() {
 	while (!chThdShouldTerminateX()) {
 		bool wasOk = runOneLua(myAlloc, config->luaScript);
+
+		auto usedAfterRun = userHeap.used();
+		if (usedAfterRun != 0) {
+			efiPrintf(TAG "MEMORY LEAK DETECTED: %d bytes used after teardown", usedAfterRun);
+
+			// Lua blew up in some terrible way that left memory allocated, reset the heap
+			// so that subsequent runs don't overflow the heap
+			userHeap.reset();
+		}
 
 		// Reset any lua adjustments the script made
 		engine->resetLua();
@@ -346,7 +387,7 @@ void startLua() {
 		char *buffer = (char *)0x20020000;
 		userHeap.reinit(buffer, 60000);
 	}
-#endif
+#endif // STM32F4
 
 #if LUA_USER_HEAP > 1
 #if EFI_CAN_SUPPORT
@@ -370,12 +411,7 @@ void startLua() {
 		needsReset = true;
 	});
 
-	addConsoleAction("luamemory", [](){
-		auto heapSize = userHeap.size();
-		auto memoryUsed = userHeap.used();
-		float pct = 100.0f * memoryUsed / heapSize;
-		efiPrintf("Lua memory heap usage: %d / %d bytes = %.1f%%", memoryUsed, heapSize, pct);
-	});
+	addConsoleAction("luamemory", printLuaMemoryInfo);
 #endif
 }
 

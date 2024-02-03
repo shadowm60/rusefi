@@ -248,9 +248,6 @@ struct Tle8888 : public GpioChip {
 	systime_t					wwd_ts;
 	systime_t					fwd_ts;
 
-	/* chip needs reintialization due to some critical issue */
-	bool						need_init;
-
 	/* main relay output */
 	bool						mr_manual;
 
@@ -258,11 +255,10 @@ struct Tle8888 : public GpioChip {
 	int							por_cnt;
 	int							wdr_cnt;
 	int							comfe_cnt;
-	int							init_cnt;
 	int							init_req_cnt;
 	int							spi_cnt;
-	uint16_t					tx;
-	uint16_t					rx;
+	uint16_t					recentTx;
+	uint16_t					recentRx;
 };
 
 static Tle8888 chips[BOARD_TLE8888_COUNT];
@@ -368,8 +364,8 @@ int Tle8888::spi_rw(uint16_t tx, uint16_t *rx_ptr)
 	spiReleaseBus(spi);
 
 	/* statisctic and debug */
-	this->tx = tx;
-	this->rx = rx;
+	recentTx = tx;
+	recentRx = rx;
 	this->spi_cnt++;
 
 	if (rx_ptr)
@@ -420,8 +416,8 @@ int Tle8888::spi_rw_array(const uint16_t *tx, uint16_t *rx, int n)
 		spiUnselect(spi);
 
 		/* statistic and debug */
-		this->tx = tx[i];
-		this->rx = rxdata;
+		recentTx = tx[i];
+		recentRx = rxdata;
 		this->spi_cnt++;
 
 		/* validate reply and save last accessed register */
@@ -471,7 +467,7 @@ int Tle8888::update_output()
 	 * (at least until we start supporting hi-Z state) */
 	o_data |= o_pp_mask;
 
-	uint16_t tx[] = {
+	uint16_t updateTx[] = {
 		/* bridge config */
 		CMD_BRICONFIG(0, briconfig0),
 		/* output enables */
@@ -483,7 +479,7 @@ int Tle8888::update_output()
 		CMD_CMD0((mr_manual ? REG_CMD0_MRSE : 0x0) |
 				 ((o_data & BIT(TLE8888_OUTPUT_MR)) ? REG_CMD0_MRON : 0x0))
 	};
-	ret = spi_rw_array(tx, NULL, efi::size(tx));
+	ret = spi_rw_array(updateTx, NULL, efi::size(updateTx));
 
 	if (ret == 0) {
 		/* atomic */
@@ -500,7 +496,7 @@ int Tle8888::update_output()
 int Tle8888::update_status_and_diag()
 {
 	int ret = 0;
-	const uint16_t tx[] = {
+	const uint16_t diagTx[] = {
 		CMD_OUTDIAG(0),
 		CMD_OUTDIAG(1),
 		CMD_OUTDIAG(2),
@@ -514,9 +510,9 @@ int Tle8888::update_status_and_diag()
 		CMD_OPSTAT(1),
 		CMD_OPSTAT(1)
 	};
-	uint16_t rx[efi::size(tx)];
+	uint16_t rx[efi::size(diagTx)];
 
-	ret = spi_rw_array(tx, rx, efi::size(tx));
+	ret = spi_rw_array(diagTx, rx, efi::size(diagTx));
 
 	if (ret == 0) {
 		/* the address and content of the selected register is transmitted with the
@@ -619,9 +615,7 @@ static brain_pin_diag_e tle8888_2b_to_diag_with_temp(unsigned int bits)
 }
 
 int Tle8888::chip_reset() {
-	int ret;
-
-	ret = spi_rw(CMD_SR, NULL);
+	int ret = spi_rw(CMD_SR, NULL);
 	/**
 	 * Table 8. Reset Times. All reset times not more than 20uS
 	 */
@@ -639,7 +633,7 @@ int Tle8888::chip_init()
 	/* statistic */
 	init_cnt++;
 
-	uint16_t tx[] = {
+	uint16_t initTx[] = {
 		/* unlock */
 		CMD_CHIP_UNLOCK,
 		/* set INCONFIG - aux input mapping */
@@ -660,7 +654,7 @@ int Tle8888::chip_init()
 		 * not to affect analog inputs.
 		 * Disable open load detection and set short to bat
 		 * thresholt to 125 mV (default) for OUTPUT8..13 */
-		CMD_OUTCONFIG(2, (0x0 << 6) | 0x00),	
+		CMD_OUTCONFIG(2, (0x0 << 6) | 0x00),
 #else
 		/* Enable open load detection and set short to bat
 		 * thresholt to 125 mV (default) for OUTPUT8..13 */
@@ -695,7 +689,7 @@ int Tle8888::chip_init()
 		CMD_OE_SET
 	};
 
-	ret = spi_rw_array(tx, NULL, efi::size(tx));
+	ret = spi_rw_array(initTx, NULL, efi::size(initTx));
 
 	if (ret == 0) {
 		/* enable pins */
@@ -763,7 +757,7 @@ int Tle8888::wd_get_status() {
 }
 
 int Tle8888::wd_feed() {
-	bool update_status;
+	bool update_status = false;
 
 	if (wwd_ts <= chVTGetSystemTimeX()) {
 		update_status = true;
@@ -977,7 +971,7 @@ int Tle8888::readPad(size_t pin) {
 
 brain_pin_diag_e Tle8888::getOutputDiag(size_t pin) {
 	if (diagResponse.hasElapsedMs(500)) {
-		// has been to long since we've recieved diagnostics
+		// has been too long since we've received diagnostics
 		return PIN_DRIVER_OFF;
 	}
 	/* OUT1..OUT4, indexes 0..3 */
@@ -1055,8 +1049,6 @@ brain_pin_diag_e Tle8888::getDiag(size_t pin)
 }
 
 int Tle8888::chip_init_data() {
-	int i;
-
 	int ret = 0;
 
 	o_direct_mask = 0;
@@ -1080,7 +1072,7 @@ int Tle8888::chip_init_data() {
 		palClearPort(cfg->inj_en.port, PAL_PORT_BIT(cfg->inj_en.pad));
 	}
 
-	for (i = 0; i < TLE8888_DIRECT_MISC; i++) {
+	for (int i = 0; i < TLE8888_DIRECT_MISC; i++) {
 		/* Set some invalid default OUT number...
 		 * Keeping this register default (0) will map one of input signals
 		 * to OUT5 and no control over SPI for this pin will be possible.
@@ -1091,7 +1083,7 @@ int Tle8888::chip_init_data() {
 		InConfig[i] = 25 - 1 - 4;
 	}
 
-	for (i = 0; i < TLE8888_DIRECT_OUTPUTS; i++) {
+	for (int i = 0; i < TLE8888_DIRECT_OUTPUTS; i++) {
 		int out = -1;
 		uint32_t mask;
 
@@ -1235,7 +1227,7 @@ int Tle8888::deinit()
 
 int tle8888_add(brain_pin_e base, unsigned int index, const tle8888_config *cfg) {
 
-	efiAssert(OBD_PCM_Processor_Fault, cfg != NULL, "8888CFG", 0)
+	efiAssert(ObdCode::OBD_PCM_Processor_Fault, cfg != NULL, "8888CFG", 0)
 
 	/* no config or no such chip */
 	if ((!cfg) || (!cfg->spi_bus) || (index >= BOARD_TLE8888_COUNT))

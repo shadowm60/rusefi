@@ -10,50 +10,54 @@
 #include "proteus_meta.h"
 
 static const brain_pin_e injPins[] = {
-	PROTEUS_LS_1,
-	PROTEUS_LS_2,
-	PROTEUS_LS_3,
-	PROTEUS_LS_4,
-	PROTEUS_LS_5,
-	PROTEUS_LS_6,
-	PROTEUS_LS_7,
-	PROTEUS_LS_8,
-	PROTEUS_LS_9,
-	PROTEUS_LS_10,
-	PROTEUS_LS_11,
-	PROTEUS_LS_12
+    Gpio::PROTEUS_LS_1,
+	Gpio::PROTEUS_LS_2,
+	Gpio::PROTEUS_LS_3,
+	Gpio::PROTEUS_LS_4,
+	Gpio::PROTEUS_LS_5,
+	Gpio::PROTEUS_LS_6,
+	Gpio::PROTEUS_LS_7,
+	Gpio::PROTEUS_LS_8,
+	Gpio::PROTEUS_LS_9,
+	Gpio::PROTEUS_LS_10,
+	Gpio::PROTEUS_LS_11,
+	Gpio::PROTEUS_LS_12
 };
 
 static const brain_pin_e ignPins[] = {
-	PROTEUS_IGN_1,
-	PROTEUS_IGN_2,
-	PROTEUS_IGN_3,
-	PROTEUS_IGN_4,
-	PROTEUS_IGN_5,
-	PROTEUS_IGN_6,
-	PROTEUS_IGN_7,
-	PROTEUS_IGN_8,
-	PROTEUS_IGN_9,
-	PROTEUS_IGN_10,
-	PROTEUS_IGN_11,
-	PROTEUS_IGN_12,
+	Gpio::PROTEUS_IGN_1,
+	Gpio::PROTEUS_IGN_2,
+	Gpio::PROTEUS_IGN_3,
+	Gpio::PROTEUS_IGN_4,
+	Gpio::PROTEUS_IGN_5,
+	Gpio::PROTEUS_IGN_6,
+	Gpio::PROTEUS_IGN_7,
+	Gpio::PROTEUS_IGN_8,
+	Gpio::PROTEUS_IGN_9,
+	Gpio::PROTEUS_IGN_10,
+	Gpio::PROTEUS_IGN_11,
+	Gpio::PROTEUS_IGN_12,
 };
 
 static void setInjectorPins() {
 	copyArray(engineConfiguration->injectionPins, injPins);
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 }
 
 static void setIgnitionPins() {
 	copyArray(engineConfiguration->ignitionPins, ignPins);
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
 }
 
-static void setLedPins() {
-	// PE3 is error LED, configured in board.mk
-	engineConfiguration->communicationLedPin = Gpio::E4;
-	engineConfiguration->runningLedPin = Gpio::E5;
-	engineConfiguration->warningLedPin = Gpio::E6;
+// PE3 is error LED, configured in board.mk
+Gpio getCommsLedPin() {
+	return Gpio::E4;
+}
+
+Gpio getRunningLedPin() {
+	return Gpio::E5;
+}
+
+Gpio getWarningLedPin() {
+	return Gpio::E6;
 }
 
 static void setupVbatt() {
@@ -83,8 +87,6 @@ static void setupEtb() {
 	engineConfiguration->etbIo[0].directionPin1 = Gpio::D10;
 	// Disable pin
 	engineConfiguration->etbIo[0].disablePin = Gpio::D11;
-	// Unused
-	engineConfiguration->etbIo[0].directionPin2 = Gpio::Unassigned;
 
 	// Throttle #2
 	// PWM pin
@@ -93,8 +95,6 @@ static void setupEtb() {
 	engineConfiguration->etbIo[1].directionPin1 = Gpio::D9;
 	// Disable pin
 	engineConfiguration->etbIo[1].disablePin = Gpio::D8;
-	// Unused
-	engineConfiguration->etbIo[1].directionPin2 = Gpio::Unassigned;
 
 	// we only have pwm/dir, no dira/dirb
 	engineConfiguration->etb_use_two_wires = false;
@@ -120,6 +120,7 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->tps1_1AdcChannel = PROTEUS_IN_TPS;
 	engineConfiguration->map.sensor.hwChannel = PROTEUS_IN_MAP;
 
+    // see also enableAemXSeries
 	// pin #28 WBO AFR "Analog Volt 10"
 	engineConfiguration->afr.hwChannel = PROTEUS_IN_ANALOG_VOLT_10;
 }
@@ -136,11 +137,10 @@ static void setupSdCard() {
 
 void setBoardConfigOverrides() {
 	setupSdCard();
-	setLedPins();
 	setupVbatt();
 
-	engineConfiguration->clt.config.bias_resistor = 2700;
-	engineConfiguration->iat.config.bias_resistor = 2700;
+	engineConfiguration->clt.config.bias_resistor = PROTEUS_DEFAULT_AT_PULLUP;
+	engineConfiguration->iat.config.bias_resistor = PROTEUS_DEFAULT_AT_PULLUP;
 
 	engineConfiguration->canTxPin = Gpio::D1;
 	engineConfiguration->canRxPin = Gpio::D0;
@@ -159,7 +159,7 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
+
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
@@ -171,19 +171,12 @@ void setBoardDefaultConfiguration() {
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 8;
-	engineConfiguration->specs.firingOrder = FO_1_8_7_2_6_5_4_3;
-
 	engineConfiguration->enableSoftwareKnock = true;
 
-	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;
-
 #if HW_PROTEUS & EFI_PROD_CODE
-	engineConfiguration->mainRelayPin = PROTEUS_LS_13;
-	engineConfiguration->fanPin = PROTEUS_LS_15;
-	engineConfiguration->fuelPumpPin = PROTEUS_LS_16;
+	engineConfiguration->mainRelayPin = Gpio::PROTEUS_LS_12;
+	engineConfiguration->fanPin = Gpio::PROTEUS_LS_11;
+	engineConfiguration->fuelPumpPin = Gpio::PROTEUS_LS_10;
 #endif // HW_PROTEUS
 
 	// If we're running as hardware CI, borrow a few extra pins for that
@@ -198,10 +191,130 @@ void boardPrepareForStop() {
 	palEnableLineEvent(PAL_LINE(GPIOD, 0), PAL_EVENT_MODE_RISING_EDGE);
 }
 
+#if HW_PROTEUS
+static Gpio PROTEUS_ME17_ADAPTER_OUTPUTS[] = {
+    Gpio::PROTEUS_LS_1,
+};
+
+static Gpio PROTEUS_SBC_OUTPUTS[] = {
+    Gpio::PROTEUS_LS_14, // inj 1 four times
+    Gpio::PROTEUS_LS_14, // inj 1 four times
+    Gpio::PROTEUS_LS_14, // inj 1 four times
+    Gpio::PROTEUS_LS_14, // inj 1 four times
+
+    Gpio::PROTEUS_LS_15, // inj 4 four times
+    Gpio::PROTEUS_LS_15, // inj 4 four times
+    Gpio::PROTEUS_LS_15, // inj 4 four times
+    Gpio::PROTEUS_LS_15, // inj 4 four times
+
+};
+
+static Gpio PROTEUS_CANAM_OUTPUTS[] = {
+    Gpio::PROTEUS_LS_1, // inj 1
+    Gpio::PROTEUS_LS_2, // inj 2
+    Gpio::PROTEUS_LS_3, // inj 3
+    Gpio::PROTEUS_LS_12, // main relay
+    Gpio::PROTEUS_LS_14, // starter
+    Gpio::PROTEUS_LS_15, // intercooler fan
+    Gpio::PROTEUS_LS_4, // accessories relay
+	Gpio::PROTEUS_IGN_1,
+	Gpio::PROTEUS_IGN_2,
+	Gpio::PROTEUS_IGN_3,
+};
+
+static Gpio PROTEUS_HARLEY_OUTPUTS[] = {
+    Gpio::PROTEUS_LS_1,
+    Gpio::PROTEUS_LS_2,
+	Gpio::PROTEUS_IGN_1,
+	Gpio::PROTEUS_IGN_2,
+	Gpio::PROTEUS_IGN_8, // ACR
+	Gpio::PROTEUS_IGN_9, // ACR2
+};
+
+int getBoardMetaLowSideOutputsCount() {
+    if (engineConfiguration->engineType == engine_type_e::MAVERICK_X3) {
+        return getBoardMetaOutputsCount();
+    }
+    if (engineConfiguration->engineType == engine_type_e::HARLEY) {
+        return getBoardMetaOutputsCount();
+    }
+    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+        return getBoardMetaOutputsCount();
+    }
+    return 16;
+}
+
+static Gpio PROTEUS_OUTPUTS[] = {
+Gpio::PROTEUS_LS_1,
+Gpio::PROTEUS_LS_2,
+Gpio::PROTEUS_LS_3,
+Gpio::PROTEUS_LS_4,
+Gpio::PROTEUS_LS_5,
+Gpio::PROTEUS_LS_6,
+Gpio::PROTEUS_LS_7,
+Gpio::PROTEUS_LS_8,
+Gpio::PROTEUS_LS_9,
+Gpio::PROTEUS_LS_10,
+Gpio::PROTEUS_LS_11,
+Gpio::PROTEUS_LS_12,
+Gpio::PROTEUS_LS_13,
+Gpio::PROTEUS_LS_14,
+Gpio::PROTEUS_LS_15,
+Gpio::PROTEUS_LS_16,
+	Gpio::PROTEUS_IGN_1,
+	Gpio::PROTEUS_IGN_2,
+	Gpio::PROTEUS_IGN_3,
+	Gpio::PROTEUS_IGN_4,
+	Gpio::PROTEUS_IGN_5,
+	Gpio::PROTEUS_IGN_6,
+	Gpio::PROTEUS_IGN_7,
+	Gpio::PROTEUS_IGN_8,
+	Gpio::PROTEUS_IGN_9,
+	Gpio::PROTEUS_IGN_10,
+	Gpio::PROTEUS_IGN_11,
+	Gpio::PROTEUS_IGN_12,
+	Gpio::PROTEUS_HS_1,
+	Gpio::PROTEUS_HS_2,
+	Gpio::PROTEUS_HS_3,
+	Gpio::PROTEUS_HS_4
+};
+
 int getBoardMetaOutputsCount() {
+    if (engineConfiguration->engineType == engine_type_e::MAVERICK_X3) {
+        return efi::size(PROTEUS_CANAM_OUTPUTS);
+    }
+    if (engineConfiguration->engineType == engine_type_e::ME17_9_MISC) {
+        return efi::size(PROTEUS_ME17_ADAPTER_OUTPUTS);
+    }
+    if (engineConfiguration->engineType == engine_type_e::HARLEY) {
+        return efi::size(PROTEUS_HARLEY_OUTPUTS);
+    }
+    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+        return efi::size(PROTEUS_SBC_OUTPUTS);
+    }
     return efi::size(PROTEUS_OUTPUTS);
 }
 
+int getBoardMetaDcOutputsCount() {
+    if (engineConfiguration->engineType == engine_type_e::ME17_9_MISC ||
+        engineConfiguration->engineType == engine_type_e::HARLEY ||
+        engineConfiguration->engineType == engine_type_e::MAVERICK_X3
+        ) {
+        return 1;
+    }
+    return 2;
+}
+
 Gpio* getBoardMetaOutputs() {
+    if (engineConfiguration->engineType == engine_type_e::MAVERICK_X3) {
+        return PROTEUS_CANAM_OUTPUTS;
+    }
+    if (engineConfiguration->engineType == engine_type_e::HARLEY) {
+        return PROTEUS_HARLEY_OUTPUTS;
+    }
+    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+        return PROTEUS_SBC_OUTPUTS;
+    }
     return PROTEUS_OUTPUTS;
 }
+#endif // HW_PROTEUS

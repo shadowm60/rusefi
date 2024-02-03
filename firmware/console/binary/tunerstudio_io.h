@@ -10,24 +10,17 @@
 #include "global.h"
 #include "tunerstudio_impl.h"
 
-#if (!TS_NO_PRIMARY && defined(TS_PRIMARY_PORT))
-	#define HAS_PRIMARY true
-#else
-	#define HAS_PRIMARY false
-#endif
-
-#if (!TS_NO_SECONDARY && defined(TS_SECONDARY_PORT))
-	#define HAS_SECONDARY true
-#else
-	#define HAS_SECONDARY false
-#endif
-
 #if EFI_USB_SERIAL
 #include "usbconsole.h"
 #endif // EFI_USB_SERIAL
 
 #if EFI_PROD_CODE
 #include "pin_repository.h"
+#endif
+
+#ifndef USART_CR2_STOP1_BITS
+// todo: acticulate why exactly does prometheus_469 as for this hack
+#define USART_CR2_STOP1_BITS 0
 #endif
 
 #define SCRATCH_BUFFER_PREFIX_SIZE 3
@@ -47,6 +40,9 @@ public:
 
 	// Base functions that use the above virtual implementation
 	size_t read(uint8_t* buffer, size_t size);
+
+	int bytesIn = 0;
+	int bytesOut = 0;
 
 #ifdef EFI_CAN_SERIAL
 	virtual	// CAN device needs this function to be virtual for small-packet optimization
@@ -70,7 +66,7 @@ public:
 	 * As soon as tsProcessOne was able to receive valid packet with valid size and crc
 	 * TsChannel becomes "in sync". That means it will react on any futher errors: it will
 	 * emit packet with error code and switch back to "not in sync" mode.
-	 * This insures that RE will send only one error message after lost of syncronization
+	 * This insures that RE will send only one error message after lost of synchronization
 	 * with TS.
 	 * Also while in "not in sync" state - tsProcessOne will not try to receive whole packet
 	 * by one read. Instead after getting packet size it will try to receive one byte of
@@ -84,7 +80,7 @@ private:
 // This class represents a channel for a physical async serial poart
 class SerialTsChannelBase : public TsChannelBase {
 public:
-	SerialTsChannelBase(const char *name) : TsChannelBase(name) {};
+	SerialTsChannelBase(const char *p_name) : TsChannelBase(p_name) {};
 	// Open the serial port with the specified baud rate
 	virtual void start(uint32_t baud) = 0;
 };
@@ -125,8 +121,6 @@ protected:
 #endif // HAL_USE_UART
 
 #define CRC_VALUE_SIZE 4
-// todo: double-check this
-#define CRC_WRAPPING_SIZE (CRC_VALUE_SIZE + 3)
 
 // that's 1 second
 #define BINARY_IO_TIMEOUT TIME_MS2I(1000)

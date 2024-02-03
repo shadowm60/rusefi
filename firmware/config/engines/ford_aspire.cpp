@@ -38,7 +38,7 @@ static const int8_t default_aspire_timing_table[16][16] = {
 #endif
 
 static void setDefaultAspireMaps() {
-#if IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT
+#if (IGN_RPM_COUNT == DEFAULT_IGN_RPM_COUNT) && (IGN_LOAD_COUNT == DEFAULT_IGN_LOAD_COUNT)
 	copyTable(config->ignitionTable, default_aspire_timing_table);
 #endif
 }
@@ -59,12 +59,12 @@ void setFordAspireEngineConfiguration() {
 
 //	engineConfiguration->ignitionPinMode = OM_INVERTED;
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.displacement = 1.3;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->displacement = 1.3;
 	// Denso 195500-2110
 	engineConfiguration->injector.flow = 119.8;
 
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 	engineConfiguration->globalTriggerAngleOffset = 175;
 
 	setDefaultAspireMaps();
@@ -73,15 +73,12 @@ void setFordAspireEngineConfiguration() {
 
 	setSingleCoilDwell();
 	engineConfiguration->ignitionMode = IM_ONE_COIL;
-	engineConfiguration->trigger.type = TT_FORD_ASPIRE;
+	engineConfiguration->trigger.type = trigger_type_e::TT_FORD_ASPIRE;
 
 	engineConfiguration->triggerInputDebugPins[0] = Gpio::C15;
 
 	engineConfiguration->injectionPins[4] = Gpio::Unassigned;
 	engineConfiguration->injectionPins[5] = Gpio::Unassigned;
-
-	engineConfiguration->HD44780width = 20;
-	engineConfiguration->HD44780height = 4;
 
 	// Frankenstein analog input #1: adc1
 	// Frankenstein analog input #2: adc3

@@ -10,7 +10,7 @@
 #include "trigger_structure.h"
 #include "trigger_state_generated.h"
 #include "trigger_state_primary_generated.h"
-#include "timer.h"
+#include <rusefi/timer.h>
 
 const char *getTrigger_event_e(trigger_event_e value);
 const char *getTrigger_value_e(TriggerValue value);
@@ -18,7 +18,7 @@ const char *getTrigger_value_e(TriggerValue value);
 struct TriggerStateListener {
 #if EFI_SHAFT_POSITION_INPUT
 	virtual void OnTriggerStateProperState(efitick_t nowNt) = 0;
-	virtual void OnTriggerSyncronization(bool wasSynchronized, bool isDecodingError) = 0;
+	virtual void OnTriggerSynchronization(bool wasSynchronized, bool isDecodingError) = 0;
 	virtual void OnTriggerSynchronizationLost() = 0;
 #endif // EFI_SHAFT_POSITION_INPUT
 };
@@ -50,7 +50,7 @@ class VvtTriggerConfiguration final : public TriggerConfiguration {
 public:
 	const int index;
 
-	VvtTriggerConfiguration(const char * prefix, const int index) : TriggerConfiguration(prefix), index(index) {
+	VvtTriggerConfiguration(const char * prefix, const int p_index) : TriggerConfiguration(prefix), index(p_index) {
 	}
 
 protected:
@@ -92,6 +92,13 @@ public:
 	 */
 	void incrementShaftSynchronizationCounter();
 
+#if EFI_UNIT_TEST
+	/**
+	 * used for trigger export only
+	 */
+	float gapRatio[PWM_PHASE_MAX_COUNT * 6];
+#endif // EFI_UNIT_TEST
+
 	int64_t getTotalEventCounter() const;
 
 	expected<TriggerDecodeResult> decodeTriggerEvent(
@@ -116,8 +123,6 @@ public:
 	efitick_t mostRecentSyncTime;
 
 	Timer previousEventTimer;
-
-	void setTriggerErrorState();
 
 	/**
 	 * current duration at index zero and previous durations are following
@@ -165,6 +170,7 @@ protected:
 	virtual void onTooManyTeeth(int, int) { }
 
 private:
+	void setTriggerErrorState(int errorIncrement = 1);
 	void resetCurrentCycleState();
 	bool isSyncPoint(const TriggerWaveform& triggerShape, trigger_type_e triggerType) const;
 
@@ -218,7 +224,7 @@ private:
 
 class VvtTriggerDecoder : public TriggerDecoderBase {
 public:
-	VvtTriggerDecoder(const char* name) : TriggerDecoderBase(name) { }
+	VvtTriggerDecoder(const char* p_name) : TriggerDecoderBase(p_name) { }
 
 	void onNotEnoughTeeth(int actual, int expected) override;
 	void onTooManyTeeth(int actual, int expected) override;

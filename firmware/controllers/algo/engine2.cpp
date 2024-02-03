@@ -33,11 +33,11 @@ WarningCodeState::WarningCodeState() {
 
 void WarningCodeState::clear() {
 	warningCounter = 0;
-	lastErrorCode = 0;
+	lastErrorCode = ObdCode::None;
 	recentWarnings.clear();
 }
 
-void WarningCodeState::addWarningCode(obd_code_e code) {
+void WarningCodeState::addWarningCode(ObdCode code) {
 	warningCounter++;
 	lastErrorCode = code;
 
@@ -69,7 +69,7 @@ bool WarningCodeState::isWarningNow() const {
 }
 
 // Check whether a particular warning is active
-bool WarningCodeState::isWarningNow(obd_code_e code) const {
+bool WarningCodeState::isWarningNow(ObdCode code) const {
 	warning_t* warn = recentWarnings.find(code);
 
 	// No warning found at all
@@ -79,27 +79,6 @@ bool WarningCodeState::isWarningNow(obd_code_e code) const {
 
 	// If the warning is old, it is not active
 	return !warn->LastTriggered.hasElapsedSec(maxI(3, engineConfiguration->warningPeriod));
-}
-
-void FuelConsumptionState::consumeFuel(float grams, efitick_t nowNt) {
-	m_consumedGrams += grams;
-
-	float elapsedSecond = m_timer.getElapsedSecondsAndReset(nowNt);
-
-	// If it's been a long time since last injection, ignore this pulse
-	if (elapsedSecond > 0.2f) {
-		m_rate = 0;
-	} else {
-		m_rate = grams / elapsedSecond;
-	}
-}
-
-float FuelConsumptionState::getConsumedGrams() const {
-	return m_consumedGrams;
-}
-
-float FuelConsumptionState::getConsumptionGramPerSecond() const {
-	return m_rate;
 }
 
 EngineState::EngineState() {
@@ -112,59 +91,83 @@ void EngineState::updateSlowSensors() {
 void EngineState::periodicFastCallback() {
 	ScopePerf perf(PE::EngineStatePeriodicFastCallback);
 
-#if EFI_ENGINE_CONTROL
+#if EFI_SHAFT_POSITION_INPUT
 	if (!engine->slowCallBackWasInvoked) {
-		warning(CUSTOM_SLOW_NOT_INVOKED, "Slow not invoked yet");
+		warning(ObdCode::CUSTOM_SLOW_NOT_INVOKED, "Slow not invoked yet");
 	}
 	efitick_t nowNt = getTimeNowNt();
-	
+
 	if (engine->rpmCalculator.isCranking()) {
 		crankingTimer.reset(nowNt);
 	}
 
-	running.timeSinceCrankingInSecs = crankingTimer.getElapsedSeconds(nowNt);
+	engine->fuelComputer.running.timeSinceCrankingInSecs = crankingTimer.getElapsedSeconds(nowNt);
 
 	recalculateAuxValveTiming();
 
 	int rpm = Sensor::getOrZero(SensorType::Rpm);
-	sparkDwell = engine->ignitionState.getSparkDwell(rpm);
-	dwellAngle = cisnan(rpm) ? NAN :  sparkDwell / getOneDegreeTimeMs(rpm);
+	engine->ignitionState.sparkDwell = engine->ignitionState.getSparkDwell(rpm);
+	engine->ignitionState.dwellAngle = cisnan(rpm) ? NAN :  engine->ignitionState.sparkDwell / getOneDegreeTimeMs(rpm);
 
 	// todo: move this into slow callback, no reason for IAT corr to be here
-	running.intakeTemperatureCoefficient = getIatFuelCorrection();
+	engine->fuelComputer.running.intakeTemperatureCoefficient = getIatFuelCorrection();
 	// todo: move this into slow callback, no reason for CLT corr to be here
-	running.coolantTemperatureCoefficient = getCltFuelCorrection();
+	engine->fuelComputer.running.coolantTemperatureCoefficient = getCltFuelCorrection();
 
 	engine->module<DfcoController>()->update();
+	// should be called before getInjectionMass() and getLimitingTimingRetard()
+	getLimpManager()->updateRevLimit(rpm);
 
 	// post-cranking fuel enrichment.
+	float m_postCrankingFactor = interpolate3d(
+		engineConfiguration->postCrankingFactor,
+		engineConfiguration->postCrankingCLTBins, Sensor::getOrZero(SensorType::Clt),
+		engineConfiguration->postCrankingDurationBins, engine->rpmCalculator.getRevolutionCounterSinceStart()
+	);
 	// for compatibility reasons, apply only if the factor is greater than unity (only allow adding fuel)
-	if (engineConfiguration->postCrankingFactor > 1.0f) {
-		// use interpolation for correction taper
-		running.postCrankingFuelCorrection = interpolateClamped(0.0f, engineConfiguration->postCrankingFactor,
-			engineConfiguration->postCrankingDurationSec, 1.0f, running.timeSinceCrankingInSecs);
-	} else {
-		running.postCrankingFuelCorrection = 1.0f;
+	// if the engine run time is past the last bin, disable ASE in case the table is filled with values more than 1.0, helps with compatibility
+	if ((m_postCrankingFactor < 1.0f) || (engine->rpmCalculator.getRevolutionCounterSinceStart() > engineConfiguration->postCrankingDurationBins[efi::size(engineConfiguration->postCrankingDurationBins)-1])) {
+		m_postCrankingFactor = 1.0f;
 	}
+	engine->fuelComputer.running.postCrankingFuelCorrection = m_postCrankingFactor;
 
-	cltTimingCorrection = getCltTimingCorrection();
+	engine->ignitionState.cltTimingCorrection = getCltTimingCorrection();
 
 	baroCorrection = getBaroCorrection();
 
 	auto tps = Sensor::get(SensorType::Tps1);
 	updateTChargeK(rpm, tps.value_or(0));
 
-	float injectionMass = getInjectionMass(rpm) * engine->engineState.lua.fuelMult + engine->engineState.lua.fuelAdd;
+	float untrimmedInjectionMass = getInjectionMass(rpm) * engine->engineState.lua.fuelMult + engine->engineState.lua.fuelAdd;
 	auto clResult = fuelClosedLoopCorrection();
 
-	// Store the pre-wall wetting injection duration for scheduling purposes only, not the actual injection duration
-	engine->engineState.injectionDuration = engine->module<InjectorModel>()->getInjectionDuration(injectionMass);
-
 	float fuelLoad = getFuelingLoad();
-	injectionOffset = getInjectionOffset(rpm, fuelLoad);
 
-	float ignitionLoad = getIgnitionLoad();
-	float advance = getAdvance(rpm, ignitionLoad) * engine->ignitionState.luaTimingMult + engine->ignitionState.luaTimingAdd;
+	injectionStage2Fraction = getStage2InjectionFraction(rpm, fuelLoad);
+	float stage2InjectionMass = untrimmedInjectionMass * injectionStage2Fraction;
+	float stage1InjectionMass = untrimmedInjectionMass - stage2InjectionMass;
+
+	// Store the pre-wall wetting injection duration for scheduling purposes only, not the actual injection duration
+	engine->engineState.injectionDuration = engine->module<InjectorModelPrimary>()->getInjectionDuration(stage1InjectionMass);
+	engine->engineState.injectionDurationStage2 =
+		engineConfiguration->enableStagedInjection
+		? engine->module<InjectorModelSecondary>()->getInjectionDuration(stage2InjectionMass)
+		: 0;
+
+	injectionOffset = getInjectionOffset(rpm, fuelLoad);
+	engine->lambdaMonitor.update(rpm, fuelLoad);
+
+	float l_ignitionLoad = getIgnitionLoad();
+	float baseAdvance = getAdvance(rpm, l_ignitionLoad) * engine->ignitionState.luaTimingMult + engine->ignitionState.luaTimingAdd;
+	float correctedIgnitionAdvance = baseAdvance
+			// Pull any extra timing for knock retard
+			- engine->module<KnockController>()->getKnockRetard()
+			// Degrees of timing REMOVED from actual timing during soft RPM limit window
+			- getLimpManager()->getLimitingTimingRetard();
+	// these fields are scaled_channel so let's only use for observability, with a local variables holding value while it matters locally
+	engine->ignitionState.baseIgnitionAdvance = baseAdvance;
+	engine->ignitionState.correctedIgnitionAdvance = correctedIgnitionAdvance;
+
 
 	// compute per-bank fueling
 	for (size_t i = 0; i < STFT_BANK_COUNT; i++) {
@@ -173,16 +176,18 @@ void EngineState::periodicFastCallback() {
 	}
 
 	// Now apply that to per-cylinder fueling and timing
-	for (size_t i = 0; i < engineConfiguration->specs.cylindersCount; i++) {
+	for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
 		uint8_t bankIndex = engineConfiguration->cylinderBankSelect[i];
-		auto bankTrim =engine->stftCorrection[bankIndex];
+		auto bankTrim = engine->stftCorrection[bankIndex];
 		auto cylinderTrim = getCylinderFuelTrim(i, rpm, fuelLoad);
 
 		// Apply both per-bank and per-cylinder trims
-		engine->engineState.injectionMass[i] = injectionMass * bankTrim * cylinderTrim;
+		engine->engineState.injectionMass[i] = untrimmedInjectionMass * bankTrim * cylinderTrim;
 
-		timingAdvance[i] = advance + getCylinderIgnitionTrim(i, rpm, ignitionLoad);
+		timingAdvance[i] = correctedIgnitionAdvance + getCombinedCylinderIgnitionTrim(i, rpm, l_ignitionLoad);
 	}
+
+	shouldUpdateInjectionTiming = getInjectorDutyCycle(rpm) < 90;
 
 	// TODO: calculate me from a table!
 	trailingSparkAngle = engineConfiguration->trailingSparkAngle;
@@ -196,11 +201,11 @@ void EngineState::periodicFastCallback() {
 #if EFI_ANTILAG_SYSTEM
 	engine->antilagController.update();
 #endif //EFI_ANTILAG_SYSTEM
-#endif // EFI_ENGINE_CONTROL
+#endif // EFI_SHAFT_POSITION_INPUT
 }
 
-void EngineState::updateTChargeK(int rpm, float tps) {
 #if EFI_ENGINE_CONTROL
+void EngineState::updateTChargeK(int rpm, float tps) {
 	float newTCharge = engine->fuelComputer.getTCharge(rpm, tps);
 	// convert to microsecs and then to seconds
 	efitick_t curTime = getTimeNowNt();
@@ -211,8 +216,8 @@ void EngineState::updateTChargeK(int rpm, float tps) {
 		sd.tChargeK = convertCelsiusToKelvin(sd.tCharge);
 		timeSinceLastTChargeK = curTime;
 	}
-#endif
 }
+#endif
 
 #if EFI_SIMULATOR
 #define VCS_VERSION "123"
@@ -244,7 +249,7 @@ bool isLockedFromUser() {
 	int lock = engineConfiguration->tuneHidingKey;
 	bool isLocked = lock > 0;
 	if (isLocked) {
-		firmwareError(OBD_PCM_Processor_Fault, "password protected");
+		criticalError("Tune is password protected. Please use console to unlock tune.");
 	}
 	return isLocked;
 }

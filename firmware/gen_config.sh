@@ -9,6 +9,9 @@ rm -f gen_config_board.log
 # todo: who is the consumer of this folder? shall we move that 'mkdir' command closer to usage?
 mkdir build
 
+cd ../java_tools
+./gradlew :config_definition:shadowJar
+cd ../firmware
 
 # todo: we have a bit of code duplication with build-firmware.yaml here :(
 config/boards/kinetis/config/gen_kinetis_config.sh
@@ -22,53 +25,56 @@ config/boards/subaru_eg33/config/gen_subaru_config.sh
 
 #
 # see also build-firmware where we compile all versions of firmware
-#
+# *** IMPORTANT *** most inclusive f407-discovery is last for a reason - we want it's generated files to be in repo
 #
 for BOARD in \
-   "hellen/alphax-2chan alphax-2chan" \
-   "hellen/alphax-4chan alphax-4chan" \
-   "hellen/alphax-8chan alphax-8chan" \
-   "hellen/harley81 harley81" \
-   "hellen/hellen128 hellen128 rusefi_hellen128mercedes.ini" \
-   "hellen/hellen121vag hellen121vag" \
-   "hellen/hellen121nissan hellen121nissan" \
-   "hellen/hellen154hyundai hellen154hyundai" \
-   "hellen/hellen88bmw hellen88bmw" \
-   "hellen/hellen72 hellen72" \
-   "hellen/hellen81 hellen81" \
-   "hellen/hellen-nb1 hellen-nb1" \
-   "hellen/hellen-gm-e67 hellen-gm-e67" \
-   "hellen/hellen64_miataNA6_94 hellenNA6" \
-   "hellen/hellenNA8_96 hellenNA8_96" \
-   "microrusefi mre_f7" \
-   "microrusefi mre_f4" \
-   "core8 core8" \
-   "48way 48way" \
-   "s105 s105" \
-   "frankenso frankenso_na6" \
-   "prometheus prometheus_469" \
-   "prometheus prometheus_405" \
-   "proteus proteus_f7" \
-   "proteus proteus_f4" \
-   "proteus proteus_h7" \
-   "f407-discovery f407-discovery" \
-   "f429-discovery f429-discovery" \
-   "atlas atlas"\
-   "tdg-pdm8 tdg-pdm8"\
+   "config/boards/hellen/alphax-2chan alphax-2chan" \
+   "config/boards/hellen/alphax-4chan alphax-4chan" \
+   "config/boards/hellen/alphax-4chan alphax-4chan_f7" \
+   "config/boards/hellen/alphax-8chan alphax-8chan" \
+   "config/boards/hellen/alphax-8chan alphax-8chan_f7" \
+   "config/boards/hellen/alphax-8chan-revA alphax-8chan-revA" \
+   "config/boards/hellen/hellen128 hellen128" \
+   "config/boards/hellen/hellen121vag hellen121vag" \
+   "config/boards/hellen/hellen121nissan hellen121nissan" \
+   "config/boards/hellen/hellen-honda-k hellen-honda-k" \
+   "config/boards/hellen/hellen154hyundai hellen154hyundai" \
+   "config/boards/hellen/hellen88bmw hellen88bmw" \
+   "config/boards/hellen/uaefi uaefi" \
+   "config/boards/hellen/hellen-112-17 hellen-112-17" \
+   "config/boards/hellen/hellen72 hellen72" \
+   "config/boards/hellen/hellen81 hellen81" \
+   "config/boards/hellen/hellen-nb1 hellen-nb1" \
+   "config/boards/hellen/hellen-gm-e67 hellen-gm-e67" \
+   "config/boards/hellen/hellen64_miataNA6_94 hellenNA6" \
+   "config/boards/hellen/hellenNA8_96 hellenNA8_96" \
+   "config/boards/hellen/small-can-board small-can-board" \
+   "config/boards/microrusefi mre_f7" \
+   "config/boards/microrusefi mre_f4" \
+   "config/boards/m74_9 m74_9" \
+   "config/boards/s105 s105" \
+   "config/boards/test-build-guards t-b-g" \
+   "config/boards/frankenso_na6 frankenso_na6" \
+   "config/boards/prometheus prometheus_469" \
+   "config/boards/prometheus prometheus_405" \
+   "config/boards/proteus proteus_f7" \
+   "config/boards/proteus proteus_f4" \
+   "config/boards/proteus proteus_h7" \
+   "config/boards/f429-discovery f429-discovery" \
+   "config/boards/f469-discovery f469-discovery" \
+   "config/boards/nucleo_f413 stm32f413_nucleo" \
+   "config/boards/nucleo_f429 stm32f429_nucleo" \
+   "config/boards/nucleo_f767 stm32f767_nucleo" \
+   "config/boards/nucleo_h743 nucleo_h743" \
+   "config/boards/atlas atlas"\
+   "config/boards/tdg-pdm8 tdg-pdm8"\
+   "config/boards/f407-discovery f407-discovery" \
+   "config/boards/at_start_f435 at_start_f435" \
    ; do
- BOARD_NAME=$(echo "$BOARD" | cut -d " " -f 1)
+ BOARD_DIR=$(echo "$BOARD" | cut -d " " -f 1)
  BOARD_SHORT_NAME=$(echo "$BOARD" | cut -d " " -f 2)
- INI=$(echo "$BOARD" | cut -d " " -f 3)
- ./gen_config_board.sh $BOARD_NAME $BOARD_SHORT_NAME $INI
- [ $? -eq 0 ] || { echo "ERROR generating board $BOARD_NAME $BOARD_SHORT_NAME $INI"; exit 1; }
+ ./gen_config_board.sh $BOARD_DIR $BOARD_SHORT_NAME
+ [ $? -eq 0 ] || { echo "ERROR generating board dir=[$BOARD_DIR] short=[$BOARD_SHORT_NAME]"; exit 1; }
 done
-
-#
-# TODO: it's time to kill the 'default' bundle concept and just live happily with explicit f407-discovery
-# default config should be generated after normal custom boards so that it would be default
-# firmware/controllers/generated/rusefi_generated.h file which would be pushed into VCS
-./gen_config_default.sh
-[ $? -eq 0 ] || { echo "ERROR generating default"; exit 1; }
-
 
 exit 0

@@ -6,6 +6,7 @@
 #include "pch.h"
 
 #include "fuel_pump.h"
+#include "bench_test.h"
 
 void FuelPumpController::onSlowCallback() {
 	auto timeSinceIgn = m_ignOnTimer.getElapsedSeconds();
@@ -20,7 +21,9 @@ void FuelPumpController::onSlowCallback() {
 
 	isFuelPumpOn = isPrime || engineTurnedRecently;
 
-	enginePins.fuelPumpRelay.setValue(isFuelPumpOn);
+    if (!isRunningBenchTest()) {
+	    enginePins.fuelPumpRelay.setValue("FP", isFuelPumpOn);
+	}
 }
 
 void FuelPumpController::onIgnitionStateChanged(bool ignitionOnParam) {

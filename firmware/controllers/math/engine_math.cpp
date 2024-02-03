@@ -30,11 +30,6 @@
 extern bool verboseMode;
 #endif /* EFI_UNIT_TEST */
 
-angle_t wrapAngleMethod(angle_t param, const char *msg, obd_code_e code) {
-	fixAngle(param, msg, code);
-	return param;
-}
-
 floatms_t getEngineCycleDuration(int rpm) {
 	return getCrankshaftRevolutionTimeMs(rpm) * (getEngineRotationState()->getOperationMode() == TWO_STROKE ? 1 : 2);
 }
@@ -85,7 +80,7 @@ floatms_t IgnitionState::getSparkDwell(int rpm) {
 	if (engine->rpmCalculator.isCranking()) {
 		dwellMs = engineConfiguration->ignitionDwellForCrankingMs;
 	} else {
-		efiAssert(CUSTOM_ERR_ASSERT, !cisnan(rpm), "invalid rpm", NAN);
+		efiAssert(ObdCode::CUSTOM_ERR_ASSERT, !cisnan(rpm), "invalid rpm", NAN);
 
 		baseDwell = interpolate2d(rpm, config->sparkDwellRpmBins, config->sparkDwellValues);
 		dwellVoltageCorrection = interpolate2d(
@@ -104,7 +99,7 @@ floatms_t IgnitionState::getSparkDwell(int rpm) {
 
 	if (cisnan(dwellMs) || dwellMs <= 0) {
 		// this could happen during engine configuration reset
-		warning(CUSTOM_ERR_DWELL_DURATION, "invalid dwell: %.2f at rpm=%d", dwellMs, rpm);
+		warning(ObdCode::CUSTOM_ERR_DWELL_DURATION, "invalid dwell: %.2f at rpm=%d", dwellMs, rpm);
 		return 0;
 	}
 	return dwellMs;
@@ -148,6 +143,7 @@ static const uint8_t order_1_3_7_2_6_5_4_8[] = { 1, 3, 7, 2, 6, 5, 4, 8 };
 static const uint8_t order_1_2_3_4_5_6_7_8[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 static const uint8_t order_1_5_4_8_6_3_7_2[] = { 1, 5, 4, 8, 6, 3, 7, 2 };
 static const uint8_t order_1_8_7_3_6_5_4_2[] = { 1, 8, 7, 3, 6, 5, 4, 2 };
+static const uint8_t order_1_5_4_8_3_7_2_6[] = { 1, 5, 4, 8, 3, 7, 2, 6 };
 
 // 9 cylinder
 static const uint8_t order_1_2_3_4_5_6_7_8_9[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
@@ -166,7 +162,7 @@ static const uint8_t order_1_14_9_4_7_12_15_6_13_8_3_16_11_2_5_10[] = {1, 14, 9,
 
 static size_t getFiringOrderLength() {
 
-	switch (engineConfiguration->specs.firingOrder) {
+	switch (engineConfiguration->firingOrder) {
 	case FO_1:
 		return 1;
 // 2 cylinder
@@ -206,6 +202,7 @@ static size_t getFiringOrderLength() {
 	case FO_1_2_3_4_5_6_7_8:
 	case FO_1_5_4_8_6_3_7_2:
 	case FO_1_8_7_3_6_5_4_2:
+	case FO_1_5_4_8_3_7_2_6:
 		return 8;
 
 // 9 cylinder radial
@@ -227,14 +224,13 @@ static size_t getFiringOrderLength() {
 		return 16;
 
 	default:
-		firmwareError(CUSTOM_OBD_UNKNOWN_FIRING_ORDER, "Invalid firing order: %d", engineConfiguration->specs.firingOrder);
+		firmwareError(ObdCode::CUSTOM_OBD_UNKNOWN_FIRING_ORDER, "Invalid firing order: %d", engineConfiguration->firingOrder);
 	}
 	return 1;
 }
 
-static const uint8_t* getFiringOrderTable()
-{
-	switch (engineConfiguration->specs.firingOrder) {
+static const uint8_t* getFiringOrderTable() {
+	switch (engineConfiguration->firingOrder) {
 	case FO_1:
 		return order_1;
 // 2 cylinder
@@ -293,7 +289,8 @@ static const uint8_t* getFiringOrderTable()
 		return order_1_5_4_8_6_3_7_2;
 	case FO_1_8_7_3_6_5_4_2:
 		return order_1_8_7_3_6_5_4_2;
-
+	case FO_1_5_4_8_3_7_2_6:
+		return order_1_5_4_8_3_7_2_6;
 
 // 9 cylinder
 	case FO_1_2_3_4_5_6_7_8_9:
@@ -319,7 +316,7 @@ static const uint8_t* getFiringOrderTable()
 		return order_1_14_9_4_7_12_15_6_13_8_3_16_11_2_5_10;
 
 	default:
-		firmwareError(CUSTOM_OBD_UNKNOWN_FIRING_ORDER, "Invalid firing order: %d", engineConfiguration->specs.firingOrder);
+		firmwareError(ObdCode::CUSTOM_OBD_UNKNOWN_FIRING_ORDER, "Invalid firing order: %d", engineConfiguration->firingOrder);
 	}
 
 	return NULL;
@@ -333,18 +330,18 @@ size_t getCylinderId(size_t index) {
 	const size_t firingOrderLength = getFiringOrderLength();
 
 	if (firingOrderLength < 1 || firingOrderLength > MAX_CYLINDER_COUNT) {
-		firmwareError(CUSTOM_FIRING_LENGTH, "fol %d", firingOrderLength);
+		firmwareError(ObdCode::CUSTOM_FIRING_LENGTH, "fol %d", firingOrderLength);
 		return 1;
 	}
-	if (engineConfiguration->specs.cylindersCount != firingOrderLength) {
+	if (engineConfiguration->cylindersCount != firingOrderLength) {
 		// May 2020 this somehow still happens with functional tests, maybe race condition?
-		firmwareError(CUSTOM_OBD_WRONG_FIRING_ORDER, "Wrong cyl count for firing order, expected %d cylinders", firingOrderLength);
+		firmwareError(ObdCode::CUSTOM_OBD_WRONG_FIRING_ORDER, "Wrong cyl count for firing order, expected %d cylinders", firingOrderLength);
 		return 1;
 	}
 
 	if (index >= firingOrderLength) {
 		// May 2020 this somehow still happens with functional tests, maybe race condition?
-		warning(CUSTOM_ERR_6686, "firing order index %d", index);
+		warning(ObdCode::CUSTOM_ERR_6686, "firing order index %d", index);
 		return 1;
 	}
 
@@ -384,11 +381,11 @@ ignition_mode_e getCurrentIgnitionMode() {
 #if EFI_SHAFT_POSITION_INPUT
 	// In spin-up cranking mode we don't have full phase sync info yet, so wasted spark mode is better
 	// However, only do this on even cylinder count engines: odd cyl count doesn't fire at all
-	if (ignitionMode == IM_INDIVIDUAL_COILS && (engineConfiguration->specs.cylindersCount % 2 == 0)) {
-		bool missingPhaseInfoForSequential = 
+	if (ignitionMode == IM_INDIVIDUAL_COILS && (engineConfiguration->cylindersCount % 2 == 0)) {
+		bool missingPhaseInfoForSequential =
 			!engine->triggerCentral.triggerState.hasSynchronizedPhase();
 
-		if (engine->rpmCalculator.isSpinningUp() || missingPhaseInfoForSequential) {
+		if (!engineConfiguration->oddFireEngine && (engine->rpmCalculator.isSpinningUp() || missingPhaseInfoForSequential)) {
 			ignitionMode = IM_WASTED_SPARK;
 		}
 	}
@@ -418,27 +415,19 @@ void prepareOutputSignals() {
 	engine->injectionEvents.invalidate();
 }
 
-angle_t getCylinderAngle(uint8_t cylinderIndex, uint8_t cylinderNumber) {
+angle_t getPerCylinderFiringOrderOffset(uint8_t cylinderIndex, uint8_t cylinderNumber) {
+	UNUSED(cylinderNumber); // TODO: technical debt
 	// base = position of this cylinder in the firing order.
 	// We get a cylinder every n-th of an engine cycle where N is the number of cylinders
-	auto base = engine->engineState.engineCycle * cylinderIndex / engineConfiguration->specs.cylindersCount;
+	auto firingOrderOffset = engine->engineState.engineCycle * cylinderIndex / engineConfiguration->cylindersCount;
 
-	// Plus or minus any adjustment if this is an odd-fire engine
-	auto adjustment = engineConfiguration->timing_offset_cylinder[cylinderNumber];
+	assertAngleRange(firingOrderOffset, "getPerCylinderFiringOrderOffset", ObdCode::CUSTOM_ERR_6566);
 
-	auto result = base + adjustment;
-
-	assertAngleRange(result, "getCylinderAngle", CUSTOM_ERR_6566);
-
-	return result;
+	return firingOrderOffset;
 }
 
 void setTimingRpmBin(float from, float to) {
 	setRpmBin(config->ignitionRpmBins, IGN_RPM_COUNT, from, to);
-}
-
-void setTimingLoadBin(float from, float to) {
-	setLinearCurve(config->ignitionLoadBins, from, to);
 }
 
 /**
@@ -455,13 +444,19 @@ void setFlatInjectorLag(float value) {
 BlendResult calculateBlend(blend_table_s& cfg, float rpm, float load) {
 	// If set to 0, skip the math as its disabled
 	if (cfg.blendParameter == GPPWM_Zero) {
-		return { 0, 0 };
+		return { 0, 0, 0 };
 	}
 
 	auto value = readGppwmChannel(cfg.blendParameter);
 
 	if (!value) {
-		return { 0, 0 };
+		return { 0, 0, 0 };
+	}
+
+	// Override Y axis value (if necessary)
+	if (cfg.yAxisOverride != GPPWM_Zero) {
+		// TODO: is this value_or(0) correct or even reasonable?
+		load = readGppwmChannel(cfg.yAxisOverride).value_or(0);
 	}
 
 	float tableValue = interpolate3d(
@@ -472,7 +467,7 @@ BlendResult calculateBlend(blend_table_s& cfg, float rpm, float load) {
 
 	float blendFactor = interpolate2d(value.Value, cfg.blendBins, cfg.blendValues);
 
-	return { blendFactor, 0.01f * blendFactor * tableValue };
+	return { value.Value, blendFactor, 0.01f * blendFactor * tableValue };
 }
 
 #endif /* EFI_ENGINE_CONTROL */

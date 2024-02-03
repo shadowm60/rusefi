@@ -12,31 +12,25 @@
 #include "hellen_meta.h"
 #include "defaults.h"
 
-static OutputPin alphaEn;
+// mm176 matches mm144 in terms of LED pinout
+#include "hellen_leds_144.cpp"
+
 static OutputPin alphaTachPullUp;
 static OutputPin alphaTempPullUp;
 static OutputPin alphaCrankPPullUp;
-static OutputPin alphaCrankNPullUp;
 static OutputPin alpha2stepPullDown;
 static OutputPin alphaCamPullDown;
-static OutputPin alphaCamVrPullUp;
+//static OutputPin alphaCamVrPullUp;
 static OutputPin alphaD2PullDown;
 static OutputPin alphaD3PullDown;
 static OutputPin alphaD4PullDown;
-static OutputPin alphaD5PullDown;
+//static OutputPin alphaD5PullDown;
 
 static void setInjectorPins() {
-	engineConfiguration->injectionPins[0] = H144_LS_1;
-	engineConfiguration->injectionPins[1] = H144_LS_2;
-	engineConfiguration->injectionPins[2] = H144_LS_3;
-	engineConfiguration->injectionPins[3] = H144_LS_4;
-
-	// Disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
+	engineConfiguration->injectionPins[0] = Gpio::MM176_INJ1;
+	engineConfiguration->injectionPins[1] = Gpio::MM176_INJ2;
+	engineConfiguration->injectionPins[2] = Gpio::MM176_INJ3;
+	engineConfiguration->injectionPins[3] = Gpio::MM176_INJ4;
 
 	engineConfiguration->clutchDownPin = Gpio::Unassigned;
 	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
@@ -52,112 +46,97 @@ static void setupEtb() {
 	// DIS - disables motor (enable low)
 
 	// PWM pin
-	engineConfiguration->etbIo[0].controlPin = H144_OUT_PWM2;
+	engineConfiguration->etbIo[0].controlPin = Gpio::MM176_OUT_PWM9;
 	// DIR pin
-	engineConfiguration->etbIo[0].directionPin1 = H144_GP1;
+	engineConfiguration->etbIo[0].directionPin1 = Gpio::MM176_GP6;
 	// Disable pin
-	engineConfiguration->etbIo[0].disablePin = H144_GP2;
-	// Unused
-	engineConfiguration->etbIo[0].directionPin2 = Gpio::Unassigned;
+	engineConfiguration->etbIo[0].disablePin = Gpio::MM176_GP7;
+
+	// PWM pin
+	engineConfiguration->etbIo[1].controlPin = Gpio::MM176_OUT_PWM18;
+	// DIR pin
+	engineConfiguration->etbIo[1].directionPin1 = Gpio::MM176_GP10;
+	// Disable pin
+	engineConfiguration->etbIo[1].disablePin = Gpio::MM176_GP11;
 
 	// we only have pwm/dir, no dira/dirb
 	engineConfiguration->etb_use_two_wires = false;
 }
 
 static void setIgnitionPins() {
-	engineConfiguration->ignitionPins[0] = H144_IGN_1;
-	engineConfiguration->ignitionPins[1] = H144_IGN_2;
-	engineConfiguration->ignitionPins[2] = H144_IGN_3;
-	engineConfiguration->ignitionPins[3] = H144_IGN_4;
-
-	// disable remainder
-	for (int i = 4; i < MAX_CYLINDER_COUNT; i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-	}
-
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-}
-
-static void setupVbatt() {
-	// 4.7k high side/4.7k low side = 2.0 ratio divider
-	engineConfiguration->analogInputDividerCoefficient = 2.0f;
-
-	// set vbatt_divider 5.835
-	// 33k / 6.8k
-	engineConfiguration->vbattDividerCoeff = (33 + 6.8) / 6.8; // 5.835
-
-	engineConfiguration->vbattAdcChannel = H144_IN_VBATT;
-
-	engineConfiguration->adcVcc = 3.29f;
+	engineConfiguration->ignitionPins[0] = Gpio::MM176_IGN1;
+	engineConfiguration->ignitionPins[1] = Gpio::MM176_IGN2;
+	engineConfiguration->ignitionPins[2] = Gpio::MM176_IGN3;
+	engineConfiguration->ignitionPins[3] = Gpio::MM176_IGN4;
 }
 
 static void setupDefaultSensorInputs() {
 	// trigger inputs, hall
-	engineConfiguration->triggerInputPins[0] = H144_IN_CRANK;
-	engineConfiguration->triggerInputPins[1] = H144_IN_CAM;
-	engineConfiguration->camInputs[0] = Gpio::Unassigned;
+	engineConfiguration->triggerInputPins[0] = Gpio::MM176_USB1ID;
+//	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_CAM;
+	engineConfiguration->camInputs[0] = Gpio::MM176_IN_D1;
+	engineConfiguration->camInputs[1] = Gpio::MM176_IN_D2;
+	engineConfiguration->camInputs[2] = Gpio::MM176_IN_D3;
+	engineConfiguration->camInputs[3] = Gpio::MM176_IN_D4;
+	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
+	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(MM176_IN_TPS_ANALOG, MM176_IN_TPS2_ANALOG);
 
-	setPPSInputs(H144_IN_PPS, H144_IN_AUX2);
+	setPPSInputs(MM176_IN_PPS1_ANALOG, MM176_IN_PPS2_ANALOG);
 
 	// random values to have valid config
 	engineConfiguration->tps1SecondaryMin = 1000;
 	engineConfiguration->tps1SecondaryMax = 0;
 
-	engineConfiguration->mafAdcChannel = EFI_ADC_NONE;
-	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2;
+
+//	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2;
 	engineConfiguration->baroSensor.type = MT_MPXH6400;
-	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3;
+//	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3;
 
-	engineConfiguration->afr.hwChannel = EFI_ADC_1;
+	engineConfiguration->afr.hwChannel = EFI_ADC_NONE;
 
-	engineConfiguration->clt.adcChannel = H144_IN_CLT;
+	engineConfiguration->clt.adcChannel = MM176_IN_CLT_ANALOG;
 
-	engineConfiguration->iat.adcChannel = H144_IN_IAT;
+	engineConfiguration->iat.adcChannel = MM176_IN_IAT_ANALOG;
 }
 
 void boardInitHardware() {
-	alphaEn.initPin("a-EN", H144_OUT_IO3);
-	alphaEn.setValue(1);
+	setHellenEnPin(Gpio::MM176_EN_PIN);
 
-	alphaTachPullUp.initPin("a-tach", H144_OUT_IO1);
-	alphaTempPullUp.initPin("a-temp", H144_OUT_IO4);
-	alphaCrankPPullUp.initPin("a-crank-p", H144_OUT_IO2);
-	alphaCrankNPullUp.initPin("a-crank-n", H144_OUT_IO5);
-	alpha2stepPullDown.initPin("a-2step", H144_OUT_IO7);
-	alphaCamPullDown.initPin("a-cam", H144_OUT_IO8);
-	alphaCamVrPullUp.initPin("a-cam-vr", H144_OUT_IO9);
-	alphaD2PullDown.initPin("a-d2", H144_LS_5);
-	alphaD3PullDown.initPin("a-d3", H144_LS_6);
-	alphaD4PullDown.initPin("a-d4", H144_LS_7);
-	alphaD5PullDown.initPin("a-d5", H144_LS_8);
+//	alphaTempPullUp.initPin("a-temp", Gpio::H144_OUT_IO4);
+	alphaCrankPPullUp.initPin("a-crank-p", Gpio::MM176_GP16);
+//	alphaTachPullUp.initPin("a-tach", Gpio::H144_OUT_IO6);
+//	alpha2stepPullDown.initPin("a-2step", Gpio::H144_OUT_IO7);
+//	alphaCamPullDown.initPin("a-cam", Gpio::H144_OUT_IO8);
+//	//alphaCamVrPullUp.initPin("a-cam-vr", Gpio::H144_OUT_IO9);
+	alphaD2PullDown.initPin("a-d2", Gpio::MM176_GP21);
+	alphaD3PullDown.initPin("a-d3", Gpio::MM176_GP22);
+	alphaD4PullDown.initPin("a-d4", Gpio::MM176_GP23);
+//	//alphaD5PullDown.initPin("a-d5", Gpio::H144_LS_8);
 	boardOnConfigurationChange(nullptr);
 }
 
 void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
-	alphaTachPullUp.setValue(engineConfiguration->boardUseTachPullUp);
-	alphaTempPullUp.setValue(engineConfiguration->boardUseTempPullUp);
+//	alphaTachPullUp.setValue(engineConfiguration->boardUseTachPullUp);
+//	alphaTempPullUp.setValue(engineConfiguration->boardUseTempPullUp);
 	alphaCrankPPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alphaCrankNPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alpha2stepPullDown.setValue(engineConfiguration->boardUse2stepPullDown);
-	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
-	alphaCamVrPullUp.setValue(engineConfiguration->boardUseCamVrPullUp);
-
+//	alpha2stepPullDown.setValue(engineConfiguration->boardUse2stepPullDown);
+//	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
+//	//alphaCamVrPullUp.setValue(engineConfiguration->boardUseCamVrPullUp);
+//
 	alphaD2PullDown.setValue(engineConfiguration->boardUseD2PullDown);
 	alphaD3PullDown.setValue(engineConfiguration->boardUseD3PullDown);
-	alphaD4PullDown.setValue(engineConfiguration->boardUseD4PullDown);
-	alphaD5PullDown.setValue(engineConfiguration->boardUseD5PullDown);
+//	alphaD4PullDown.setValue(engineConfiguration->boardUseD4PullDown);
+	//alphaD5PullDown.setValue(engineConfiguration->boardUseD5PullDown);
 }
 
 void setBoardConfigOverrides() {
-	setHellen144LedPins();
-	setupVbatt();
+	setHellenVbatt();
 
-	setHellenSdCardSpi2();
+	setHellenSdCardSpi1();
 
-	engineConfiguration->clt.config.bias_resistor = 4700;
-	engineConfiguration->iat.config.bias_resistor = 4700;
+    setDefaultHellenAtPullUps();
 
 	setHellenCan();
 }
@@ -167,42 +146,38 @@ void setBoardConfigOverrides() {
  *
  * See also setDefaultEngineConfiguration
  *
- * @todo    Add your board-specific code, if any.
  */
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 	setupEtb();
-	engineConfiguration->vvtPins[0] = H144_OUT_PWM7;
-	engineConfiguration->vvtPins[1] = H144_OUT_PWM8;
+//	engineConfiguration->vvtPins[0] = Gpio::H144_OUT_PWM7;
+//	engineConfiguration->vvtPins[1] = Gpio::H144_OUT_PWM8;
 
     engineConfiguration->boardUseTempPullUp = true;
-    // todo: use board ID condition? below D no SD, D and up with SD?
-    engineConfiguration->isSdCardEnabled = true;
 
-	engineConfiguration->acSwitch = Gpio::Unassigned;
-	engineConfiguration->fuelPumpPin = H144_OUT_IO12;
-	engineConfiguration->fanPin = H144_OUT_IO11;
-	engineConfiguration->mainRelayPin = H144_OUT_IO10;
-    engineConfiguration->tachOutputPin = H144_OUT_IO13;
-    engineConfiguration->boostControlPin = H144_OUT_PWM3;
+    setHellenMMbaro();
+
+//	engineConfiguration->mainRelayPin = Gpio::H144_OUT_IO10;
+//	engineConfiguration->fanPin = Gpio::H144_OUT_IO11;
+//	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_IO12;
+//    engineConfiguration->tachOutputPin = Gpio::H144_OUT_IO13;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
 
-	engineConfiguration->specs.cylindersCount = 4;
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->cylindersCount = 4;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
-	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->injectionMode = IM_SIMULTANEOUS;//IM_BATCH;// IM_SEQUENTIAL;
 
-	engineConfiguration->clutchDownPin = H144_IN_D_2;
-	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
-// ?	engineConfiguration->malfunctionIndicatorPin = Gpio::G4; //1E - Check Engine Light
-	engineConfiguration->vrThreshold[0].pin = H144_OUT_PWM6;
-	engineConfiguration->vrThreshold[1].pin = H144_OUT_PWM4;
+
+	engineConfiguration->vrThreshold[0].pin = Gpio::MM176_OUT_PWM11;
+	engineConfiguration->vrThreshold[1].pin = Gpio::MM176_OUT_PWM12;
+	//engineConfiguration->vrThreshold[2].pin = Gpio::MM176_OUT_PWM13;
+
+	hellenWbo();
 }
 
 void boardPrepareForStop() {
@@ -211,16 +186,75 @@ void boardPrepareForStop() {
 }
 
 static Gpio OUTPUTS[] = {
-		H144_LS_1,
-		H144_LS_2,
-		H144_LS_3,
-		H144_LS_4,
+	Gpio::MM176_INJ1, // 1D - Injector 1
+	Gpio::MM176_INJ2, // 2D - Injector 2
+	Gpio::MM176_INJ3, // 3D - Injector 3
+	Gpio::MM176_INJ4, // 4D - Injector 4
+	Gpio::MM176_INJ5, // 5D - Injector 5
+
+	Gpio::MM176_INJ6, // 6D - Injector 6
+	Gpio::MM176_INJ7, // 7D - Injector 7
+	Gpio::MM176_OUT_PWM1, // 8D - VVT 1
+	Gpio::MM176_GP3, // 9D - Fuel Pump
+	Gpio::MM176_GP2, // 10D - Fan
+
+	Gpio::MM176_GP1, // 11D - Main Relay
+	Gpio::MM176_OUT_IO8, // 12D - NOS
+	Gpio::MM176_INJ8, // 13D - Injector 8
+	Gpio::MM176_OUT_PWM2, // 14D - VVT 2
+	Gpio::MM176_OUT_IO13, // 15D - Tachometer
+
+	Gpio::MM176_OUT_PWM6, // 16C - Low Side 1
+	Gpio::MM176_GP17, // 19D - Injector 9
+	Gpio::MM176_OUT_PWM3, // 20D - VVT 3
+	Gpio::MM176_OUT_PWM4, // 21D - VVT 4
+	Gpio::MM176_OUT_PWM5, // 22C - Boost
+
+	Gpio::MM176_OUT_PWM7, // 23C - Low Side 2
+	Gpio::MM176_GP20, // 24D - Injector 12
+	Gpio::MM176_GP19, // 25D - Injector 11
+	Gpio::MM176_GP18, // 26D - Injector 10
+	Gpio::MM176_OUT_IO3, // 8C - Low Side 3
+
+	Gpio::MM176_OUT_IO4, // 9C - Low Side 4
+	Gpio::MM176_OUT_IO5, // 17C - Low Side 5
+	Gpio::MM176_OUT_IO6, // 25C - Low Side 6
+	Gpio::MM176_OUT_IO7, // 34C - Low Side 7
+	Gpio::MM176_OUT_PWM8, // 5C - High Side 1
+
+	Gpio::MM176_OUT_IO2, // 6C - High Side 2
+	Gpio::MM176_OUT_IO1, // 7C - High Side 3
+	Gpio::MM176_IGN1, // 11C - Ignition 1
+	Gpio::MM176_IGN3, // 13C - Ignition 3
+	Gpio::MM176_IGN5, // 14C - Ignition 5
+
+//	Gpio::MM176_IGN8, // 15C - Ignition 8
+//
+//	Gpio::MM176_IGN2, // 19C - Ignition 2
+//	Gpio::MM176_IGN4, // 20C - Ignition 4
+//	Gpio::MM176_IGN7, // 21C - Ignition 7
+//	Gpio::MM176_SPI3_MISO, // 23C - Ignition 10
+//
+//	Gpio::MM176_IGN6, // 28C - Ignition 6
+//	Gpio::MM176_SPI3_SCK, // 29C - Ignition 9
+//	Gpio::MM176_SPI3_MOSI, // 30C - Ignition 11
+//	Gpio::MM176_SPI3_CS, // 31C - Ignition 12
+
+
 };
 
 int getBoardMetaOutputsCount() {
     return efi::size(OUTPUTS);
 }
 
+int getBoardMetaLowSideOutputsCount() {
+    return getBoardMetaOutputsCount() - 6;
+}
+
 Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
+}
+
+int getBoardMetaDcOutputsCount() {
+    return 2;
 }

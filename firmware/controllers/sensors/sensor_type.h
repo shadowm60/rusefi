@@ -27,11 +27,16 @@ enum class SensorType : unsigned char {
 	Map,
 	Maf,
 
-	OilPressure, // 6
+	AmbientTemperature,
+
+	OilPressure,
+	OilTemperature,
 
 	FuelPressureLow, // in kPa
 	FuelPressureHigh, // in kPa
 	FuelPressureInjector,
+
+	FuelTemperature,
 
 	// This is the "resolved" position, potentially composited out of the following two
 	Tps1, // 10
@@ -70,6 +75,7 @@ enum class SensorType : unsigned char {
 	FuelLevel,
 
 	VehicleSpeed,
+	WheelSlipRatio,
 
 	TurbochargerSpeed,
 
@@ -81,14 +87,24 @@ enum class SensorType : unsigned char {
 
 	InputShaftSpeed,
 
-	EGT1,
-	EGT2,
+// todo: migrate to SensorType framework!
+//	EGT1,
+//	EGT2,
 
 	Maf2,	// Second bank MAF sensor
 
 	Map2,
 	MapSlow2,
 	MapFast2,
+
+	// Pressure sensor after compressor, before intercooler
+	CompressorDischargePressure,
+	CompressorDischargeTemperature,
+
+	// Pressure sensor before the throttle, after any turbo/etc
+	ThrottleInletPressure,
+
+	DetectedGear,
 
 	// analog voltage inputs for Lua
 	AuxAnalog1,
@@ -102,6 +118,8 @@ enum class SensorType : unsigned char {
 
 	LuaGauge1,
 	LuaGauge2,
+
+  IgnKeyVoltage,
 
 	AuxLinear1,
 	AuxLinear2,

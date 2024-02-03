@@ -1,7 +1,8 @@
 package com.rusefi.binaryprotocol;
 
 import com.devexperts.logging.Logging;
-import com.rusefi.io.IoStream;
+import com.rusefi.config.generated.Fields;
+import com.rusefi.util.HexBinary;
 
 import java.util.zip.CRC32;
 
@@ -33,7 +34,7 @@ public class IoHelper {
      */
     public static byte[] makeCrc32Packet(byte[] command) {
         if (log.debugEnabled())
-            log.info("makeCrc32Packet: raw packet " + IoStream.printByteArray(command));
+            log.info("makeCrc32Packet: raw packet " + HexBinary.printByteArray(command));
         byte[] packet = new byte[command.length + 6];
 
         putShort(packet, 0, command.length);
@@ -65,6 +66,10 @@ public class IoHelper {
     public static void putShort(byte[] packet, int offset, int value) {
         packet[offset + 1] = (byte) value;
         packet[offset] = (byte) (value >> 8);
+    }
+
+    public static boolean checkResponseCode(byte[] response) {
+        return checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK);
     }
 
     /**

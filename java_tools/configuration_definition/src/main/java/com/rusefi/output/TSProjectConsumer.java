@@ -1,7 +1,7 @@
 package com.rusefi.output;
 
 import com.rusefi.*;
-import com.rusefi.util.LazyFile;
+import com.rusefi.util.LazyFileImpl;
 import com.rusefi.util.Output;
 import com.rusefi.util.SystemOut;
 
@@ -21,18 +21,18 @@ public class TSProjectConsumer implements ConfigurationConsumer {
     public static final String SETTING_CONTEXT_HELP = "SettingContextHelp";
 
     private final String tsPath;
-    private final ReaderState state;
+    private final ReaderStateImpl state;
     private int totalTsSize;
     private final TsOutput tsOutput;
 
-    public TSProjectConsumer(String tsPath, ReaderState state) {
+    public TSProjectConsumer(String tsPath, ReaderStateImpl state) {
         this.tsPath = tsPath;
         tsOutput = new TsOutput(true);
         this.state = state;
     }
 
     // also known as TS tooltips
-    public StringBuilder getSettingContextHelp() {
+    public String getSettingContextHelpForUnitTest() {
         return tsOutput.getSettingContextHelp();
     }
 
@@ -41,8 +41,8 @@ public class TSProjectConsumer implements ConfigurationConsumer {
         SystemOut.println("Got " + tsContent.getPrefix().length() + "/" + tsContent.getPostfix().length() + " of " + TS_FILE_INPUT_NAME);
 
         // File.getPath() would eliminate potential separator at the end of the path
-        String fileName = getTsFileOutputName(new File(tsPath).getPath());
-        Output tsHeader = new LazyFile(fileName);
+        String fileName = getTsFileOutputName(new File(ConfigDefinitionRootOutputFolder.getValue() + tsPath).getPath());
+        Output tsHeader = new LazyFileImpl(fileName);
         writeContent(fieldsSection, tsContent, tsHeader);
     }
 
@@ -56,7 +56,7 @@ public class TSProjectConsumer implements ConfigurationConsumer {
         tsHeader.write(fieldsSection);
         if (tsOutput.getSettingContextHelp().length() > 0) {
             tsHeader.write("[" + SETTING_CONTEXT_HELP + "]" + ToolUtil.EOL);
-            tsHeader.write(tsOutput.getSettingContextHelp().toString() + ToolUtil.EOL + ToolUtil.EOL);
+            tsHeader.write(tsOutput.getSettingContextHelp() + ToolUtil.EOL + ToolUtil.EOL);
             tsHeader.write("; " + SETTING_CONTEXT_HELP_END + ToolUtil.EOL);
         }
         tsHeader.write("; " + CONFIG_DEFINITION_END + ToolUtil.EOL);
@@ -90,20 +90,20 @@ public class TSProjectConsumer implements ConfigurationConsumer {
 
             if (line.contains(TS_CONDITION)) {
                 String token = getToken(line);
-                String strValue = state.variableRegistry.get(token);
+                String strValue = state.getVariableRegistry().get(token);
                 boolean value = Boolean.parseBoolean(strValue);
                 if (!value)
                     continue; // skipping this line
                 line = removeToken(line);
             }
 
-            line = state.variableRegistry.applyVariables(line);
+            line = state.getVariableRegistry().applyVariables(line);
 
             if (isBeforeStartTag)
                 prefix.append(line + ToolUtil.EOL);
 
             if (isAfterEndTag)
-                postfix.append(state.variableRegistry.applyVariables(line) + ToolUtil.EOL);
+                postfix.append(state.getVariableRegistry().applyVariables(line) + ToolUtil.EOL);
         }
         r.close();
         return new TsFileContent(prefix.toString(), postfix.toString());
@@ -130,7 +130,7 @@ public class TSProjectConsumer implements ConfigurationConsumer {
     }
 
     private String getTsFileOutputName(String tsPath) {
-        return tsPath + File.separator + state.tsFileOutputName;
+        return tsPath + File.separator + state.getTsFileOutputName();
     }
 
     public static String getTsFileInputName(String tsPath) {
@@ -143,12 +143,12 @@ public class TSProjectConsumer implements ConfigurationConsumer {
     }
 
     @Override
-    public void handleEndStruct(ReaderState readerState, ConfigStructure structure) throws IOException {
-        state.variableRegistry.register(structure.name + "_size", structure.getTotalSize());
-        totalTsSize = tsOutput.run(readerState, structure, 0);
+    public void handleEndStruct(ReaderState readerState, ConfigStructure structure) {
+        state.getVariableRegistry().register(structure.getName() + "_size", structure.getTotalSize());
+        totalTsSize = tsOutput.run(readerState, structure, 0, "", "");
 
-        if (state.stack.isEmpty()) {
-            state.variableRegistry.register("TOTAL_CONFIG_SIZE", totalTsSize);
+        if (state.isStackEmpty()) {
+            state.getVariableRegistry().register("TOTAL_CONFIG_SIZE", totalTsSize);
         }
     }
 

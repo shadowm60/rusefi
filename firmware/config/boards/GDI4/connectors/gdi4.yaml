@@ -17,27 +17,51 @@ pins:
 
   - pin: 44a
     function: Injector Control 1
-    color: blue
+    color: green
 
   - pin: 45a
-    function: Injector Control 2
-    color: blue
+    function: Injector Control 5
+    color: grey
 
   - pin: 46a
     function: Injector Control 3
     color: blue
 
   - pin: 47a
+    function: Injector Control 6 or HPFP Control
+    color: yellow
+
+  - pin: 48a
+    function: Injector Control 2
+    color: white
+
+  - pin: 49a
     function: Injector Control 4
-    color: blue
+    color: orange/brown
 
   - pin: 52a
     function: CAN High
-    color: yellow
+    color: green
 
   - pin: 53a
     function: CAN Low
-    color: yellow
+    color: blue
+
+  - pin: 82a
+    function: Pump Negative
+    color: white
+
+  - pin: 83a
+    function: Pump Negative
+    color: white
+
+  - pin: 84a
+    function: Pump Positive
+    color: green
+
+  - pin: 85a
+    function: Pump Positive
+    color: green
 
   - pin: 90a
     function: Injector Output 3 Negative
@@ -49,11 +73,11 @@ pins:
 
   - pin: 92a
     function: Injector Output 4 Negative
-    color: blue
+    color: brown
 
   - pin: 93a
     function: Injector Output 4 Negative
-    color: blue
+    color: brown
 
   - pin: 94a
     function: Injector Output 3 Positive
@@ -65,19 +89,19 @@ pins:
 
   - pin: 96a
     function: Injector Output 4 Positive
-    color: blue
+    color: brown
 
   - pin: 97a
     function: Injector Output 4 Positive
-    color: blue
+    color: brown
 
   - pin: 114a
     function: Injector Output 1 Negative
-    color: blue
+    color: green
 
   - pin: 115a
     function: Injector Output 6 Negative
-    color: green
+    color: yellow
 
   - pin: 116a
     function: Injector Output 5 Positive
@@ -89,25 +113,26 @@ pins:
 
   - pin: 118a
     function: Injector Output 1 Positive
-    color: blue
+    color: green
 
   - pin: 119a
     function: Injector Output 2 Negative
-    color: blue
+    color: white
 
   - pin: 120a
     function: Injector Output 6 Positive
-    color: green
+    color: yellow
 
   - pin: 121a
     function: Injector Output 2 Positive
-    color: blue
+    color: white
 
 
 info:
   title: GDI4
   name: GDI4
   board_url: https://rusefi.com/s/gdi4
+  directory: GDI4
   image:
     file: 121pin.jpg
 #copy-paste of firmware/config/boards/hellen/hellen121vag/connectors/ yaml file

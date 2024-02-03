@@ -106,16 +106,16 @@ int HIP9011::getGainIndex(DEFINE_HIP_PARAMS) {
  * 'TC is typically TINT/(2*Pi*VOUT)'
  * Knock Sensor Training TPIC8101, page 24
  */
-float HIP9011::getRpmByAngleWindowAndTimeUs(int timeUs, float angleWindowWidth) {
+float HIP9011::getRpmByAngleWindowAndTimeUs(int timeUs, float p_angleWindowWidth) {
 	/**
 	 * TINT = TC * 2 * PI * VOUT
 	 */
-	float integrationTimeUs = timeUs * 2 * CONST_PI * HIP9011_DESIRED_OUTPUT_VALUE;
+	float integrationTimeUs = timeUs * 2 * CONST_PI * HIP9011_ANALOG_OUTPUT_MAX;
 	/**
 	 * rpm = 60 seconds / time
 	 * '60000000' because revolutions per MINUTE in uS conversion
 	 */
-	float windowWidthMult = angleWindowWidth / 360.0f;
+	float windowWidthMult = p_angleWindowWidth / 360.0f;
 	return 60000000.0f / integrationTimeUs * windowWidthMult;
 }
 
@@ -143,7 +143,7 @@ void HIP9011::setAngleWindowWidth(DEFINE_HIP_PARAMS) {
 		GET_CONFIG_VALUE(knockDetectionWindowStart);
 	if (new_angleWindowWidth < 0) {
 #if EFI_PROD_CODE
-		warning(CUSTOM_KNOCK_WINDOW, "invalid knock window");
+		warning(ObdCode::CUSTOM_KNOCK_WINDOW, "invalid knock window");
 #endif
 		new_angleWindowWidth = 0;
 	}

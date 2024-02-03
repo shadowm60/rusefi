@@ -19,7 +19,6 @@
 #include "buffered_writer.h"
 #include "status_loop.h"
 #include "binary_logging.h"
-#include "tooth_logger.h"
 
 static bool fs_ready = false;
 
@@ -48,6 +47,7 @@ static int totalSyncCounter = 0;
 #define SD_STATE_CONNECTING "CONNECTING"
 #define SD_STATE_MSD "MSD"
 #define SD_STATE_NOT_CONNECTED "NOT_CONNECTED"
+#define SD_STATE_MMC_FAILED "MMC_CONNECT_FAILED"
 
 // todo: shall we migrate to enum with enum2string for consistency? maybe not until we start reading sdStatus?
 static const char *sdStatus = SD_STATE_INIT;
@@ -59,7 +59,7 @@ static const char *sdStatus = SD_STATE_INIT;
  * on't re-read SD card spi device after boot - it could change mid transaction (TS thread could preempt),
  * which will cause disaster (usually multiple-unlock of the same mutex in UNLOCK_SD_SPI)
  */
-spi_device_e mmcSpiDevice = SPI_NONE;
+static spi_device_e mmcSpiDevice = SPI_NONE;
 
 #define LOG_INDEX_FILENAME "index.txt"
 
@@ -79,8 +79,13 @@ MMCDriver MMCD1;
 /* MMC/SD over SPI driver configuration.*/
 static MMCConfig mmccfg = { NULL, &mmc_ls_spicfg, &mmc_hs_spicfg };
 
-#define LOCK_SD_SPI lockSpi(mmcSpiDevice)
-#define UNLOCK_SD_SPI unlockSpi(mmcSpiDevice)
+#if MMC_USE_MUTUAL_EXCLUSION == TRUE
+#define LOCK_SD_SPI()
+#define UNLOCK_SD_SPI()
+#else
+#define LOCK_SD_SPI() lockSpi(mmcSpiDevice)
+#define UNLOCK_SD_SPI() unlockSpi(mmcSpiDevice)
+#endif
 
 #endif /* HAL_USE_MMC_SPI */
 
@@ -203,7 +208,7 @@ static void createLogFile() {
 	FRESULT err = f_open(&FDLogFile, logName, FA_OPEN_ALWAYS | FA_WRITE);				// Create new file
 	if (err != FR_OK && err != FR_EXIST) {
 		sdStatus = SD_STATE_OPEN_FAILED;
-		warning(CUSTOM_ERR_SD_MOUNT_FAILED, "SD: mount failed");
+		warning(ObdCode::CUSTOM_ERR_SD_MOUNT_FAILED, "SD: mount failed");
 		printError("FS mount failed", err);	// else - show error
 		return;
 	}
@@ -211,7 +216,7 @@ static void createLogFile() {
 	err = f_lseek(&FDLogFile, f_size(&FDLogFile)); // Move to end of the file to append data
 	if (err) {
 		sdStatus = SD_STATE_SEEK_FAILED;
-		warning(CUSTOM_ERR_SD_SEEK_FAILED, "SD: seek failed");
+		warning(ObdCode::CUSTOM_ERR_SD_SEEK_FAILED, "SD: seek failed");
 		printError("Seek error", err);
 		return;
 	}
@@ -297,12 +302,12 @@ static void mmcUnMount() {
 	f_sync(&FDLogFile);							// sync ALL
 
 #if HAL_USE_MMC_SPI
-	mmcDisconnect(&MMCD1);						// Brings the driver in a state safe for card removal.
+	blkDisconnect(&MMCD1);						// Brings the driver in a state safe for card removal.
 	mmcStop(&MMCD1);							// Disables the MMC peripheral.
-	UNLOCK_SD_SPI;
+	UNLOCK_SD_SPI();
 #endif
 #ifdef EFI_SDC_DEVICE
-	sdcDisconnect(&EFI_SDC_DEVICE);
+	blkDisconnect(&EFI_SDC_DEVICE);
 	sdcStop(&EFI_SDC_DEVICE);
 #endif
 	f_mount(NULL, 0, 0);						// FATFS: Unregister work area prior to discard it
@@ -332,7 +337,9 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 		return nullptr;
 	}
 	
-	if (!engineConfiguration->isSdCardEnabled || mmcSpiDevice == SPI_NONE) {
+	if (!engineConfiguration->isSdCardEnabled ||
+		engineConfiguration->sdCardSpiDevice == SPI_NONE ||
+		!isBrainPinValid(engineConfiguration->sdCardCsPin)) {
 		return nullptr;
 	}
 
@@ -354,11 +361,11 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 	mmcStart(&MMCD1, &mmccfg);
 
 	// Performs the initialization procedure on the inserted card.
-	LOCK_SD_SPI;
+	LOCK_SD_SPI();
 	sdStatus = SD_STATE_CONNECTING;
-	if (mmcConnect(&MMCD1) != HAL_SUCCESS) {
-		sdStatus = SD_STATE_NOT_CONNECTED;
-		UNLOCK_SD_SPI;
+	if (blkConnect(&MMCD1) != HAL_SUCCESS) {
+		sdStatus = SD_STATE_MMC_FAILED;
+		UNLOCK_SD_SPI();
 		return nullptr;
 	}
 	// We intentionally never unlock in case of success, we take exclusive access of that spi device for SD use
@@ -384,7 +391,7 @@ static BaseBlockDevice* initializeMmcBlockDevice() {
 
 	sdcStart(&EFI_SDC_DEVICE, &sdcConfig);
 	sdStatus = SD_STATE_CONNECTING;
-	if (sdcConnect(&EFI_SDC_DEVICE) != HAL_SUCCESS) {
+	if (blkConnect(&EFI_SDC_DEVICE) != HAL_SUCCESS) {
 		sdStatus = SD_STATE_NOT_CONNECTED;
 		return nullptr;
 	}
@@ -404,8 +411,8 @@ static bool mountMmc() {
 #endif
 
 #if HAL_USE_USB_MSD
-	// Wait for the USB stack to wake up, or a 5 second timeout, whichever occurs first
-	msg_t usbResult = usbConnectedSemaphore.wait(TIME_MS2I(5000));
+	// Wait for the USB stack to wake up, or a 15 second timeout, whichever occurs first
+	msg_t usbResult = usbConnectedSemaphore.wait(TIME_MS2I(15000));
 
 	bool hasUsb = usbResult == MSG_OK;
 
@@ -546,12 +553,6 @@ void mlgLogger() {
 		}
 #endif
 
-		if (engineConfiguration->debugMode == DBG_SD_CARD) {
-			engine->outputChannels.debugIntField1 = totalLoggedBytes;
-			engine->outputChannels.debugIntField2 = totalWritesCounter;
-			engine->outputChannels.debugIntField3 = totalSyncCounter;
-			engine->outputChannels.debugIntField4 = fileCreatedCounter;
-		}
 
 		writeSdLogLine(logBuffer);
 
@@ -579,9 +580,12 @@ static void sdTriggerLogger() {
 	while (true) {
 		auto buffer = GetToothLoggerBufferBlocking();
 
-		logBuffer.write(reinterpret_cast<const char*>(buffer->buffer), buffer->nextIdx * sizeof(composite_logger_s));
+		// can return nullptr
+		if (buffer) {
+			logBuffer.write(reinterpret_cast<const char*>(buffer->buffer), buffer->nextIdx * sizeof(composite_logger_s));
 
-		ReturnToothLoggerBuffer(buffer);
+			ReturnToothLoggerBuffer(buffer);
+		}
 	}
 #endif /* EFI_TOOTH_LOGGER */
 }

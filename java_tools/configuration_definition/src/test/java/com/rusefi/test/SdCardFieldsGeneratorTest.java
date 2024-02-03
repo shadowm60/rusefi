@@ -2,29 +2,28 @@ package com.rusefi.test;
 
 import static org.junit.Assert.assertEquals;
 
-import com.rusefi.ReaderState;
-import com.rusefi.output.SdCardFieldsConsumer;
-import com.rusefi.util.LazyFile;
+import com.rusefi.ReaderStateImpl;
 
-import org.junit.Test;
+import com.rusefi.util.LazyFile;
+import org.junit.jupiter.api.Test;
 
 public class SdCardFieldsGeneratorTest {
     @Test
     public void outputs() {
         Actor actor = new Actor() {
             @Override
-            public void act(ReaderState state) {
-                state.variableRegistry.register("PACK_MULT_PERCENT", 100);
-                state.variableRegistry.register("GAUGE_NAME_RPM", "\"hello\"");
-                state.variableRegistry.register("GAUGE_NAME_GEAR_RATIO", "ra");
-                state.variableRegistry.register("GAUGE_NAME_CPU_TEMP", "te");
+            public void act(ReaderStateImpl state) {
+                state.getVariableRegistry().register("PACK_MULT_PERCENT", 100);
+                state.getVariableRegistry().register("GAUGE_NAME_RPM", "\"hello\"");
+                state.getVariableRegistry().register("GAUGE_NAME_GEAR_RATIO", "ra");
+                state.getVariableRegistry().register("GAUGE_NAME_CPU_TEMP", "te");
 
             }
         };
 
         String test = "struct_no_prefix output_channels_s\n" +
                 "\tfloat autoscale internalMcuTemperature\n" +
-                "uint16_t autoscale RPMValue;@@GAUGE_NAME_RPM@@;\"RPM\",1, 0, 0, 8000, 2\n" +
+                "uint16_t autoscale RPMValue;@@GAUGE_NAME_RPM@@;\"RPM\",1, 0, 0, 8000, 2, \"myCategory\"\n" +
                 "\n" +
                 "uint16_t rpmAcceleration;dRPM;\"RPM/s\",1, 0, 0, 5, 2\n" +
                 "\n" +
@@ -32,10 +31,10 @@ public class SdCardFieldsGeneratorTest {
                 "end_struct";
 
         processAndAssert(test, "\t{engine->outputChannels.internalMcuTemperature, \"internalMcuTemperature\", \"\", 0},\n" +
-                "\t{engine->outputChannels.RPMValue, \"hello\", \"RPM\", 2},\n" +
+                "\t{engine->outputChannels.RPMValue, \"hello\", \"RPM\", 2, \"myCategory\"},\n" +
                 "\t{engine->outputChannels.rpmAcceleration, \"dRPM\", \"RPM/s\", 2},\n" +
                 "\t{engine->outputChannels.speedToRpmRatio, \"ra\", \"value\", 0},\n" +
-                "", actor);
+                "", actor, false);
     }
 
     @Test
@@ -45,7 +44,7 @@ public class SdCardFieldsGeneratorTest {
                 "bit sd_logging_internal\n" +
                 "end_struct", "\t{engine->outputChannels.RPMValue, \"feee\", \"RPM\", 2},\n", readerState -> {
 
-        });
+        }, false);
     }
 
     @Test
@@ -57,7 +56,7 @@ public class SdCardFieldsGeneratorTest {
                 "\t{engine->outputChannels.recentErrorCode[2], \"recentErrorCode 3\", \"error\", 0},\n" +
                 "\t{engine->outputChannels.recentErrorCode[3], \"recentErrorCode 4\", \"error\", 0},\n", readerState -> {
 
-        });
+        }, false);
     }
 
     @Test
@@ -66,23 +65,37 @@ public class SdCardFieldsGeneratorTest {
                         "    struct pid_status_s\n" +
                         "    \tfloat pTerm;;\"\", 1, 0, -50000, 50000, 2\n" +
                         "    end_struct\n" +
+                        "\tpid_status_s[2 iterate] vvtStatus\n" +
                         "\tpid_status_s alternatorStatus\n" +
                         "end_struct",
-                "\t{engine->outputChannels.alternatorStatus.pTerm, \"alternatorStatus.pTerm\", \"\", 2},\n",
+                "\t{engine->outputChannels->alternatorStatus.pTerm, \"alternatorStatus.pTerm\", \"\", 2},\n",
                 readerState -> {
 
-                });
+                }, true);
     }
+
+    @Test
+    public void enumField() {
+        processAndAssert("struct_no_prefix output_channels_s\n" +
+                        "    custom idle_state_e 4 bits, S32, @OFFSET@, [0:2], \"not important\"\n" +
+                        "    idle_state_e idleState\n" +
+                        "end_struct",
+                "",
+                readerState -> {
+
+                }, true);
+    }
+
 
     interface Actor {
-        void act(ReaderState readerState);
+        void act(ReaderStateImpl readerState);
     }
 
-    private static void processAndAssert(String input, String expectedOutput, Actor actor) {
-        ReaderState state = new ReaderState();
+    private static void processAndAssert(String input, String expectedOutput, Actor actor, boolean isPtr) {
+        ReaderStateImpl state = new ReaderStateImpl(null, LazyFile.REAL);
         actor.act(state);
 
-        SdCardFieldsConsumer consumer = new SdCardFieldsConsumer(LazyFile.TEST);
+        SdCardFieldsTestConsumer consumer = new SdCardFieldsTestConsumer(LazyFile.TEST, isPtr);
         state.readBufferedReader(input, consumer);
         assertEquals(expectedOutput, consumer.getBody());
     }

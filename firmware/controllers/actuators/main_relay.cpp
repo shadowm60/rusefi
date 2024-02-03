@@ -3,10 +3,19 @@
 #include "main_relay.h"
 
 void MainRelayController::onSlowCallback() {
-	isBenchTest = engine->isInMainRelayBench();
-
 #if EFI_MAIN_RELAY_CONTROL
-	hasIgnitionVoltage = Sensor::getOrZero(SensorType::BatteryVoltage) > 5;
+#if defined(IGN_KEY_DIVIDER)
+    if (isAdcChannelValid(engineConfiguration->ignKeyAdcChannel)) {
+      hasIgnitionVoltage = Sensor::getOrZero(SensorType::IgnKeyVoltage) > 5;
+    } else
+#endif // IGN_KEY_DIVIDER
+    if (engineConfiguration->ignitionKeyDigitalPin != Gpio::Unassigned) {
+        // separate digital input pin just for main relay logic since it's preferred to read voltage from main relay
+        // key-on is usually a bit smaller voltage than main relay but sometimes even 1v off!
+        hasIgnitionVoltage = efiReadPin(engineConfiguration->ignitionKeyDigitalPin);
+    } else {
+	    hasIgnitionVoltage = Sensor::getOrZero(SensorType::BatteryVoltage) > 5;
+	}
 
 	if (hasIgnitionVoltage) {
 		m_lastIgnitionTime.reset();
@@ -17,16 +26,16 @@ void MainRelayController::onSlowCallback() {
 
 	// TODO: delayed shutoff timeout?
 
-	mainRelayState = isBenchTest | hasIgnitionVoltage | delayedShutoffRequested;
+	mainRelayState = hasIgnitionVoltage | delayedShutoffRequested;
 #else // not EFI_MAIN_RELAY_CONTROL
-	mainRelayState = !isBenchTest;
+	mainRelayState = true;
 #endif
 
-	enginePins.mainRelay.setValue(mainRelayState);
+	enginePins.mainRelay.setValue("mr", mainRelayState);
 }
 
 bool MainRelayController::needsDelayedShutoff() {
-	// Prevent main relay from turning off if we had igniton voltage in the past 1 second
+	// Prevent main relay from turning off if we had ignition voltage in the past 1 second
 	// This avoids accidentally killing the car during a transient, for example
 	// right when the starter is engaged.
 	return !m_lastIgnitionTime.hasElapsedSec(1);

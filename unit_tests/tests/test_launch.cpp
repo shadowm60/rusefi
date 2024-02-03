@@ -3,7 +3,7 @@
 #include "launch_control.h"
 
 TEST(LaunchControl, TpsCondition) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	LaunchControlBase dut;
 
@@ -24,7 +24,7 @@ TEST(LaunchControl, TpsCondition) {
 
 
 TEST(LaunchControl, VSSCondition) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	LaunchControlBase dut;
 
@@ -40,8 +40,39 @@ TEST(LaunchControl, VSSCondition) {
 
 }
 
+TEST(LaunchControl, ZeroVSSCondition) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	LaunchControlBase dut;
+
+	// Test Speed threshold
+	engineConfiguration->launchActivationMode = ALWAYS_ACTIVE_LAUNCH;
+    engineConfiguration->launchSpeedThreshold = 0;
+
+	Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
+	EXPECT_TRUE(dut.isInsideSpeedCondition());
+}
+
+TEST(LaunchControl, VSSConditionWithSwitch) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	LaunchControlBase dut;
+
+	// Test Speed threshold
+	engineConfiguration->launchActivationMode = SWITCH_INPUT_LAUNCH;
+	engineConfiguration->launchActivatePin = Gpio::G1;
+	setMockState(engineConfiguration->launchActivatePin, true);
+    engineConfiguration->launchSpeedThreshold = 30;
+
+	Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
+    EXPECT_TRUE(dut.isInsideSpeedCondition());
+
+	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
+	EXPECT_FALSE(dut.isInsideSpeedCondition());
+}
+
 TEST(LaunchControl, RPMCondition) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	LaunchControlBase dut;
 
@@ -53,7 +84,7 @@ TEST(LaunchControl, RPMCondition) {
 }
 
 TEST(LaunchControl, SwitchInputCondition) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	LaunchControlBase dut;
 
@@ -95,7 +126,7 @@ TEST(LaunchControl, SwitchInputCondition) {
 }
 
 TEST(LaunchControl, CombinedCondition) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	LaunchControlBase dut;
 
@@ -138,9 +169,7 @@ static void setDefaultLaunchParameters() {
 }
 
 TEST(LaunchControl, CompleteRun) {
-	EngineTestHelper eth(TEST_ENGINE);
-
-	initLaunchControl();
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	//load default config
 	setDefaultLaunchParameters();
@@ -193,3 +222,35 @@ TEST(LaunchControl, CompleteRun) {
 	EXPECT_FALSE(engine->launchController.isLaunchFuelRpmRetardCondition());
 
 }
+
+TEST(LaunchControl, hardSkip) {
+	SoftSparkLimiter hardSparkLimiter(true);
+	ASSERT_FALSE(hardSparkLimiter.shouldSkip());
+
+
+	hardSparkLimiter.setTargetSkipRatio(1);
+	// open question if we need special handling of '1' or random would just work?
+	ASSERT_TRUE(hardSparkLimiter.shouldSkip());
+
+	int counter = 0;
+	hardSparkLimiter.setTargetSkipRatio(0.5);
+	for (int i =0;i<1000;i++) {
+		if (hardSparkLimiter.shouldSkip()) {
+			counter++;
+		}
+
+	}
+	ASSERT_TRUE(counter > 400 && counter < 600) << "How good is random " << counter;
+}
+
+
+
+
+
+
+
+
+
+
+
+

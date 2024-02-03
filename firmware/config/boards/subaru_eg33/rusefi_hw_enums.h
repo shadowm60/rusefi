@@ -3,19 +3,10 @@
  *
  * @date Jun 2, 2019
  * @author Andrey Belomutskiy, (c) 2012-2020
+ *
  */
 
 #pragma once
-
-// todo: migrate/unify with pin_output_mode_e? rename? something is messy here
-// this enum is currently only used for SPI pins
-typedef enum __attribute__ ((__packed__)) {
-// todo: here we have a rare example of stm32-specific enum, todo: make this not stm32 specific?
-	PO_DEFAULT = 0,
-	PO_OPENDRAIN = 4, // PAL_STM32_OTYPE_OPENDRAIN
-	PO_PULLUP = 32, // PAL_STM32_PUDR_PULLUP
-	PO_PULLDOWN = 64 // PAL_STM32_PUPDR_PULLDOWN
-} pin_mode_e;
 
 /**
  * Hardware pin. This enum is platform-specific.
@@ -245,12 +236,12 @@ enum class Gpio : uint16_t {
 	CAN_PIN_7 = 257,
 };
 
-/* Plase keep updating these defines */
+/* Please keep updating these defines */
 #define BRAIN_PIN_ONCHIP_LAST	Gpio::I15
 #define BRAIN_PIN_ONCHIP_PINS	(BRAIN_PIN_ONCHIP_LAST - Gpio::A0 + 1)
 #define BRAIN_PIN_LAST 			Gpio::MC33810_1_GD_3
 #define BRAIN_PIN_TOTAL_PINS	(BRAIN_PIN_LAST - Gpio::A0 + 1)
-/* Plase keep updating these defines */
+/* Please keep updating these defines */
 
 typedef enum __attribute__ ((__packed__)) {
 	EFI_ADC_NONE = 0,

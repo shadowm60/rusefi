@@ -6,10 +6,17 @@
 
 bool FanController::getState(bool acActive, bool lastState) {
 	auto clt = Sensor::get(SensorType::Clt);
+	auto vss = Sensor::get(SensorType::VehicleSpeed);
 
+#if EFI_SHAFT_POSITION_INPUT
 	cranking = engine->rpmCalculator.isCranking();
 	notRunning = !engine->rpmCalculator.isRunning();
+#else
+	cranking = false;
+	notRunning = true;
+#endif
 
+	disabledBySpeed = disableAtSpeed() > 0 && vss.Valid && vss.Value > disableAtSpeed();
 	disabledWhileEngineStopped = notRunning && disableWhenStopped();
 	brokenClt = !clt;
 	enabledForAc = enableWithAc() && acActive;
@@ -21,6 +28,9 @@ bool FanController::getState(bool acActive, bool lastState) {
 		return false;
 	} else if (disabledWhileEngineStopped) {
 		// Inhibit while not running (if so configured)
+		return false;
+	} else if (disabledBySpeed) {
+		// Inhibit while driving fast
 		return false;
 	} else if (brokenClt) {
 		// If CLT is broken, turn the fan on
@@ -39,21 +49,18 @@ bool FanController::getState(bool acActive, bool lastState) {
 	}
 }
 
-void FanController::update(bool acActive) {
-	auto& pin = getPin();
-
-	bool result = getState(acActive, pin.getLogicValue());
-
-	pin.setValue(result);
-}
-
-void updateFans(bool acActive) {
+void FanController::onSlowCallback() {
 #if EFI_PROD_CODE
 	if (isRunningBenchTest()) {
 		return; // let's not mess with bench testing
 	}
 #endif
 
-	engine->fan1.update(acActive);
-	engine->fan2.update(acActive);
+	bool acActive = engine->module<AcController>()->isAcEnabled();
+
+	auto& pin = getPin();
+
+	bool result = getState(acActive, pin.getLogicValue());
+
+	pin.setValue(result);
 }

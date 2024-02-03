@@ -19,8 +19,8 @@ import com.rusefi.io.ConnectionStateListener;
 import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.IoStream;
 import com.rusefi.io.LinkManager;
-import com.rusefi.io.stream.PCanIoStream;
-import com.rusefi.io.stream.SocketCANIoStream;
+import com.rusefi.io.can.PCanIoStream;
+import com.rusefi.io.can.SocketCANIoStream;
 import com.rusefi.io.tcp.BinaryProtocolProxy;
 import com.rusefi.io.tcp.BinaryProtocolServer;
 import com.rusefi.io.tcp.ServerSocketReference;
@@ -30,6 +30,7 @@ import com.rusefi.tools.online.Online;
 import com.rusefi.tune.xml.Msq;
 import com.rusefi.ui.AuthTokenPanel;
 import com.rusefi.ui.StatusConsumer;
+import com.rusefi.ui.basic.BasicStartupFrame;
 import com.rusefi.ui.light.LightweightGUI;
 import org.jetbrains.annotations.Nullable;
 
@@ -63,9 +64,9 @@ public class ConsoleTools {
     static {
         registerTool("help", args -> printTools(), "Print this help.");
         registerTool("headless", ConsoleTools::runHeadless, "Connect to rusEFI controller and start saving logs.");
+        registerTool("basic-ui", BasicStartupFrame::runTool, "Basic UI");
 
         registerTool("ptrace_enums", ConsoleTools::runPerfTraceTool, "NOT A USER TOOL. Development tool to process performance trace enums");
-        registerTool("firing_order", ConsoleTools::runFiringOrderTool, "NOT A USER TOOL. Development tool relating to adding new firing order into rusEFI firmware.");
         registerTool("functional_test", ConsoleTools::runFunctionalTest, "NOT A USER TOOL. Development tool related to functional testing");
         registerTool("convert_binary_configuration_to_xml", ConsoleTools::convertBinaryToXml, "NOT A USER TOOL. Development tool to convert binary configuration into XML form.");
 
@@ -162,7 +163,7 @@ public class ConsoleTools {
     }
 
     private static void printCrc(ConfigurationImage image) {
-        for (int i = 0; i < Fields.ERROR_BUFFER_SIZE; i++)
+        for (int i = 0; i < Fields.WARNING_BUFFER_SIZE; i++)
             image.getContent()[Fields.WARNING_MESSAGE.getOffset() + i] = 0;
         int crc32 = getCrc32(image.getContent());
         int crc16 = crc32 & 0xFFFF;
@@ -212,10 +213,6 @@ public class ConsoleTools {
         PerfTraceTool.readPerfTrace(args[1], args[2], args[3], args[4]);
     }
 
-    private static void runFiringOrderTool(String[] args) throws IOException {
-        FiringOrderTSLogic.invoke(args[1]);
-    }
-
     private static void setAuthToken(String[] args) {
         String newToken = args[1];
         System.out.println("Saving auth token " + newToken);
@@ -240,7 +237,7 @@ public class ConsoleTools {
     private static void runFunctionalTest(String[] args) throws InterruptedException {
         // passing port argument if it was specified
         String[] toolArgs = args.length == 1 ? new String[0] : new String[]{args[1]};
-        RealHardwareTestLauncher.main(toolArgs);
+        HwCiF4Discovery.main(toolArgs);
     }
 
     private static void runHeadless(String[] args) {
@@ -359,7 +356,7 @@ public class ConsoleTools {
         ConfigurationImage image = ConfigurationImageFile.readFromFile(inputBinaryFileName);
         System.out.println("Got " + image.getSize() + " of configuration from " + inputBinaryFileName);
 
-        Msq tune = MsqFactory.valueOf(image);
+        Msq tune = MsqFactory.valueOf(image, IniFileModel.getInstance());
         tune.writeXmlFile(Online.outputXmlFileName);
         String authToken = AuthTokenPanel.getAuthToken();
         System.out.println("Using " + authToken);

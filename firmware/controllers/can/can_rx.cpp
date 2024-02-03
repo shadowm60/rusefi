@@ -12,44 +12,9 @@
 
 #include "rusefi_lua.h"
 #include "can_bench_test.h"
+#include "can_common.h"
 
 typedef float SCRIPT_TABLE_8x8_f32t_linear[SCRIPT_TABLE_8 * SCRIPT_TABLE_8];
-
-bool acceptCanRx(int /*sid*/) {
-	if (!engineConfiguration->usescriptTableForCanSniffingFiltering) {
-		// accept anything if filtering is not enabled
-		return true;
-	}
-/*
-	// the whole table reuse and 2D table cast to 1D array is a major hack, but it's OK for prototyping
-	SCRIPT_TABLE_8x8_f32t_linear *array =
-			(SCRIPT_TABLE_8x8_f32t_linear*) (void*) &config->scriptTable1;
-
-	int arraySize = efi::size(*array);
-
-	int showOnlyCount = (int) array[arraySize - 1];
-	if (showOnlyCount > 0 && showOnlyCount < arraySize) {
-		for (int i = 0; i < showOnlyCount; i++) {
-			if (sid == (int) array[arraySize - 2 - i]) {
-				return true;
-			}
-		}
-		// if white list is not empty and element not on the white list we do not check ignore list
-		return false;
-	}
-
-	int ignoreListCount = (int) array[0];
-	if (ignoreListCount > 0 && ignoreListCount < arraySize) {
-		for (int i = 0; i < ignoreListCount; i++) {
-			if (sid == (int) array[1 + i]) {
-				// element is in ignore list
-				return false;
-			}
-		}
-	}
-*/
-	return true;
-}
 
 #if EFI_CAN_SUPPORT
 
@@ -58,28 +23,34 @@ bool acceptCanRx(int /*sid*/) {
 #include "can_sensor.h"
 #include "can_vss.h"
 #include "rusefi_wideband.h"
+#include "wideband_firmware/for_rusefi/wideband_can.h"
+
 
 /**
  * this build-in CAN sniffer is very basic but that's our CAN sniffer
  */
 static void printPacket(const size_t busIndex, const CANRxFrame &rx) {
-//	bool accept = acceptCanRx(CAN_SID(rx));
-//	if (!accept) {
-//		return;
-//	}
-
 	// only print info if we're in can debug mode
 
 	int id = CAN_ID(rx);
 
-	// internet people use both hex and decimal to discuss packed IDs, for usability it's better to print both right here
-	efiPrintf("CAN RX bus %d ID %x(%d) DLC %d: %02x %02x %02x %02x %02x %02x %02x %02x",
-			busIndex,
-			id,	id, // once in hex, once in dec
-			rx.DLC,
-			rx.data8[0], rx.data8[1], rx.data8[2], rx.data8[3],
-			rx.data8[4], rx.data8[5], rx.data8[6], rx.data8[7]);
-
+	if (CAN_ISX(rx)) {
+		// print extended IDs in hex only
+		efiPrintf("CAN%d RX: ID %07x DLC %d: %02x %02x %02x %02x %02x %02x %02x %02x",
+				busIndex,
+				id,
+				rx.DLC,
+				rx.data8[0], rx.data8[1], rx.data8[2], rx.data8[3],
+				rx.data8[4], rx.data8[5], rx.data8[6], rx.data8[7]);
+	} else {
+		// internet people use both hex and decimal to discuss packed IDs, for usability it's better to print both right here
+		efiPrintf("CAN%d RX: ID %03x(%d) DLC %d: %02x %02x %02x %02x %02x %02x %02x %02x",
+				busIndex,
+				id,	id, // once in hex, once in dec
+				rx.DLC,
+				rx.data8[0], rx.data8[1], rx.data8[2], rx.data8[3],
+				rx.data8[4], rx.data8[5], rx.data8[6], rx.data8[7]);
+	}
 }
 
 volatile float canMap = 0;
@@ -139,23 +110,21 @@ static void processCanRxImu_BoschM5_10_YawY(const CANRxFrame& frame) {
 	float accY = getShiftedLSB_intel(frame, 4);
 
 	efiPrintf("CAN_rx MM5_10_YAW_Y %f %f", yaw, accY);
-	engine->sensors.accelerometer.yaw = yaw * MM5_10_RATE_QUANT;
-	engine->sensors.accelerometer.y = accY * MM5_10_ACC_QUANT;
+	engine->sensors.accelerometer.yawRate = yaw * MM5_10_RATE_QUANT;
+	engine->sensors.accelerometer.lat = accY * MM5_10_ACC_QUANT;
 }
 
 static void processCanRxImu_BoschM5_10_RollX(const CANRxFrame& frame) {
-	float roll = getShiftedLSB_intel(frame, 0);
 	float accX = getShiftedLSB_intel(frame, 4);
-	efiPrintf("CAN_rx MM5_10_ROLL_X %f %f", roll, accX);
+	efiPrintf("CAN_rx MM5_10_ROLL_X %f", accX);
 
-	engine->sensors.accelerometer.roll = roll * MM5_10_RATE_QUANT;
-	engine->sensors.accelerometer.x = accX * MM5_10_ACC_QUANT;
+	engine->sensors.accelerometer.lon = accX * MM5_10_ACC_QUANT;
 }
 
 static void processCanRxImu_BoschM5_10_Z(const CANRxFrame& frame) {
 	float accZ = getShiftedLSB_intel(frame, 4);
 	efiPrintf("CAN_rx MM5_10_Z %f", accZ);
-	engine->sensors.accelerometer.z = accZ * MM5_10_ACC_QUANT;
+	engine->sensors.accelerometer.vert = accZ * MM5_10_ACC_QUANT;
 }
 
 static void processCanRxImu(const CANRxFrame& frame) {
@@ -192,24 +161,28 @@ static void processCanRxImu(const CANRxFrame& frame) {
 	}
 }
 
+extern bool verboseRxCan;
+
 void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick_t nowNt) {
-	if (engineConfiguration->verboseCan && busIndex == 0) {
+	if ((engineConfiguration->verboseCan && busIndex == 0) || verboseRxCan) {
 		printPacket(busIndex, frame);
 	} else if (engineConfiguration->verboseCan2 && busIndex == 1) {
 		printPacket(busIndex, frame);
 	}
 
-
+    // see AemXSeriesWideband as an example of CanSensorBase/CanListener
 	serviceCanSubscribers(frame, nowNt);
 
 	// todo: convert to CanListener or not?
 	//Vss is configurable, should we handle it here:
 	processCanRxVss(frame, nowNt);
 
-	// todo: convert to CanListener or not?
-	processCanRxImu(frame);
+	if (!engineConfiguration->useSpiImu) {
+		// todo: convert to CanListener or not?
+		processCanRxImu(frame);
+	}
 
-	processCanBenchTest(frame);
+	processCanQcBenchTest(frame);
 
 	processLuaCan(busIndex, frame);
 
@@ -223,9 +196,16 @@ void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick
 		obdOnCanPacketRx(frame, busIndex);
 	}
 
+#if EFI_ENGINE_CONTROL
+	if (CAN_EID(frame) == GDI4_BASE_ADDRESS && frame.data8[7] == GDI4_MAGIC) {
+//	    efiPrintf("CAN GDI4 says hi");
+	    getLimpManager()->gdiComms.reset();
+	}
+#endif // EFI_ENGINE_CONTROL
+
 #if EFI_WIDEBAND_FIRMWARE_UPDATE
 	// Bootloader acks with address 0x727573 aka ascii "rus"
-	if (CAN_EID(frame) == 0x727573) {
+	if (CAN_EID(frame) == WB_ACK) {
 		handleWidebandBootloaderAck();
 	}
 #endif

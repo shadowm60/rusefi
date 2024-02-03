@@ -26,9 +26,9 @@
 static void common2jz() {
 	setFrankensoConfiguration(); // default pinout
 
-	engineConfiguration->specs.displacement = 3.0;
-	engineConfiguration->specs.cylindersCount = 6;
-	engineConfiguration->specs.firingOrder = FO_1_5_3_6_2_4;
+	engineConfiguration->displacement = 3.0;
+	engineConfiguration->cylindersCount = 6;
+	engineConfiguration->firingOrder = FO_1_5_3_6_2_4;
 	// set ignition_mode 1
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
 
@@ -73,13 +73,13 @@ void setToyota_2jz_vics() {
 	common2jz();
 
 	setCrankOperationMode();
-	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL_36_2;
+	engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL_36_2;
 
 	engineConfiguration->triggerInputPins[0] = Gpio::A5; // crank sensor
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned; // cam sensor will he handled by custom vtti code
 
 	engineConfiguration->camInputs[0] = Gpio::C6;
-	engineConfiguration->vvtMode[0] = VVT_2JZ;
+	engineConfiguration->vvtMode[0] = VVT_TOYOTA_3_TOOTH;
 
 	// set global_trigger_offset_angle 155
 	engineConfiguration->globalTriggerAngleOffset = 155; // todo
@@ -87,20 +87,14 @@ void setToyota_2jz_vics() {
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK; // just for now
 	engineConfiguration->injectionMode = IM_BATCH; // just for now
 	engineConfiguration->twoWireBatchIgnition = true;
-	engineConfiguration->twoWireBatchInjection = true;
 
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_TOYOTA);
 	strcpy(engineConfiguration->engineCode, "2JZ");
 	strcpy(engineConfiguration->vehicleName, "VVT example");
 
-	// todo: these magic values would be hardcoded once we find out proper magic values
+	// todo: these magic values would be hardcoded once we find out proper magic values!
 	//	engineConfiguration->scriptSetting[4] = 175 - 45;
 	//	engineConfiguration->scriptSetting[5] = 175 + 45;
 
 	engineConfiguration->vvtPins[0] = Gpio::E3; // VVT solenoid control
-
-	// Mazda VVT settings have nothing to do wit Toyota 2JZ settings but those are a good starting point for settings
-	setMazdaNB2VVTSettings();
 }
-
-

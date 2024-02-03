@@ -12,23 +12,23 @@ extern WarningCodeState unitTestWarningCodeState;
 #include "engine_sniffer.h"
 extern WaveChart waveChart;
 
-TEST(trigger, testNoStartUpWarningsNoSyncronizationTrigger) {
-	EngineTestHelper eth(TEST_ENGINE);
+TEST(trigger, testNoStartUpWarningsNoSynchronizationTrigger) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	// one tooth does not need synchronization it just counts tooth
-	eth.setTriggerType(TT_ONE);
+	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 	ASSERT_EQ( 0,  round(Sensor::getOrZero(SensorType::Rpm))) << "testNoStartUpWarnings RPM";
 
 	eth.fireTriggerEvents2(/*count*/10, /*duration*/50);
 	ASSERT_EQ(1200,  round(Sensor::getOrZero(SensorType::Rpm))) << "testNoStartUpWarnings RPM";
-	ASSERT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testNoStartUpWarningsNoSyncronizationTrigger";
+	ASSERT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testNoStartUpWarningsNoSynchronizationTrigger";
 }
 
 TEST(trigger, testNoStartUpWarnings) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	// for this test we need a trigger with isSynchronizationNeeded=true
 	engineConfiguration->trigger.customTotalToothCount = 3;
 	engineConfiguration->trigger.customSkippedToothCount = 1;
-	eth.setTriggerType(TT_TOOTHED_WHEEL);
+	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
 	ASSERT_EQ( 0,  round(Sensor::getOrZero(SensorType::Rpm))) << "testNoStartUpWarnings RPM";
 
 	for (int i = 0;i < 10;i++) {
@@ -54,11 +54,11 @@ TEST(trigger, testNoStartUpWarnings) {
 		eth.fireFall(150);
 	}
 	EXPECT_EQ( 1,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testNoStartUpWarnings CUSTOM_SYNC_COUNT_MISMATCH expected";
-	EXPECT_EQ(CUSTOM_PRIMARY_TOO_MANY_TEETH, unitTestWarningCodeState.recentWarnings.get(0).Code);
+	EXPECT_EQ(ObdCode::CUSTOM_PRIMARY_TOO_MANY_TEETH, unitTestWarningCodeState.recentWarnings.get(0).Code);
 }
 
 TEST(trigger, testNoisyInput) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	ASSERT_EQ( 0,  round(Sensor::getOrZero(SensorType::Rpm))) << "testNoisyInput RPM";
 
@@ -74,19 +74,19 @@ TEST(trigger, testNoisyInput) {
 	ASSERT_EQ(NOISY_RPM,  Sensor::getOrZero(SensorType::Rpm)) << "testNoisyInput RPM should be noisy";
 
 	ASSERT_EQ( 2,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testNoisyInput";
-	ASSERT_EQ(CUSTOM_PRIMARY_NOT_ENOUGH_TEETH, unitTestWarningCodeState.recentWarnings.get(0).Code) << "@0";
-	ASSERT_EQ(OBD_Crankshaft_Position_Sensor_A_Circuit_Malfunction, unitTestWarningCodeState.recentWarnings.get(1).Code) << "@0";
+	ASSERT_EQ(ObdCode::CUSTOM_PRIMARY_NOT_ENOUGH_TEETH, unitTestWarningCodeState.recentWarnings.get(0).Code) << "@0";
+	ASSERT_EQ(ObdCode::OBD_Crankshaft_Position_Sensor_A_Circuit_Malfunction, unitTestWarningCodeState.recentWarnings.get(1).Code) << "@0";
 }
 
 TEST(trigger, testCamInput) {
 	// setting some weird engine
-	EngineTestHelper eth(FORD_ESCORT_GT);
+	EngineTestHelper eth(engine_type_e::FORD_ESCORT_GT);
 
 	// changing to 'ONE TOOTH' trigger on CRANK with CAM/VVT
 	setCrankOperationMode();
-	engineConfiguration->vvtMode[0] = VVT_FIRST_HALF;
+	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtOffsets[0] = 360;
-	eth.setTriggerType(TT_ONE);
+	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 	engineConfiguration->camInputs[0] = Gpio::A10; // we just need to indicate that we have CAM
 
 	ASSERT_EQ( 0,  round(Sensor::getOrZero(SensorType::Rpm))) << "testCamInput RPM";
@@ -106,15 +106,10 @@ TEST(trigger, testCamInput) {
 
 	// asserting that lack of camshaft signal would be detecting
 	ASSERT_EQ(1,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testCamInput #2";
-	ASSERT_EQ(OBD_Camshaft_Position_Sensor_Circuit_Range_Performance, unitTestWarningCodeState.recentWarnings.get(0).Code) << "@0";
+	ASSERT_EQ(ObdCode::OBD_Camshaft_Position_Sensor_Circuit_Range_Performance, unitTestWarningCodeState.recentWarnings.get(0).Code) << "@0";
 	unitTestWarningCodeState.recentWarnings.clear();
 
 	for (int i = 0; i < 600;i++) {
-		eth.moveTimeForwardUs(MS2US(25));
-
-		eth.firePrimaryTriggerRise();
-		EXPECT_EQ(1200,  round(Sensor::getOrZero(SensorType::Rpm)));
-
 		eth.moveTimeForwardUs(MS2US(10));
 
 		// cam comes every other crank rev
@@ -123,16 +118,21 @@ TEST(trigger, testCamInput) {
 		}
 
 		eth.moveTimeForwardUs(MS2US(15));
+
+		eth.firePrimaryTriggerRise();
+		EXPECT_EQ(1200,  round(Sensor::getOrZero(SensorType::Rpm)));
+
+		eth.moveTimeForwardUs(MS2US(25));
 		eth.firePrimaryTriggerFall();
 	}
 
 	// asserting that error code has cleared
 	ASSERT_EQ(0, unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#testCamInput #3";
-	EXPECT_NEAR_M3(-109, engine->triggerCentral.getVVTPosition(0, 0));
+	EXPECT_NEAR_M3(71, engine->triggerCentral.getVVTPosition(0, 0));
 }
 
 TEST(trigger, testNB2CamInput) {
-	EngineTestHelper eth(FRANKENSO_MAZDA_MIATA_2003);
+	EngineTestHelper eth(engine_type_e::FRANKENSO_MAZDA_MIATA_2003);
 
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 
@@ -156,21 +156,21 @@ TEST(trigger, testNB2CamInput) {
 
 	eth.moveTimeForwardUs(MS2US(3)); // shifting VVT phase a few angles
 
-	hwHandleVvtCamSignal(TriggerValue::RISE, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(true, getTimeNowNt(), 0);
 
 	// first gap - long
 
 	eth.moveTimeForwardUs(MS2US(130));
-	hwHandleVvtCamSignal(TriggerValue::FALL, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(false, getTimeNowNt(), 0);
 	eth.moveTimeForwardUs(MS2US( 30));
-	hwHandleVvtCamSignal(TriggerValue::RISE, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(true, getTimeNowNt(), 0);
 
 	// second gap - short
 
 	eth.moveTimeForwardUs(MS2US(10));
-	hwHandleVvtCamSignal(TriggerValue::FALL, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(false, getTimeNowNt(), 0);
 	eth.moveTimeForwardUs(MS2US(10));
-	hwHandleVvtCamSignal(TriggerValue::RISE, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(true, getTimeNowNt(), 0);
 
 	ASSERT_FLOAT_EQ(0, engine->triggerCentral.getVVTPosition(0, 0));
 	ASSERT_EQ(totalRevolutionCountBeforeVvtSync, engine->triggerCentral.triggerState.getCrankSynchronizationCounter());
@@ -178,13 +178,13 @@ TEST(trigger, testNB2CamInput) {
 	// Third gap - long
 
 	eth.moveTimeForwardUs(MS2US(130));
-	hwHandleVvtCamSignal(TriggerValue::FALL, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(false, getTimeNowNt(), 0);
 	eth.moveTimeForwardUs(MS2US( 30));
-	hwHandleVvtCamSignal(TriggerValue::RISE, getTimeNowNt(), 0);
+	hwHandleVvtCamSignal(true, getTimeNowNt(), 0);
 
 	EXPECT_NEAR(290.5f, engine->triggerCentral.getVVTPosition(0, 0), EPS2D);
 	// actually position based on VVT!
 	ASSERT_EQ(totalRevolutionCountBeforeVvtSync + 3, engine->triggerCentral.triggerState.getCrankSynchronizationCounter());
 
-	EXPECT_EQ(39, waveChart.getSize());
+	EXPECT_EQ(40, waveChart.getSize());
 }

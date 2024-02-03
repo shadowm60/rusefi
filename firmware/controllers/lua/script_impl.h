@@ -7,10 +7,11 @@
 
 #pragma once
 
-#include "expected.h"
+#include <rusefi/expected.h>
 
 typedef Map3D<SCRIPT_TABLE_8, SCRIPT_TABLE_8, float, int16_t, int16_t> fsio8_Map3D_f32t;
 typedef Map3D<SCRIPT_TABLE_8, SCRIPT_TABLE_8, uint8_t, int16_t, int16_t> fsio8_Map3D_u8t;
+typedef Map3D<TABLE_4_RPM, SCRIPT_TABLE_8, uint8_t, int16_t, int16_t> script4_Map3D_u8t;
 
 void initScriptImpl();
 

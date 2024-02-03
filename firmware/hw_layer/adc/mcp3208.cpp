@@ -69,7 +69,7 @@ MCP3208_CS_PIN,
 		};
 
 static void createRequest(McpAdcState *state, int channel) {
-	efiAssertVoid(CUSTOM_ERR_6680, channel < 8, "Invalid ADC channel");
+	efiAssertVoid(ObdCode::CUSTOM_ERR_6680, channel < 8, "Invalid ADC channel");
 
 	state->requestedChannel = channel;
 
@@ -124,9 +124,6 @@ void adc_in_out(McpAdcState *state) {
 }
 
 void init_adc_mcp3208(McpAdcState *state, SPIDriver *driver) {
-
-//	initSpiModules();
-
 	state->driver = driver;
 	state->tx_buff[2] = 0;
 

@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import static com.rusefi.io.can.Elm327Connector.ELM327_DEFAULT_BAUDRATE;
+import static com.rusefi.io.can.elm.Elm327Connector.ELM327_DEFAULT_BAUDRATE;
 
 /**
  * Andrey Belomutskiy, (c) 2013-2020
@@ -24,7 +24,7 @@ import static com.rusefi.io.can.Elm327Connector.ELM327_DEFAULT_BAUDRATE;
 public class PortDetector {
     private final static Logging log = Logging.getLogging(PortDetector.class);
 
-    private static final NamedThreadFactory AUTO_DETECT_PORT = new NamedThreadFactory("AutoDetectPort");
+    private static final NamedThreadFactory AUTO_DETECT_PORT = new NamedThreadFactory("ECU AutoDetectPort", true);
     public static final String AUTO = "auto";
 
     public enum DetectorMode {

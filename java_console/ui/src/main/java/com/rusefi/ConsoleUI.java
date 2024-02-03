@@ -7,7 +7,7 @@ import com.rusefi.core.MessagesCentral;
 import com.rusefi.io.CommandQueue;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.serial.BaudRateHolder;
-import com.rusefi.maintenance.FirmwareFlasher;
+import com.rusefi.maintenance.StLinkFlasher;
 import com.rusefi.maintenance.VersionChecker;
 import com.rusefi.ui.*;
 import com.rusefi.ui.console.MainFrame;
@@ -33,6 +33,7 @@ import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.StartupFrame.setFrameIcon;
 import static com.rusefi.core.preferences.storage.PersistentConfiguration.getConfig;
 import static com.rusefi.core.rusEFIVersion.CONSOLE_VERSION;
+import static com.rusefi.ui.util.UiUtils.createOnTopParent;
 
 /**
  * @see StartupFrame
@@ -75,7 +76,7 @@ public class ConsoleUI {
         setFrameIcon(ConsoleUI.staticFrame);
         log.info("Console " + CONSOLE_VERSION);
 
-        log.info("Hardware: " + FirmwareFlasher.getHardwareKind());
+        log.info("Hardware: " + StLinkFlasher.getHardwareKind());
 
         getConfig().getRoot().setProperty(PORT_KEY, port);
         getConfig().getRoot().setProperty(SPEED_KEY, BaudRateHolder.INSTANCE.baudRate);
@@ -102,9 +103,6 @@ public class ConsoleUI {
         }
         if (!linkManager.isLogViewer()) {
             tabbedPane.addTab("Bench Test", new BenchTestPane(uiContext, getConfig()).getContent());
-            if (tabbedPane.paneSettings.showEtbPane)
-                tabbedPane.addTab("ETB", new ETBPane(uiContext).getContent());
-            tabbedPane.addTab("Presets", new PresetsPane(uiContext).getContent());
         }
 
         if (!linkManager.isLogViewer()) {
@@ -149,8 +147,13 @@ public class ConsoleUI {
         MessagesCentral.getInstance().postMessage(ConsoleUI.class, "COMPOSITE_OFF_RPM=" + BinaryProtocolLogger.COMPOSITE_OFF_RPM);
 
         tabbedPane.addTab("rusEFI Online", new OnlineTab(uiContext).getContent());
+        tabbedPane.addTab("Connection", new ConnectionTab(uiContext).getContent());
 
-        uiContext.sensorLogger.init();
+        if (false) {
+            // this feature is not totally happy safer to disable to reduce user confusion
+            // https://github.com/rusefi/rusefi/issues/5292
+            uiContext.sensorLogger.init();
+        }
 
         if (!LinkManager.isLogViewerMode(port)) {
             int selectedIndex = getConfig().getRoot().getIntProperty(TAB_INDEX, DEFAULT_TAB_INDEX);
@@ -203,7 +206,7 @@ public class ConsoleUI {
 
     private static void awtCode(String[] args) {
         if (JustOneInstance.isAlreadyRunning()) {
-            int result = JOptionPane.showConfirmDialog(null, "Looks like another instance is already running. Do you really want to start another instance?",
+            int result = JOptionPane.showConfirmDialog(createOnTopParent(), "Looks like another instance is already running. Do you really want to start another instance?",
                     "rusEfi", JOptionPane.YES_NO_OPTION);
             if (result == JOptionPane.NO_OPTION)
                 System.exit(-1);

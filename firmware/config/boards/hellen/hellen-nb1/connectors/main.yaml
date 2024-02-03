@@ -1,7 +1,4 @@
-#
-# CONNECTOR MAPPING NEEDED
-# https://github.com/rusefi/rusefi/blob/master/firmware/config/boards/hellen/hellen_meta.h
-#
+meta: config/boards/hellen_meta.h
 
 pins:
   - pin: 1A
@@ -20,8 +17,8 @@ pins:
     type: can
 
   - pin: 1F    
-    id: [F9]
-    class: [switch_inputs]
+    id: F9
+    class: switch_inputs
     ts_name: 1F - Brake/RES1
     function: Brake Switch
 
@@ -336,8 +333,8 @@ pins:
     function: WBO
     
   - pin: int_pps1
-    id: [A3]
-    class: [switch_inputs]
+    id: A3
+    class: switch_inputs
     ts_name: PPS1
     
   - pin: int_tps2
@@ -363,6 +360,7 @@ pins:
 
 info:
   title: Hellen Miata NB1
+  directory: hellen/hellen-nb1
   image:
     file: main.jpg
   pins:

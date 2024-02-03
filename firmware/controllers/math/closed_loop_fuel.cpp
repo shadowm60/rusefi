@@ -4,6 +4,8 @@
 #include "closed_loop_fuel_cell.h"
 #include "deadband.h"
 
+#if EFI_ENGINE_CONTROL
+
 struct FuelingBank {
 	ClosedLoopFuelCellImpl cells[STFT_CELL_COUNT];
 };
@@ -46,7 +48,6 @@ size_t computeStftBin(int rpm, float load, stft_s& cfg) {
 }
 
 static bool shouldCorrect() {
-#if EFI_SHAFT_POSITION_INPUT
 	const auto& cfg = engineConfiguration->stft;
 
 	// User disable bit
@@ -60,7 +61,7 @@ static bool shouldCorrect() {
 	}
 
 	// Startup delay - allow O2 sensor to warm up, etc
-	if (cfg.startupDelay > engine->engineState.running.timeSinceCrankingInSecs) {
+	if (cfg.startupDelay > engine->fuelComputer.running.timeSinceCrankingInSecs) {
 		return false;
 	}
 
@@ -72,9 +73,6 @@ static bool shouldCorrect() {
 
 	// If all was well, then we're enabled!
 	return true;
-#else
-	return false;
-#endif // EFI_SHAFT_POSITION_INPUT
 }
 
 bool shouldUpdateCorrection(SensorType sensor) {
@@ -90,6 +88,13 @@ bool shouldUpdateCorrection(SensorType sensor) {
 	// Pause correction if DFCO was active recently
 	auto timeSinceDfco = engine->module<DfcoController>()->getTimeSinceCut();
 	if (timeSinceDfco < engineConfiguration->noFuelTrimAfterDfcoTime) {
+		return false;
+	}
+
+	// Pause if some other cut was active recently
+	auto timeSinceFuelCut = engine->module<LimpManager>()->getTimeSinceAnyCut();
+	// TODO: should duration this be configurable?
+	if (timeSinceFuelCut < 2) {
 		return false;
 	}
 
@@ -126,3 +131,5 @@ ClosedLoopFuelResult fuelClosedLoopCorrection() {
 
 	return result;
 }
+
+#endif // EFI_ENGINE_CONTROL

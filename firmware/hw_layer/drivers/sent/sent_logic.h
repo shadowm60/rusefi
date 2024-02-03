@@ -41,6 +41,14 @@ struct sent_channel_stat {
 	/* Slow channel */
 	uint32_t sc;
 	uint32_t scCrcErr;
+uint32_t getTotalError() {
+    return ShortIntervalErr + LongIntervalErr + SyncErr + CrcErrCnt;
+}
+
+float getErrorRate() {
+    return getTotalError() * 1.0 / FrameCnt;
+}
+
 };
 
 class sent_channel {
@@ -56,6 +64,7 @@ private:
 
 	/* fast channel shift register*/
 	uint32_t rxReg;
+	bool hasValidFast = false;
 	/* fast channel last received valid message */
 	uint32_t rxLast;
 

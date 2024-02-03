@@ -1,0 +1,205 @@
+#
+# see https://github.com/rusefi/fw-Paralela/blob/master/.github/workflows/compile-board.yaml as an example of how to build custom board firmware
+#
+
+name: Build Custom Board Firmware
+
+on:
+  workflow_call:
+    inputs:
+      shortBoardName:
+        required: true
+        type: string
+      token:
+        description: 'Token for accessing private repos'
+        required: false
+        type: string
+      rusefi_dir:
+        required: false
+        type: string
+        default: ext/rusefi
+      relative_board_dir:
+        required: false
+        type: string
+        default: ../..
+
+jobs:
+  create-board:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set Token
+        run: |
+          if ! [[ -z "${{ inputs.token }}" ]]; then
+            echo "Got token input"
+            echo "TOKEN=${{ inputs.token }}" >> "$GITHUB_ENV"
+          elif ! [[ -z "${{ secrets.MY_REPO_PAT }}" ]]; then
+            echo "Using current secret"
+            echo "TOKEN=${{ secrets.MY_REPO_PAT }}" >> "$GITHUB_ENV"
+          else
+            echo "Using current token"
+            echo "TOKEN=${{ github.token }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Echo
+        run: |
+          echo "shortBoardName=${{inputs.shortBoardName}}"
+          echo "rusefi_dir=${{inputs.rusefi_dir}}"
+          echo "relative_board_dir=${{inputs.relative_board_dir}}"
+
+      - name: Set Env Variables
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run: |
+          echo "META_OUTPUT_ROOT_FOLDER=../${{inputs.relative_board_dir}}/generated/" >> $GITHUB_ENV
+          echo "gha_shortBoardName=${{inputs.shortBoardName}}" >> $GITHUB_ENV
+          echo "gha_iniFileName=rusefi_${{inputs.shortBoardName}}.ini" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ env.TOKEN }}
+          submodules: recursive
+
+      - name: Invoking Post-Checkout Action
+        run: |
+          if [ -f .github/workflows/actions/post-checkout.sh ]; then
+            bash .github/workflows/actions/post-checkout.sh
+          fi
+
+      # Build machines don't have arm-none-eabi gcc, so let's download it and put it on the path
+      - name: Download & Install GCC
+        if: ${{ env.skip != 'true' }}
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run: |
+          ${{inputs.rusefi_dir}}/firmware/provide_gcc.sh
+          echo "::add-path::`pwd`/gcc-arm-none-eabi/bin"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Test Compiler
+        run: javac -version
+
+      - name: Install Tools
+        run: |
+          sudo bash ${{inputs.rusefi_dir}}/misc/actions/add-ubuntu-latest-apt-mirrors.sh
+          sudo apt-get install sshpass sshpass mtools
+
+      - name: Gen Config
+        working-directory: ${{inputs.rusefi_dir}}/firmware
+        run: |
+          bash gen_config_board.sh ../${{inputs.relative_board_dir}} ${{env.gha_shortBoardName}}
+
+      - name: Repo Status
+        run: |
+          git status
+
+      - name: rusefi_dir Status
+        working-directory: ${{inputs.rusefi_dir}}
+        run: |
+          if [ -d .git ]; then
+            git status
+          else
+            echo Not a repository
+          fi
+
+      - name: Push Config
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub git update Action"
+          git add generated/*
+          OUT=$(git commit -am "GHA Automation" 2>&1) || echo "commit failed, finding out why"
+          if echo "$OUT" | grep 'nothing to commit'; then
+            echo "Configs: looks like nothing to commit"
+            exit 0
+          fi
+          git status
+
+      - name: Connectors Status
+        run: |
+          git status
+
+      - name: Push Connectors
+        run: |
+          if [ -d connectors ]; then
+            git add connectors/*
+          fi
+          OUT=$(git commit -am "GHA Connectors Generated" 2>&1) || echo "commit failed, finding out why"
+          if echo "$OUT" | grep 'nothing to commit'; then
+            echo "Connectors: looks like nothing to commit"
+            exit 0
+          fi
+          echo "[$OUT]"
+
+      - name: Push
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ github.token }}
+
+      - name: Upload .ini files to server
+        working-directory: generated/tunerstudio/generated
+        run: ../../../${{inputs.rusefi_dir}}/firmware/tunerstudio/upload_ini.sh ${{env.gha_iniFileName}} ${{ secrets.RUSEFI_ONLINE_FTP_USER }} ${{ secrets.RUSEFI_ONLINE_FTP_PASS }} ${{ secrets.RUSEFI_FTP_SERVER }}
+
+      - name: Build Firmware
+        working-directory: ${{inputs.rusefi_dir}}
+        run: bash misc/jenkins/compile_other_versions/compile.sh ../${{inputs.relative_board_dir}} ${{env.gha_shortBoardName}}
+
+      - name: Upload build bin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi.bin
+          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.bin
+
+      - name: Upload build hex artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi.hex
+          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.hex
+
+      - name: Upload build list artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi.list
+          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.list
+
+      - name: Upload build map artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi.map
+          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.map
+
+      - name: Upload build elf artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi.elf
+          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.elf
+
+      - name: Build console
+        working-directory: ${{inputs.rusefi_dir}}
+        run: bash misc/jenkins/build_java_console.sh
+
+      - name: Set SSH variables
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run: |
+          if [ "${{github.event_name}}" = "push" ] && [ "${{github.ref}}" = "refs/heads/master" ]; then
+            echo "Setting credentials..."
+            echo "RUSEFI_SSH_SERVER=${{secrets.RUSEFI_SSH_SERVER}}" >> $GITHUB_ENV
+            echo "RUSEFI_SSH_USER=${{secrets.RUSEFI_SSH_USER}}" >> $GITHUB_ENV
+            echo "RUSEFI_SSH_PASS=${{secrets.RUSEFI_SSH_PASS}}" >> $GITHUB_ENV
+          else
+            echo "NOT setting credentials: ${{github.event_name}} ${{github.ref}}"
+          fi
+
+      - name: Package and Upload Bundle
+        working-directory: ${{inputs.rusefi_dir}}
+        run: bash misc/jenkins/compile_other_versions/prepare_bundle.sh ${{env.gha_shortBoardName}} "${{inputs.relative_board_dir}}/generated/tunerstudio/generated/${{env.gha_iniFileName}}" master
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi_bundle_${{env.gha_shortBoardName}}.zip
+          path: ${{inputs.rusefi_dir}}/artifacts/rusefi_bundle*.zip

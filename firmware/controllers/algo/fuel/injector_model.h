@@ -1,6 +1,6 @@
 #pragma once
 
-#include "expected.h"
+#include <rusefi/expected.h>
 #include "injector_model_generated.h"
 #include "engine_module.h"
 
@@ -18,7 +18,7 @@ public:
 	float getFuelMassForDuration(floatms_t duration) const override;
 
 	virtual float getInjectorFlowRatio() = 0;
-	virtual expected<float> getAbsoluteRailPressure() const = 0;
+	virtual expected<float> getFuelDifferentialPressure() const = 0;
 
 	virtual float getBaseFlowRate() const = 0;
 
@@ -44,21 +44,37 @@ private:
 	float m_smallPulseOffset = 0;
 };
 
-class InjectorModel : public InjectorModelBase {
+class InjectorModelWithConfig : public InjectorModelBase {
 public:
+	InjectorModelWithConfig(const injector_s* const cfg);
 
 	floatms_t getDeadtime() const override;
 	float getBaseFlowRate() const override;
 	float getInjectorFlowRatio() override;
-	expected<float> getAbsoluteRailPressure() const override;
+	expected<float> getFuelDifferentialPressure() const override;
+
+	using interface_t = IInjectorModel; // Mock interface
+
+private:
+	const injector_s* const m_cfg;
+};
+
+struct InjectorModelPrimary : public InjectorModelWithConfig {
+	InjectorModelPrimary();
 
 	InjectorNonlinearMode getNonlinearMode() const override;
 
 	// Ford small pulse model
 	float getSmallPulseFlowRate() const override;
 	float getSmallPulseBreakPoint() const override;
+};
 
-	// Small pulse correction logic
+struct InjectorModelSecondary : public InjectorModelWithConfig {
+	InjectorModelSecondary();
 
-	using interface_t = IInjectorModel; // Mock interface
+	InjectorNonlinearMode getNonlinearMode() const override;
+
+	// Ford small pulse model
+	float getSmallPulseFlowRate() const override;
+	float getSmallPulseBreakPoint() const override;
 };

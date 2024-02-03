@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.devexperts.logging.Logging.getLogging;
+import static com.rusefi.config.generated.TriggerMeta.IGNITION_OUTPUT;
 
 /**
  * Andrey Belomutskiy, (c) 2012-2016
@@ -39,7 +40,7 @@ public class FiringOrderTSLogic {
     }
 
     private static void readFiringOrders(String fileName, State state) throws IOException {
-        BufferedReader br = new BufferedReader(new FileReader(fileName));
+        BufferedReader br = new BufferedReader(new FileReader(RootHolder.ROOT + fileName));
 
         String line;
         while ((line = br.readLine()) != null) {
@@ -101,7 +102,7 @@ public class FiringOrderTSLogic {
         String result = logic.length() == 0 ? "" : "|| (" + logic + ")";
 
         //String output = "#define ignitionPin" + cylinderId + "logic" + " " + result + "";
-        String output = "\t\tfield = \"Ignition Pin " + cylinderId +
+        String output = "\t\tfield = \"" + IGNITION_OUTPUT + " " + cylinderId +
                 "\",                       ignitionPins" + cylinderId +
                 ", {isIgnitionEnabled == 1 && (ignitionMode != 0 && cylindersCount >= " + cylinderId + ") && (ignitionMode !=2 || twoWireBatchIgnition == 1 " + result + ")}";
         System.out.println(output);

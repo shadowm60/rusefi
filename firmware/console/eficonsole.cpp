@@ -26,6 +26,7 @@
 
 #include "eficonsole.h"
 #include "console_io.h"
+#include "mpu_util.h"
 #include "svnversion.h"
 
 static void testCritical() {
@@ -33,11 +34,15 @@ static void testCritical() {
 }
 
 static void myerror() {
-	firmwareError(CUSTOM_ERR_TEST_ERROR, "firmwareError: %d", getRusEfiVersion());
+	firmwareError(ObdCode::CUSTOM_ERR_TEST_ERROR, "firmwareError: %d", getRusEfiVersion());
+}
+
+static void testHardFault() {
+	causeHardFault();
 }
 
 static void sayHello() {
-	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2022. All rights reserved.");
+	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2023. All rights reserved.");
 	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI v%d@%s", getRusEfiVersion(), VCS_VERSION);
 	efiPrintf(PROTOCOL_HELLO_PREFIX " Chibios Kernel:       %s", CH_KERNEL_VERSION);
 	efiPrintf(PROTOCOL_HELLO_PREFIX " Compiled:     " __DATE__ " - " __TIME__ "");
@@ -46,7 +51,7 @@ static void sayHello() {
 	efiPrintf(PROTOCOL_HELLO_PREFIX " with OPENBLT");
 #endif
 
-#ifdef ENABLE_AUTO_DETECT_HSE
+#if ENABLE_AUTO_DETECT_HSE
 	extern float hseFrequencyMhz;
 	extern uint8_t autoDetectedRoundedMhz;
 	efiPrintf(PROTOCOL_HELLO_PREFIX " detected HSE clock %.2f MHz PLLM = %d", hseFrequencyMhz, autoDetectedRoundedMhz);
@@ -58,18 +63,15 @@ static void sayHello() {
 	uint32_t *uid = ((uint32_t *)UID_BASE);
 	efiPrintf("UID=%x %x %x", uid[0], uid[1], uid[2]);
 
+#if defined(STM32F4) && !defined(AT32F4XX)
 	efiPrintf("can read 0x20000010 %d", ramReadProbe((const char *)0x20000010));
 	efiPrintf("can read 0x20020010 %d", ramReadProbe((const char *)0x20020010));
 	efiPrintf("can read 0x20070010 %d", ramReadProbe((const char *)0x20070010));
 
-#if defined(STM32F4)
 	efiPrintf("isStm32F42x %s", boolToString(isStm32F42x()));
 #endif // STM32F4
 
 #define 	TM_ID_GetFlashSize()    (*(__IO uint16_t *) (FLASHSIZE_BASE))
-#define MCU_REVISION_MASK  0xfff
-
-	int mcuRevision = DBGMCU->IDCODE & MCU_REVISION_MASK;
 
 #ifndef MIN_FLASH_SIZE
 #define MIN_FLASH_SIZE 1024
@@ -77,16 +79,36 @@ static void sayHello() {
 
 	int flashSize = TM_ID_GetFlashSize();
 	if (flashSize < MIN_FLASH_SIZE) {
-		firmwareError(OBD_PCM_Processor_Fault, "rusEFI expected at least %dK of flash", MIN_FLASH_SIZE);
+		// todo: bug, at the moment we report 1MB on dual-bank F7
+		criticalError("rusEFI expected at least %dK of flash", MIN_FLASH_SIZE);
 	}
 
-	// todo: bug, at the moment we report 1MB on dual-bank F7
+#ifdef AT32F4XX
+	int mcuRevision = DBGMCU->SERID & 0x07;
+	int mcuSerId = (DBGMCU->SERID >> 8) & 0xff;
+	const char *partNumber, *package;
+	uint32_t pnFlashSize;
+	int ret = at32GetMcuType(DBGMCU->IDCODE, &partNumber, &package, &pnFlashSize);
+	if (ret == 0) {
+		efiPrintf("MCU IDCODE %s in %s with %d KB flash",
+			partNumber, package, pnFlashSize);
+	} else {
+		efiPrintf("MCU IDCODE unknown 0x%x", DBGMCU->IDCODE);
+	}
+	efiPrintf("MCU SER_ID %s rev %c",
+		(mcuSerId == 0x0d) ? "AT32F435" : ((mcuSerId == 0x0e) ? "AT32F437" : "UNKNOWN"),
+		'A' + mcuRevision);
+	efiPrintf("MCU F_SIZE %d KB", flashSize);
+	efiPrintf("MCU RAM %d KB", at32GetRamSizeKb());
+#else
+#define MCU_REVISION_MASK  0xfff
+	int mcuRevision = DBGMCU->IDCODE & MCU_REVISION_MASK;
 	efiPrintf("MCU rev=%x flashSize=%d", mcuRevision, flashSize);
 #endif
+#endif
 
-
-#ifdef CH_FREQUENCY
-	efiPrintf("CH_FREQUENCY=%d", CH_FREQUENCY);
+#ifdef CH_CFG_ST_FREQUENCY
+	efiPrintf("CH_CFG_ST_FREQUENCY=%d", CH_CFG_ST_FREQUENCY);
 #endif
 
 #ifdef CORTEX_MAX_KERNEL_PRIORITY
@@ -142,17 +164,6 @@ static void sayHello() {
 	chThdSleepMilliseconds(5);
 }
 
-void validateStack(const char*msg, obd_code_e code, int desiredStackUnusedSize) {
-#if CH_DBG_THREADS_PROFILING && CH_DBG_FILL_THREADS
-	int unusedStack = CountFreeStackSpace(chThdGetSelfX()->wabase);
-	if (unusedStack < desiredStackUnusedSize) {
-		warning(code, "Stack low on %s: %d", msg, unusedStack);
-	}
-#else
-	(void)msg; (void)code; (void)desiredStackUnusedSize;
-#endif
-}
-
 #if CH_DBG_THREADS_PROFILING && CH_DBG_FILL_THREADS
 int CountFreeStackSpace(const void* wabase) {
 	const uint8_t* stackBase = reinterpret_cast<const uint8_t*>(wabase);
@@ -183,7 +194,7 @@ static void cmd_threads() {
 		efiPrintf("%s\t%08x\t%lu\t%d", tp->name, tp->wabase, tp->time, freeBytes);
 
 		if (freeBytes < 100) {
-			firmwareError(OBD_PCM_Processor_Fault, "Ran out of stack on thread %s, %d bytes remain", tp->name, freeBytes);
+			criticalError("Ran out of stack on thread %s, %d bytes remain", tp->name, freeBytes);
 		}
 
 		tp = chRegNextThread(tp);
@@ -199,6 +210,30 @@ static void cmd_threads() {
 #endif
 }
 
+/**
+ * @brief This is just a test function
+ */
+static void echo(int value) {
+	efiPrintf("got value: %d", value);
+}
+
+void checkStackAndHandleConsoleLine(char *line) {
+	assertStackVoid("console", ObdCode::STACK_USAGE_MISC, EXPECTED_REMAINING_STACK);
+    handleConsoleLine(line);
+}
+
+void onCliCaseError(const char *token) {
+	firmwareError(ObdCode::CUSTOM_ERR_COMMAND_LOWER_CASE_EXPECTED, "lowerCase expected [%s]", token);
+}
+
+void onCliDuplicateError(const char *token) {
+    firmwareError(ObdCode::CUSTOM_SAME_TWICE, "Same action twice [%s]", token);
+}
+
+void onCliOverflowError() {
+    firmwareError(ObdCode::CUSTOM_CONSOLE_TOO_MANY, "Too many console actions");
+}
+
 void initializeConsole() {
 	initConsoleLogic();
 
@@ -206,6 +241,7 @@ void initializeConsole() {
 
 	sayHello();
 	addConsoleAction("test", [](){ /* do nothing */});
+	addConsoleActionI("echo", echo);
 	addConsoleAction("hello", sayHello);
 #if EFI_HAS_RESET
 	addConsoleAction("reset", scheduleReset);
@@ -213,5 +249,11 @@ void initializeConsole() {
 
 	addConsoleAction("critical", testCritical);
 	addConsoleAction("error", myerror);
+	addConsoleAction("hard_fault", testHardFault);
 	addConsoleAction("threadsinfo", cmd_threads);
+
+#if HAL_USE_WDG
+	addConsoleActionI("set_watchdog_timeout", startWatchdog);
+	addConsoleActionI("set_watchdog_reset", setWatchdogResetPeriod);
+#endif
 }

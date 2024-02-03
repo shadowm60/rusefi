@@ -41,6 +41,7 @@ CPPSRC += $(ALLCPPSRC) \
 	$(PROJECT_DIR)/../unit_tests/main.cpp \
 	$(PROJECT_DIR)/../unit_tests/global_mocks.cpp \
 	$(PROJECT_DIR)/../unit_tests/mocks.cpp \
+	$(RUSEFI_LIB)/mock/lib-time-mocks.cpp \
 	$(RUSEFI_LIB_CPP) \
 	$(RUSEFI_LIB_CPP_TEST) \
 
@@ -49,6 +50,7 @@ INCDIR += \
 	$(UNIT_TESTS_DIR) \
 	$(ALLINC) \
 	$(PROJECT_DIR)/config/boards/hellen \
+	$(FRAMEWORK_INC) \
 	$(UNIT_TESTS_DIR)/test_data_structures \
 	$(UNIT_TESTS_DIR)/chibios-mock \
 	$(UNIT_TESTS_DIR)/native \

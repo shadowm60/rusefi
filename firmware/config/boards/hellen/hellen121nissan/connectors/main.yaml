@@ -1,43 +1,4 @@
 pins:
-  - pin: aux_ls1
-    class: outputs
-# H144_OUT_PWM2
-    id: C6
-    ts_name: Aux Low 1
-    function: Aux Low 1
-
-  - pin: aux_ls2
-    class: outputs
-    # H144_OUT_PWM3
-    id: C7
-    ts_name: Aux Low 2
-    function: Aux Low 2
-
-  - pin: aux_ls3
-    class: outputs
-    # H144_OUT_PWM4
-    id: C8
-    ts_name: Aux Low 3
-    function: Aux Low 3
-
-  - pin: aux_ain1
-    # H144_IN_MAP1
-    id: EFI_ADC_10
-    ts_name: Aux AnInput 1
-    function: Aux AnInput 1
-
-  - pin: aux_ain2
-    # H144_IN_MAP2
-    id: EFI_ADC_11
-    ts_name: Aux AnInput 2
-    function: Aux AnInput 2
-
-  - pin: aux_ain3
-    # H144_IN_MAP3
-    id: EFI_ADC_2
-    ts_name: Aux AnInput 3
-    function: Aux AnInput 3
-
   - pin: 1a
     function: GND
     type: GND
@@ -128,8 +89,8 @@ pins:
   - pin: 33a
     function: Cam Sensor Right
 # IN_CAM_R IN_AUX4 AIN20 A20
-    id: [A7]
-    class: [event_inputs]
+    id: A7
+    class: event_inputs
     ts_name: 33 - Cam Right
     
   - pin: 34a
@@ -176,14 +137,14 @@ pins:
     ts_name: 50 - TPS 1
     function: TPS 1 sensor input
 
-  - pin: 51a
+  - pin: 51a_broken1
     # H144_IN_O2S
     id: EFI_ADC_0
     class: analog_inputs
     ts_name: 51 - MAF
     function: MAF signal
 
-  - pin: 51a
+  - pin: 51a_broken2
     function: LSU 4.2 IP1
 
   - pin: 56a
@@ -231,6 +192,24 @@ pins:
     ts_name: 69 - TPS 2
     function: TPS 2 sensor input  
 
+  - pin: P66
+    # IN_MAP1 AIN9 PC0
+    id: EFI_ADC_10
+    class: analog_inputs
+    ts_name: Aux P66
+
+  - pin: P67
+    # AIN10 PC1
+    id: EFI_ADC_11
+    class: analog_inputs
+    ts_name: Aux P67
+
+  - pin: P68
+    # H144_IN_MAP3 AIN15 A15 PA2
+    id: EFI_ADC_2
+    class: analog_inputs
+    ts_name: Aux P68
+
   - pin: 73a
     id: EFI_ADC_12
     class: analog_inputs
@@ -240,10 +219,10 @@ pins:
   - pin: 75a
     function: LSU 4.2 IA1
 
-  - pin: 77a
+  - pin: 77a_broken1
     function: LSU 4.2 UN2
 
-  - pin: 77a
+  - pin: 77a_broken2
     function: LSU 4.2 IA2
 
 
@@ -344,6 +323,7 @@ pins:
     function: Main relay control
     type: ls
 
+
   - pin: 113a
 # OUT_PWM8
     id: D12
@@ -373,7 +353,9 @@ pins:
 info:
   title: Hellen 121 Nissan
   name: Hellen 121 Nissan
+  order: 0
   board_url: https://github.com/rusefi/rusefi/wiki/Hellen-121-Nissan
+  directory: hellen/hellen121nissan
   image:
     file: 121pin.jpg
   pins:

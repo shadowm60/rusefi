@@ -57,8 +57,7 @@
 /* convert CPU ticks to float Us */
 #define TicksToUs(ticks)		((float)(ticks) * 1000.0 * 1000.0 / CORE_CLOCK)
 
-void sent_channel::restart(void)
-{
+void sent_channel::restart(void) {
 	state = SENT_STATE_CALIB;
 	pulseCounter = 0;
 	currentStatePulseCounter = 0;
@@ -82,20 +81,17 @@ void sent_channel::restart(void)
 	#endif
 }
 
-uint32_t sent_channel::calcTickPerUnit(uint32_t clocks)
-{
+uint32_t sent_channel::calcTickPerUnit(uint32_t clocks) {
 	/* int division with rounding */
 	return (clocks + (SENT_SYNC_INTERVAL + SENT_OFFSET_INTERVAL) / 2) /
 			(SENT_SYNC_INTERVAL + SENT_OFFSET_INTERVAL);
 }
 
-float sent_channel::getTickTime(void)
-{
+float sent_channel::getTickTime(void) {
 	return tickPerUnit;
 }
 
-int sent_channel::Decoder(uint16_t clocks)
-{
+int sent_channel::Decoder(uint16_t clocks) {
 	int ret = 0;
 	int interval;
 
@@ -234,6 +230,7 @@ int sent_channel::Decoder(uint16_t clocks)
 					{
 						/* Full packet with correct CRC has been received */
 						rxLast = rxReg;
+						hasValidFast = true;
 						/* TODO: add timestamp? */
 						ret = 1;
 					}
@@ -275,19 +272,19 @@ int sent_channel::Decoder(uint16_t clocks)
 	return ret;
 }
 
-int sent_channel::GetMsg(uint32_t* rx)
-{
+int sent_channel::GetMsg(uint32_t* rx) {
 	if (rx) {
 		*rx = rxLast;
 	}
 
-	/* TODO: add check if any packet was received */
-	/* TODO: add check for time since last message reseived */
+    if (!hasValidFast) {
+        return -1;
+    }
+	/* TODO: add check for time since last message received */
 	return 0;
 }
 
-int sent_channel::GetSignals(uint8_t *pStat, uint16_t *pSig0, uint16_t *pSig1)
-{
+int sent_channel::GetSignals(uint8_t *pStat, uint16_t *pSig0, uint16_t *pSig1) {
 	uint32_t rx;
 	int ret = GetMsg(&rx);
 
@@ -507,10 +504,7 @@ uint8_t sent_channel::crc6(uint32_t data)
 
 static sent_channel channels[SENT_CHANNELS_NUM];
 
-void sent_channel::Info(void)
-{
-	int i;
-
+void sent_channel::Info(void) {
 	uint8_t stat;
 	uint16_t sig0, sig1;
 
@@ -523,7 +517,7 @@ void sent_channel::Info(void)
 
 	if (scMsgFlags) {
 		efiPrintf("Slow channels:");
-		for (i = 0; i < SENT_SLOW_CHANNELS_MAX; i++) {
+		for (int i = 0; i < SENT_SLOW_CHANNELS_MAX; i++) {
 			if (scMsgFlags & BIT(i)) {
 				efiPrintf(" ID %d: %d", scMsg[i].id, scMsg[i].data);
 			}
@@ -543,7 +537,7 @@ void sent_channel::Info(void)
 /* Decoder thread settings.													*/
 /*==========================================================================*/
 
-/* 4 per channel should be enougth */
+/* 4 per channel should be enough */
 #define SENT_MB_SIZE		(4 * SENT_CHANNELS_NUM)
 
 static msg_t sent_mb_buffer[SENT_MB_SIZE];
@@ -551,10 +545,9 @@ static MAILBOX_DECL(sent_mb, sent_mb_buffer, SENT_MB_SIZE);
 
 static THD_WORKING_AREA(waSentDecoderThread, 256);
 
-void SENT_ISR_Handler(uint8_t ch, uint16_t clocks)
-{
+void SENT_ISR_Handler(uint8_t channel, uint16_t clocks) {
 	/* encode to fit msg_t */
-	msg_t msg = (ch << 16) | clocks;
+	msg_t msg = (channel << 16) | clocks;
 
 	/* called from ISR */
 	chSysLockFromISR();
@@ -562,12 +555,10 @@ void SENT_ISR_Handler(uint8_t ch, uint16_t clocks)
 	chSysUnlockFromISR();
 }
 
-static void SentDecoderThread(void*)
-{
-	msg_t msg;
-	while(true)
-	{
+static void SentDecoderThread(void*) {
+	while (true) {
 		msg_t ret;
+		msg_t msg;
 
 		ret = chMBFetchTimeout(&sent_mb, &msg, TIME_INFINITE);
 
@@ -576,27 +567,39 @@ static void SentDecoderThread(void*)
 			uint8_t n = (msg >> 16) & 0xff;
 
 			if (n < SENT_CHANNELS_NUM) {
-				sent_channel &ch = channels[n];
+				sent_channel &channel = channels[n];
 
-				if (ch.Decoder(tick) > 0) {
+				if (channel.Decoder(tick) > 0) {
+
+    				uint16_t sig0, sig1;
+    				channel.GetSignals(NULL, &sig0, &sig1);
+    				engine->sent_state.value0 = sig0;
+    				engine->sent_state.value1 = sig1;
+
+    				#if SENT_STATISTIC_COUNTERS
+    				    engine->sent_state.errorRate = channel.statistic.getErrorRate();
+    				#endif // SENT_STATISTIC_COUNTERS
+
+
 					/* Call high level decoder from here */
+					sentTpsDecode();
 				}
 			}
 		}
 	}
 }
 
-static void printSentInfo()
-{
-	int i;
+static void printSentInfo() {
+#if EFI_SENT_SUPPORT
+	for (int i = 0; i < SENT_CHANNELS_NUM; i++) {
+		sent_channel &channel = channels[i];
 
-	for (i = 0; i < SENT_CHANNELS_NUM; i++) {
-		sent_channel &ch = channels[i];
-
-		efiPrintf("---- SENT ch %d ----", i);
-		ch.Info();
+        const char * pinName = getBoardSpecificPinName(engineConfiguration->sentInputPins[i]);
+		efiPrintf("---- SENT ch %d ---- on %s", i, pinName);
+		channel.Info();
 		efiPrintf("--------------------");
 	}
+#endif // EFI_SENT_SUPPORT
 }
 
 /* Don't be confused: this actually returns throttle body position */
@@ -604,9 +607,9 @@ static void printSentInfo()
 float getSentValue(size_t index) {
 	if (index < SENT_CHANNELS_NUM) {
 		uint16_t sig0, sig1;
-		sent_channel &ch = channels[index];
+		sent_channel &channel = channels[index];
 
-		if (ch.GetSignals(NULL, &sig0, &sig1) == 0) {
+		if (channel.GetSignals(NULL, &sig0, &sig1) == 0) {
 
 			// GM sig0 + sig1 == 0xfff but Ford does not
 			/* scale to 0.0 .. 1.0 */
@@ -619,9 +622,9 @@ float getSentValue(size_t index) {
 
 int getSentValues(size_t index, uint16_t *sig0, uint16_t *sig1) {
 	if (index < SENT_CHANNELS_NUM) {
-		sent_channel &ch = channels[index];
+		sent_channel &channel = channels[index];
 
-		return ch.GetSignals(NULL, sig0, sig1);
+		return channel.GetSignals(NULL, sig0, sig1);
 	}
 
 	/* invalid channel */
@@ -629,8 +632,7 @@ int getSentValues(size_t index, uint16_t *sig0, uint16_t *sig1) {
 }
 
 /* Should be called once */
-void initSent(void)
-{
+void initSent(void) {
 	/* init interval mailbox */
 	chMBObjectInit(&sent_mb, sent_mb_buffer, SENT_MB_SIZE);
 

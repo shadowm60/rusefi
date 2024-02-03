@@ -53,6 +53,7 @@ void FrequencySensor::deInit() {
 }
 
 void FrequencySensor::onEdge(efitick_t nowNt) {
+    // diagnostics
 	eventCounter++;
 	float frequency = 1 / m_edgeTimer.getElapsedSecondsAndReset(nowNt);
 

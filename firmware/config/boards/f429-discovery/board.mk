@@ -1,13 +1,9 @@
-BOARD_DIR = $(PROJECT_DIR)/config/boards/$(PROJECT_BOARD)
-
 HALCONFDIR = $(BOARD_DIR)
 
 # List of all the board related files.
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
 
 # Required include directories
-BOARDINC = $(BOARD_DIR)
-
 # STM32F429 has FSMC with SDRAM support
 DDEFS += -DFIRMWARE_ID=\"stm32f429\"
 IS_STM32F429 = yes
@@ -22,8 +18,9 @@ DDEFS += -DSTM32_USB_USE_OTG1=FALSE
 DDEFS += -DSTM32_USB_USE_OTG2=TRUE
 DDEFS += -DHAL_USE_SDRAM=TRUE
 DDEFS += -DHAL_USE_FSMC=TRUE
+DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_F429_DISCOVERY
 
-DDEFS += -DSHORT_BOARD_NAME=f429-discovery
+SHORT_BOARD_NAME = f429-discovery
 
 # Shared variables
 ALLINC += $(BOARDINC)

@@ -22,22 +22,29 @@ public class IniFileModel {
     private static final String FIELD_TYPE_ARRAY = "array";
     private static final String FIELD_TYPE_BITS = "bits";
 
+    public Map<String, List<String>> defines = new TreeMap<>();
+
     private static IniFileModel INSTANCE;
     private String dialogId;
     private String dialogUiName;
-    private Map<String, DialogModel> dialogs = new TreeMap<>();
-    private Map<String, DialogModel.Field> allFields = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final Map<String, DialogModel> dialogs = new TreeMap<>();
     // this is only used while reading model - TODO extract reader
-    private List<DialogModel.Field> fieldsOfCurrentDialog = new ArrayList<>();
-    public Map<String, IniField> allIniFields = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final List<DialogModel.Field> fieldsOfCurrentDialog = new ArrayList<>();
+    public Map<String, IniField> allIniFields = new LinkedHashMap<>();
+    public final Map<String, DialogModel.Field> fieldsInUiOrder = new LinkedHashMap<>();
 
     public Map<String, String> tooltips = new TreeMap<>();
     public Map<String, String> protocolMeta = new TreeMap<>();
     private boolean isConstantsSection;
-    private String currentSection;
+    private String currentYBins;
+    private String currentXBins;
+    private final Map<String, String> xBinsByZBins = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private final Map<String, String> yBinsByZBins = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     public static void main(String[] args) {
-        log.info("Dialogs: " + IniFileModel.getInstance().dialogs);
+        IniFileModel iniFile = new IniFileModel();
+        iniFile.findAndReadIniFile(INI_FILE_PATH);
+        log.info("Dialogs: " + iniFile.dialogs);
     }
 
     private boolean isInSettingContextHelp = false;
@@ -77,12 +84,12 @@ public class IniFileModel {
     }
 
     @Nullable
-    public static String findFile(String fileDirectory, String prefix, String suffix) {
+    private static String findFile(String fileDirectory, String prefix, String suffix) {
         File dir = new File(fileDirectory);
         if (!dir.isDirectory())
             return null;
         log.info("Searching for " + prefix + "*" + suffix + " in " + fileDirectory);
-        for (String file : dir.list()) {
+        for (String file : Objects.requireNonNull(dir.list())) {
             if (file.contains(" "))
                 continue; // spaces not acceptable
             if (file.startsWith(prefix) && file.endsWith(suffix))
@@ -107,6 +114,10 @@ public class IniFileModel {
         String rawText = line.getRawText();
         try {
             LinkedList<String> list = new LinkedList<>(Arrays.asList(line.getTokens()));
+            if (!list.isEmpty() && list.get(0).equals("#define")) {
+                defines.put(list.get(1), list.subList(2, list.size()));
+                return;
+            }
 
             if (!list.isEmpty() && list.get(0).equals(SECTION_PAGE)) {
                 isInsidePageDefinition = true;
@@ -143,14 +154,13 @@ public class IniFileModel {
 
             if (first.startsWith("[") && first.endsWith("]")) {
                 log.info("Section " + first);
-                currentSection = first;
                 isConstantsSection = first.equals("[Constants]");
             }
 
             if (isConstantsSection) {
                 if (isInsidePageDefinition) {
                     if (list.size() > 1)
-                        handleFieldDefinition(list);
+                        handleFieldDefinition(list, line);
                     return;
                 } else {
                     if (list.size() > 1) {
@@ -160,34 +170,97 @@ public class IniFileModel {
             }
 
 
-            if ("dialog".equals(first)) {
-                handleDialog(list);
-            } else if ("field".equals(first)) {
-                handleField(list);
+            switch (first) {
+                case "field":
+                    handleField(list);
+                    break;
+                case "dialog":
+                    handleDialog(list);
+                    break;
+                case "table":
+                    handleTable(list);
+                    break;
+                case "xBins":
+                    handleXBins(list);
+                    break;
+                case "yBins":
+                    handleYBins(list);
+                    break;
+                case "zBins":
+                    handleZBins(list);
+                    break;
             }
         } catch (RuntimeException e) {
-            throw new IllegalStateException("While [" + rawText + "]", e);
+            throw new IllegalStateException("Failed to handle [" + rawText + "]: " + e, e);
         }
     }
 
-    private void handleFieldDefinition(LinkedList<String> list) {
-        if (list.get(1).equals(FIELD_TYPE_SCALAR)) {
-            registerField(ScalarIniField.parse(list));
-        } else if (list.get(1).equals(FIELD_TYPE_STRING)) {
-            registerField(StringIniField.parse(list));
-        } else if (list.get(1).equals(FIELD_TYPE_ARRAY)) {
-            registerField(ArrayIniField.parse(list));
-        } else if (list.get(1).equals(FIELD_TYPE_BITS)) {
-            registerField(EnumIniField.parse(list));
-        } else {
-            throw new IllegalStateException("Unexpected " + list);
+    private void handleZBins(LinkedList<String> list) {
+        list.removeFirst();
+        String zBins = list.removeFirst();
+        addField(zBins);
+        if (currentXBins == null || currentYBins == null)
+            throw new IllegalStateException("X or Y missing for " + zBins);
+        xBinsByZBins.put(zBins, currentXBins);
+        yBinsByZBins.put(zBins, currentYBins);
+    }
+
+    public String getXBin(String tableName) {
+        return xBinsByZBins.get(tableName);
+    }
+
+    public Set<String> getTables() {
+        return xBinsByZBins.keySet();
+    }
+
+    public String getYBin(String tableName) {
+        return yBinsByZBins.get(tableName);
+    }
+
+    private void handleYBins(LinkedList<String> list) {
+        list.removeFirst();
+        currentYBins = list.removeFirst();
+        addField(currentYBins);
+    }
+
+    private void handleXBins(LinkedList<String> list) {
+        list.removeFirst();
+        currentXBins = list.removeFirst();
+        addField(currentXBins);
+    }
+
+    private void addField(String key) {
+        DialogModel.Field field = new DialogModel.Field(key, key);
+        fieldsInUiOrder.put(key, field);
+    }
+
+    private void handleTable(LinkedList<String> list) {
+        list.removeFirst();
+        String tableName = list.removeFirst();
+    }
+
+    private void handleFieldDefinition(LinkedList<String> list, RawIniFile.Line line) {
+        switch (list.get(1)) {
+            case FIELD_TYPE_SCALAR:
+                registerField(ScalarIniField.parse(list));
+                break;
+            case FIELD_TYPE_STRING:
+                registerField(StringIniField.parse(list));
+                break;
+            case FIELD_TYPE_ARRAY:
+                registerField(ArrayIniField.parse(list));
+                break;
+            case FIELD_TYPE_BITS:
+                registerField(EnumIniField.parse(list, line, this));
+                break;
+            default:
+                throw new IllegalStateException("Unexpected " + list);
         }
     }
 
     private void registerField(IniField field) {
-        // todo: only the first occurrence should matter, but com.rusefi.ui.TuneReadWriteTest is failing when uncommented :(
-        //if (allIniFields.containsKey(field.getName()))
-        //	return;
+        if (allIniFields.containsKey(field.getName()))
+            return;
         allIniFields.put(field.getName(), field);
     }
 
@@ -198,22 +271,17 @@ public class IniFileModel {
 
         String key = list.isEmpty() ? null : list.removeFirst();
 
-        DialogModel.Field field = new DialogModel.Field(key, uiFieldName);
-        if (key != null) {
-            // UI labels do not have 'key'
-            allFields.put(key, field);
-        }
-        fieldsOfCurrentDialog.add(field);
+        registerUiField(key, uiFieldName);
         log.debug("IniFileModel: Field label=[" + uiFieldName + "] : key=[" + key + "]");
     }
 
-    public Map<String, DialogModel.Field> getAllFields() {
-        return allFields;
-    }
+    private void registerUiField(String key, String uiFieldName) {
+        DialogModel.Field field = new DialogModel.Field(key, uiFieldName);
 
-    @Nullable
-    public DialogModel.Field getField(String key) {
-        return allFields.get(key);
+        if (key != null) {
+            fieldsOfCurrentDialog.add(field);
+            fieldsInUiOrder.put(key, field);
+        }
     }
 
     private void handleDialog(LinkedList<String> list) {

@@ -2,7 +2,6 @@ package com.rusefi.core;
 
 import com.rusefi.config.Field;
 import com.rusefi.config.FieldType;
-import com.rusefi.config.generated.EngineState;
 import com.rusefi.config.generated.Fields;
 import com.rusefi.config.generated.FuelComputer;
 import com.rusefi.config.generated.TsOutputs;
@@ -32,12 +31,13 @@ public enum Sensor implements BinaryLogEntry {
     RPMValue(GAUGE_NAME_RPM, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.RPMVALUE, 1, 0, 8000, "RPM"),
 //    rpmAcceleration("dRPM", SensorCategory.SENSOR_INPUTS, FieldType.INT16, 6, 1.0, 0.0, 5.0, "RPM/s"),
 //    speedToRpmRatio("Gearbox Ratio", SensorCategory.SENSOR_INPUTS, FieldType.INT16, 8, 0.01, 0.0, 0.0, "value"),
-    vehicleSpeedKph("Vehicle Speed", SensorCategory.SENSOR_INPUTS, FieldType.INT8, TsOutputs.VEHICLESPEEDKPH, 1.0, 0.0, 0.0, "kph"),
+    vehicleSpeedKph("Vehicle Speed", SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.VEHICLESPEEDKPH, 1.0 / PACK_MULT_VSS, 0.0, 0.0, "kph"),
 
     // Temperatures
     INT_TEMP(GAUGE_NAME_CPU_TEMP, SensorCategory.OPERATIONS, FieldType.INT8, TsOutputs.INTERNALMCUTEMPERATURE, 1, 0, 5, "C"),
     CLT(GAUGE_NAME_CLT, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.COOLANT, 1.0 / PACK_MULT_TEMPERATURE, -40, 150, "deg C"),
     IAT(GAUGE_NAME_IAT, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.INTAKE, 1.0 / PACK_MULT_TEMPERATURE, -40, 150, "deg C"),
+    FUEL_TEMP(GAUGE_NAME_FUEL_TEMPERATURE, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.FUELTEMP, 1.0 / PACK_MULT_TEMPERATURE, -40, 150, "deg C"),
     AuxFreq1("AuxFreq1", SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.AUXSPEED1, 1, -40, 150, "Hz"),
     AuxFreq2("AuxFreq2", SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.AUXSPEED2, 1, -40, 150, "Hz"),
 //    AuxT1("AuxT1", SensorCategory.SENSOR_INPUTS, FieldType.INT16, 16, 1.0 / PACK_MULT_TEMPERATURE, -40, 150, "deg C"),
@@ -51,8 +51,9 @@ public enum Sensor implements BinaryLogEntry {
     MAF_RAE(GAUGE_NAME_MAF + " raw", SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.RAWMAF, 1.0 / PACK_MULT_VOLTAGE, 0, 5, "Volts"),
     MAF(GAUGE_NAME_MAF, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.MAFMEASURED, 1.0 / PACK_MULT_MASS_FLOW, 0, 5, "Volts"),
     MAP(GAUGE_NAME_MAP, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.MAPVALUE, 1.0 / PACK_MULT_PRESSURE, 20, 300, "kPa"),
+    BARO(GAUGE_NAME_BARO_PRESSURE, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.BAROPRESSURE, 1.0 / PACK_MULT_PRESSURE, 20, 300, "kPa"),
 
-    Lambda(GAUGE_NAME_LAMBDA, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.LAMBDAVALUE, 1.0 / PACK_MULT_LAMBDA, 0.65, 1.2, "lambda"),
+    Lambda1(GAUGE_NAME_LAMBDA, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.LAMBDAVALUE, 1.0 / PACK_MULT_LAMBDA, 0.65, 1.2, "lambda"),
 
     VBATT(GAUGE_NAME_VBAT, SensorCategory.SENSOR_INPUTS, FieldType.UINT16, TsOutputs.VBATT, 1.0 / PACK_MULT_VOLTAGE, 4, 18, "Volts"),
 //    oilPressure(GAUGE_NAME_OIL_PRESSURE, SensorCategory.SENSOR_INPUTS, FieldType.INT16, 40, 1.0 / PACK_MULT_PRESSURE, 0, 5, "X"),
@@ -60,14 +61,14 @@ public enum Sensor implements BinaryLogEntry {
 //
 //    // fuel math
 //    CHARGE_AIR_MASS("airmass", SensorCategory.OPERATIONS, FieldType.UINT16, 44, 0.001, 0, 3, "g/cyl"),
-    crankingFuel(GAUGE_NAME_FUEL_CRANKING, SensorCategory.FUEL, FieldType.UINT16, EngineState.CRANKINGFUEL_BASEFUEL, 1, 0, 30, "ms"),
-    baseFuel(Fields.GAUGE_NAME_FUEL_BASE, SensorCategory.FUEL, FieldType.UINT16, TsOutputs.BASEFUEL, 1.0 / PACK_MULT_MS, 0, 30, "ms"),
-    runningFuel(GAUGE_NAME_FUEL_RUNNING, SensorCategory.FUEL, FieldType.UINT16, TsOutputs.FUELRUNNING, 1.0 / PACK_MULT_FUEL_MASS, 0, 15, "ms"),
+    //    crankingFuel(GAUGE_NAME_FUEL_CRANKING, SensorCategory.FUEL, FieldType.UINT16, EngineState.CRANKINGFUEL_BASEFUEL, 1, 0, 30, "ms"),
+    //baseFuel(Fields.GAUGE_NAME_FUEL_BASE, SensorCategory.FUEL, FieldType.UINT16, TsOutputs.BASEFUEL, 1.0 / PACK_MULT_MS, 0, 30, "ms"),
+    //runningFuel(GAUGE_NAME_FUEL_RUNNING, SensorCategory.FUEL, FieldType.UINT16, TsOutputs.FUELRUNNING, 1.0 / PACK_MULT_FUEL_MASS, 0, 15, "ms"),
 //    actualLastInjection(GAUGE_NAME_FUEL_LAST_INJECTION, SensorCategory.FUEL, FieldType.UINT16, 54, 1.0 / PACK_MULT_MS, 0, 30, "ms"),
 //    injectorDutyCycle(Fields.GAUGE_NAME_FUEL_INJ_DUTY, SensorCategory.FUEL, FieldType.UINT8, 56, 0.5, 0, 100, "%"),
     veValue(GAUGE_NAME_FUEL_VE, SensorCategory.FUEL, FieldType.UINT8, TsOutputs.VEVALUE, 0.5, 0, 100, "%"),
     // injectionOffset
-    tCharge(GAUGE_NAME_TCHARGE, SensorCategory.FUEL, FieldType.FLOAT, TsOutputs.TCHARGE, 1.0 / PACK_MULT_TEMPERATURE, 30, 140, "C"),
+//    tCharge(GAUGE_NAME_TCHARGE, SensorCategory.FUEL, FieldType.FLOAT, TsOutputs.TCHARGE, 1.0 / PACK_MULT_TEMPERATURE, 30, 140, "C"),
 //
 //    // Corrections
 //    injectorLagMs(GAUGE_NAME_INJECTOR_LAG, SensorCategory.FUEL, FieldType.UINT16, 62, 1.0 / PACK_MULT_MS, 0, 15, "ms"),
@@ -94,6 +95,10 @@ public enum Sensor implements BinaryLogEntry {
     etbTarget(GAUGE_NAME_ETB_TARGET, SensorCategory.OTHERS, FieldType.INT16, TsOutputs.ETBTARGET, 1.0 / PACK_MULT_PERCENT, 0, 100, "%"),
     etb1DutyCycle(GAUGE_NAME_ETB_DUTY, SensorCategory.OTHERS, FieldType.INT16, TsOutputs.ETB1DUTYCYCLE, 1.0 / PACK_MULT_PERCENT, 0, 100, "%"),
 //    etb1Error(GAUGE_NAME_ETB_ERROR, SensorCategory.OTHERS, FieldType.INT16, 96, 1.0 / PACK_MULT_PERCENT, 0, 100, "%"),
+
+    boostDcPidOutput("Boost PID output", SensorCategory.FUEL, FieldType.INT16, TsOutputs.BOOSTSTATUS_OUTPUT, 1.0 / 100, 0, 20, ""),
+    boostDcPidPTerm("Boost PID pTerm", SensorCategory.FUEL, FieldType.FLOAT, TsOutputs.BOOSTSTATUS_PTERM, 1.0 / 100, 0, 20, ""),
+    boostDcPidITerm("Boost PID iTerm", SensorCategory.FUEL, FieldType.INT16, TsOutputs.BOOSTSTATUS_ITERM, 1.0 / 100, 0, 20, ""),
 
     // Fuel system
     afrTarget(GAUGE_NAME_TARGET_AFR, SensorCategory.FUEL, FieldType.INT16, FuelComputer.TARGETAFR, 1.0 / 1000, 0, 20, ""),
@@ -136,7 +141,7 @@ public enum Sensor implements BinaryLogEntry {
     rawIat("raw IAT", SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.RAWIAT, 1.0 / PACK_MULT_VOLTAGE, 0, 5, "volts"),
 
 //    tcuDesiredGear(GAUGE_NAME_DESIRED_GEAR, SensorCategory.SENSOR_INPUTS, FieldType.INT8, 262, 1.0, 0, 100, "gear"),
-//    flexPercent(GAUGE_NAME_FLEX, SensorCategory.SENSOR_INPUTS, FieldType.INT8, 263, 1.0 / 2, 0, 100, "%"),
+    flexPercent(GAUGE_NAME_FLEX, SensorCategory.SENSOR_INPUTS, FieldType.INT8, TsOutputs.FLEXPERCENT, 1.0 / PACK_MULT_FLEX, 0, 100, "%"),
 
     wastegatePosition(GAUGE_NAME_WG_POSITION, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.WASTEGATEPOSITIONSENSOR, 1.0 / PACK_MULT_PERCENT, 0, 100, "%"),
     idlePositionSensor(GAUGE_NAME_IDLE_POSITION, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.IDLEPOSITIONSENSOR, 1.0 / PACK_MULT_PERCENT, 0, 100, "%"),
@@ -148,6 +153,7 @@ public enum Sensor implements BinaryLogEntry {
 //    airFuelRatio(GAUGE_NAME_AFR, SensorCategory.OPERATIONS, FieldType.INT16, 282, 1.0 / PACK_MULT_AFR, 10, 20, "afr"),
 //    airFuelRatio2(GAUGE_NAME_AFR2, SensorCategory.OPERATIONS, FieldType.INT16, 288, 1.0 / PACK_MULT_AFR, 10, 20, "afr"),
 
+    vvtPositionB1I(GAUGE_NAME_VVT_B1I, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.VVTPOSITIONB1I, 1.0 / PACK_MULT_ANGLE, 0, 5, "deg"),
     vvtPositionB1E(GAUGE_NAME_VVT_B1E, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.VVTPOSITIONB1E, 1.0 / PACK_MULT_ANGLE, 0, 5, "deg"),
     vvtPositionB2I(GAUGE_NAME_VVT_B2I, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.VVTPOSITIONB2I, 1.0 / PACK_MULT_ANGLE, 0, 5, "deg"),
     vvtPositionB2E(GAUGE_NAME_VVT_B2E, SensorCategory.SENSOR_INPUTS, FieldType.INT16, TsOutputs.VVTPOSITIONB2E, 1.0 / PACK_MULT_ANGLE, 0, 5, "deg"),
@@ -297,6 +303,7 @@ public enum Sensor implements BinaryLogEntry {
         }
     }
 
+    @Override
     public String getName() {
         return name;
     }
@@ -326,6 +333,8 @@ public enum Sensor implements BinaryLogEntry {
         }
     }
 
+    // TODO: this should be a string
+    @Override
     public SensorCategory getCategory() {
         return category;
     }

@@ -1,4 +1,4 @@
-// was generated automatically by rusEFI tool  from rusefi_hw_enums.h // by enum2string.jar tool on Thu Apr 28 22:03:38 UTC 2022
+// was generated automatically by rusEFI tool  from rusefi_hw_enums.h // by enum_to_string.jar tool on Tue Aug 22 00:13:56 UTC 2023
 // see also gen_config_and_enums.bat
 
 
@@ -8,5 +8,3 @@
 #if __cplusplus
 const char *getGpio(Gpio value);
 #endif //__cplusplus
-const char *getAdc_channel_e(adc_channel_e value);
-const char *getPin_mode_e(pin_mode_e value);

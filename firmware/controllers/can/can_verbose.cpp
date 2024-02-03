@@ -5,7 +5,7 @@
  *
  * If you edit this file, please update rusEFI_CAN_verbose.dbc!
  * Kvaser Database Editor works well for this task, and is free.
- * 
+ *
  * @author Matthew Kennedy, (c) 2020
  */
 
@@ -27,23 +27,35 @@ struct Status {
 	uint8_t fuelPump : 1;
 	uint8_t checkEngine : 1;
 	uint8_t o2Heater : 1;
+	uint8_t lambdaProtectActive : 1;
 
-	uint8_t pad6 : 1;
-	uint8_t pad7 : 1;
-	uint8_t pad8 : 1;
+	uint8_t fan : 1;
+	uint8_t fan2 : 1;
 
-	uint8_t pad[3];
+	uint8_t gear;
+
+	uint16_t distanceTraveled;
 };
 
 static void populateFrame(Status& msg) {
 	msg.warningCounter = engine->engineState.warnings.warningCounter;
-	msg.lastErrorCode = engine->engineState.warnings.lastErrorCode;
+	msg.lastErrorCode = static_cast<uint16_t>(engine->engineState.warnings.lastErrorCode);
 
 	msg.revLimit = Sensor::getOrZero(SensorType::Rpm) > engineConfiguration->rpmHardLimit;
 	msg.mainRelay = enginePins.mainRelay.getLogicValue();
 	msg.fuelPump = enginePins.fuelPumpRelay.getLogicValue();
 	msg.checkEngine = enginePins.checkEnginePin.getLogicValue();
 	msg.o2Heater = enginePins.o2heater.getLogicValue();
+#if EFI_SHAFT_POSITION_INPUT
+	msg.lambdaProtectActive = engine->lambdaMonitor.isCut();
+#endif // EFI_SHAFT_POSITION_INPUT
+	msg.fan = enginePins.fanRelay.getLogicValue();
+	msg.fan2 = enginePins.fanRelay2.getLogicValue();
+
+	msg.gear = Sensor::getOrZero(SensorType::DetectedGear);
+
+	// scale to units of 0.1km
+	msg.distanceTraveled = engine->module<TripOdometer>()->getDistanceMeters() / 100;
 }
 
 struct Speeds {
@@ -61,10 +73,10 @@ static void populateFrame(Speeds& msg) {
 
 	auto timing = engine->engineState.timingAdvance[0];
 	msg.timing = timing > 360 ? timing - 720 : timing;
-
+#if EFI_ENGINE_CONTROL
 	msg.injDuty = getInjectorDutyCycle(rpm);
 	msg.coilDuty = getCoilDutyCycle(rpm);
-
+#endif // EFI_ENGINE_CONTROL
 	msg.vssKph = Sensor::getOrZero(SensorType::VehicleSpeed);
 
 	msg.EthanolPercent = Sensor::getOrZero(SensorType::FuelEthanolPercent);
@@ -74,7 +86,7 @@ struct PedalAndTps {
 	scaled_percent pedal;
 	scaled_percent tps1;
 	scaled_percent tps2;
-	uint8_t pad[2];
+	scaled_percent wastegate;
 };
 
 static void populateFrame(PedalAndTps& msg)
@@ -82,6 +94,7 @@ static void populateFrame(PedalAndTps& msg)
 	msg.pedal = Sensor::get(SensorType::AcceleratorPedal).value_or(-1);
 	msg.tps1 = Sensor::get(SensorType::Tps1).value_or(-1);
 	msg.tps2 = Sensor::get(SensorType::Tps2).value_or(-1);
+	msg.wastegate = Sensor::get(SensorType::WastegatePosition).value_or(-1);
 }
 
 struct Sensors1 {
@@ -111,18 +124,18 @@ static void populateFrame(Sensors1& msg) {
 }
 
 struct Sensors2 {
-	scaled_afr afr; // deprecated
+	uint8_t pad[2];
+
 	scaled_pressure oilPressure;
-	scaled_angle vvtPos;	// deprecated
+	uint8_t oilTemp;
+	uint8_t fuelTemp;
 	scaled_voltage vbatt;
 };
 
 static void populateFrame(Sensors2& msg) {
-	msg.afr = Sensor::getOrZero(SensorType::Lambda1) * STOICH_RATIO;
 	msg.oilPressure = Sensor::get(SensorType::OilPressure).value_or(-1);
-#if EFI_SHAFT_POSITION_INPUT
-	msg.vvtPos = engine->triggerCentral.getVVTPosition(0, 0);
-#endif // EFI_SHAFT_POSITION_INPUT
+	msg.oilTemp = Sensor::getOrZero(SensorType::OilTemperature) + PACK_ADD_TEMPERATURE;
+	msg.fuelTemp = Sensor::getOrZero(SensorType::FuelTemperature) + PACK_ADD_TEMPERATURE;
 	msg.vbatt = Sensor::getOrZero(SensorType::BatteryVoltage);
 }
 
@@ -134,10 +147,12 @@ struct Fueling {
 };
 
 static void populateFrame(Fueling& msg) {
+#if EFI_ENGINE_CONTROL
 	msg.cylAirmass = engine->fuelComputer.sdAirMassInOneCylinder;
 	msg.estAirflow = engine->engineState.airflowEstimate;
 	msg.fuel_pulse = (float)engine->outputChannels.actualLastInjection;
 	msg.knockCount = engine->module<KnockController>()->getKnockCount();
+#endif // EFI_ENGINE_CONTROL
 }
 
 struct Fueling2 {
@@ -147,8 +162,8 @@ struct Fueling2 {
 };
 
 static void populateFrame(Fueling2& msg) {
-	msg.fuelConsumedGram = engine->engineState.fuelConsumption.getConsumedGrams();
-	msg.fuelFlowRate = engine->engineState.fuelConsumption.getConsumptionGramPerSecond();
+	msg.fuelConsumedGram = engine->module<TripOdometer>()->getConsumedGrams();
+	msg.fuelFlowRate = engine->module<TripOdometer>()->getConsumptionGramPerSecond();
 
 	for (size_t i = 0; i < 2; i++) {
 		msg.fuelTrim[i] = 100.0f * (engine->stftCorrection[i] - 1.0f);
@@ -198,16 +213,17 @@ static void populateFrame(Cams& msg) {
 void sendCanVerbose() {
 	auto base = engineConfiguration->verboseCanBaseAddress;
 	auto isExt = engineConfiguration->rusefiVerbose29b;
+	auto canChannel = engineConfiguration->canBroadcastUseChannelTwo;
 
-	transmitStruct<Status>	    (CanCategory::VERBOSE, base + 0, isExt);
-	transmitStruct<Speeds>	    (CanCategory::VERBOSE, base + 1, isExt);
-	transmitStruct<PedalAndTps> (CanCategory::VERBOSE, base + CAN_PEDAL_TPS_OFFSET, isExt);
-	transmitStruct<Sensors1>	(CanCategory::VERBOSE, base + CAN_SENSOR_1_OFFSET, isExt);
-	transmitStruct<Sensors2>	(CanCategory::VERBOSE, base + 4, isExt);
-	transmitStruct<Fueling>	    (CanCategory::VERBOSE, base + 5, isExt);
-	transmitStruct<Fueling2>	(CanCategory::VERBOSE, base + 6, isExt);
-	transmitStruct<Fueling3>	(CanCategory::VERBOSE, base + 7, isExt);
-	transmitStruct<Cams>		(CanCategory::VERBOSE, base + 8, isExt);
+	transmitStruct<Status>		(CanCategory::VERBOSE, base + 0, isExt, canChannel);
+	transmitStruct<Speeds>		(CanCategory::VERBOSE, base + 1, isExt, canChannel);
+	transmitStruct<PedalAndTps>	(CanCategory::VERBOSE, base + CAN_PEDAL_TPS_OFFSET, isExt, canChannel);
+	transmitStruct<Sensors1>	(CanCategory::VERBOSE, base + CAN_SENSOR_1_OFFSET, isExt, canChannel);
+	transmitStruct<Sensors2>	(CanCategory::VERBOSE, base + 4, isExt, canChannel);
+	transmitStruct<Fueling>		(CanCategory::VERBOSE, base + 5, isExt, canChannel);
+	transmitStruct<Fueling2>	(CanCategory::VERBOSE, base + 6, isExt, canChannel);
+	transmitStruct<Fueling3>	(CanCategory::VERBOSE, base + 7, isExt, canChannel);
+	transmitStruct<Cams>		(CanCategory::VERBOSE, base + 8, isExt, canChannel);
 }
 
 #endif // EFI_CAN_SUPPORT

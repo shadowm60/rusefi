@@ -2,6 +2,7 @@ package com.rusefi.binaryprotocol;
 
 import com.devexperts.logging.Logging;
 import com.opensr5.ConfigurationImage;
+import com.opensr5.ini.IniFileModel;
 import com.opensr5.io.ConfigurationImageFile;
 import com.opensr5.io.DataListener;
 import com.rusefi.ConfigurationImageDiff;
@@ -19,6 +20,7 @@ import com.rusefi.io.commands.HelloCommand;
 import com.rusefi.core.FileUtil;
 import com.rusefi.tune.xml.Msq;
 import com.rusefi.ui.livedocs.LiveDocsRegistry;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -42,7 +44,7 @@ import static com.rusefi.config.generated.Fields.*;
  */
 public class BinaryProtocol {
     private static final Logging log = getLogging(BinaryProtocol.class);
-    private static final ThreadFactory THREAD_FACTORY = new NamedThreadFactory("text pull");
+    private static final ThreadFactory THREAD_FACTORY = new NamedThreadFactory("ECU text pull", true);
 
     private static final String USE_PLAIN_PROTOCOL_PROPERTY = "protocol.plain";
     private static final String CONFIGURATION_RUSEFI_BINARY = "current_configuration.rusefi_binary";
@@ -51,7 +53,7 @@ public class BinaryProtocol {
      * This properly allows to switch to non-CRC32 mode
      * todo: finish this feature, assuming we even need it.
      */
-    public static boolean PLAIN_PROTOCOL = Boolean.getBoolean(USE_PLAIN_PROTOCOL_PROPERTY);
+    public static final boolean PLAIN_PROTOCOL = Boolean.getBoolean(USE_PLAIN_PROTOCOL_PROPERTY);
 
     private final LinkManager linkManager;
     private final IoStream stream;
@@ -65,7 +67,7 @@ public class BinaryProtocol {
     // todo: this ioLock needs better documentation!
     private final Object ioLock = new Object();
 
-    BinaryProtocolLogger binaryProtocolLogger;
+    private final BinaryProtocolLogger binaryProtocolLogger;
     public static boolean DISABLE_LOCAL_CONFIGURATION_CACHE;
 
     public static String findCommand(byte command) {
@@ -103,7 +105,7 @@ public class BinaryProtocol {
 
     public boolean isClosed;
 
-    public CommunicationLoggingListener communicationLoggingListener;
+    public final CommunicationLoggingListener communicationLoggingListener;
 
     public BinaryProtocol(LinkManager linkManager, IoStream stream) {
         this.linkManager = linkManager;
@@ -196,14 +198,17 @@ public class BinaryProtocol {
 
         String msg = "load TS_CONFIG_VERSION";
         byte[] response = executeCommand(Fields.TS_OUTPUT_COMMAND, packet, msg);
-        if (!checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK) || response.length != requestSize + 1) {
+        if (!checkResponseCode(response) || response.length != requestSize + 1) {
             close();
             return "Failed to " + msg;
         }
         int actualVersion = FileUtil.littleEndianWrap(response, 1, requestSize).getInt();
         if (actualVersion != TS_FILE_VERSION) {
-            log.error("Got TS_CONFIG_VERSION " + actualVersion);
-            return "Incompatible firmware format=" + actualVersion + " while format " + TS_FILE_VERSION + " expected";
+			String errorMessage =
+				"Incompatible firmware format=" + actualVersion + " while format " + TS_FILE_VERSION + " expected" + "\n"
+				+ "recommended fix: use a compatible console version  OR  flash new firmware";
+            log.error(errorMessage);
+            return errorMessage;
         }
         return null;
     }
@@ -291,7 +296,7 @@ public class BinaryProtocol {
     private byte[] receivePacket(String msg) throws IOException {
         long start = System.currentTimeMillis();
         synchronized (ioLock) {
-            return incomingData.getPacket(msg, start);
+            return incomingData.getPacket(Timeouts.BINARY_IO_TIMEOUT, msg, start);
         }
     }
 
@@ -341,7 +346,7 @@ public class BinaryProtocol {
 
             byte[] response = executeCommand(Fields.TS_READ_COMMAND, packet, "load image offset=" + offset);
 
-            if (!checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK) || response.length != requestSize + 1) {
+            if (!checkResponseCode(response) || response.length != requestSize + 1) {
                 if (extractCode(response) == TS_RESPONSE_OUT_OF_RANGE) {
                     throw new IllegalStateException("TS_RESPONSE_OUT_OF_RANGE ECU/console version mismatch?");
                 }
@@ -361,7 +366,7 @@ public class BinaryProtocol {
         if (arguments != null && arguments.saveFile) {
             try {
                 ConfigurationImageFile.saveToFile(image, CONFIGURATION_RUSEFI_BINARY);
-                Msq tune = MsqFactory.valueOf(image);
+                Msq tune = MsqFactory.valueOf(image, IniFileModel.getInstance());
                 tune.writeXmlFile(CONFIGURATION_RUSEFI_XML);
             } catch (Exception e) {
                 System.err.println("Ignoring " + e);
@@ -419,10 +424,10 @@ public class BinaryProtocol {
     }
 
     public int getCrcFromController(int configSize) {
-        byte[] packet = createCrcCommand(configSize);
+        byte[] packet = createRequestCrcPayload(configSize);
         byte[] response = executeCommand(Fields.TS_CRC_CHECK_COMMAND, packet, "get CRC32");
 
-        if (checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK) && response.length == 5) {
+        if (checkResponseCode(response) && response.length == 5) {
             ByteBuffer bb = ByteBuffer.wrap(response, 1, 4);
             // that's unusual - most of the protocol is LITTLE_ENDIAN
             bb.order(ByteOrder.BIG_ENDIAN);
@@ -437,7 +442,7 @@ public class BinaryProtocol {
         }
     }
 
-    public static byte[] createCrcCommand(int size) {
+    private static byte[] createRequestCrcPayload(int size) {
         byte[] packet = new byte[4];
         ByteRange.packOffsetAndSize(0, size, packet);
         return packet;
@@ -456,16 +461,7 @@ public class BinaryProtocol {
         if (isClosed)
             return null;
 
-        byte[] fullRequest;
-
-        if (packet != null) {
-            fullRequest = new byte[packet.length + 1];
-            System.arraycopy(packet, 0, fullRequest, 1, packet.length);
-        } else {
-            fullRequest = new byte[1];
-        }
-
-        fullRequest[0] = (byte)opcode;
+        byte[] fullRequest = getFullRequest((byte) opcode, packet);
 
         try {
             linkManager.assertCommunicationThread();
@@ -479,6 +475,21 @@ public class BinaryProtocol {
             close();
             return null;
         }
+    }
+
+    @NotNull
+    public static byte[] getFullRequest(byte opcode, byte[] packet) {
+        byte[] fullRequest;
+
+        if (packet != null) {
+            fullRequest = new byte[packet.length + 1];
+            System.arraycopy(packet, 0, fullRequest, 1, packet.length);
+        } else {
+            fullRequest = new byte[1];
+        }
+
+        fullRequest[0] = opcode;
+        return fullRequest;
     }
 
     public void close() {
@@ -500,7 +511,7 @@ public class BinaryProtocol {
         long start = System.currentTimeMillis();
         while (!isClosed && (System.currentTimeMillis() - start < Timeouts.BINARY_IO_TIMEOUT)) {
             byte[] response = executeCommand(Fields.TS_CHUNK_WRITE_COMMAND, packet, "writeImage");
-            if (!checkResponseCode(response, (byte) Fields.TS_RESPONSE_OK) || response.length != 1) {
+            if (!checkResponseCode(response) || response.length != 1) {
                 log.error("writeData: Something is wrong, retrying...");
                 continue;
             }

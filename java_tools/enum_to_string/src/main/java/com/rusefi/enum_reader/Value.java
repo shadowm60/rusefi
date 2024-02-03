@@ -4,9 +4,6 @@ import com.rusefi.VariableRegistry;
 
 import java.util.Objects;
 
-import static com.rusefi.ToJavaEnum.FORCE_2_BYTES_SIZE;
-import static com.rusefi.ToJavaEnum.FORCE_4_BYTES_SIZE;
-
 public class Value implements Comparable<Value> {
     private final String name;
     private final String value;
@@ -14,10 +11,6 @@ public class Value implements Comparable<Value> {
     public Value(String name, String value) {
         this.name = name;
         this.value = value;
-    }
-
-    public boolean isForceSize() {
-        return getName().startsWith(FORCE_2_BYTES_SIZE) || getName().startsWith(FORCE_4_BYTES_SIZE);
     }
 
     public String getName() {
@@ -29,7 +22,14 @@ public class Value implements Comparable<Value> {
     }
 
     public int getIntValue() {
-        return Integer.parseInt(value);
+        return parseInt(value);
+    }
+
+    public static int parseInt(String value) {
+        String trimmed = value.trim();
+        if (trimmed.toLowerCase().startsWith("0x"))
+            return Integer.parseInt(trimmed.substring(2), 16);
+        return Integer.parseInt(trimmed);
     }
 
     @Override
@@ -49,9 +49,13 @@ public class Value implements Comparable<Value> {
         try {
             return getIntValue();
         } catch (NumberFormatException e) {
-            String resolvedValue = registry.get(value);
-            Objects.requireNonNull(resolvedValue, value);
-            return Integer.parseInt(resolvedValue);
+            return handleNotInteger(registry);
         }
+    }
+
+    private int handleNotInteger(VariableRegistry registry) {
+        String resolvedValue = registry.get(value);
+        Objects.requireNonNull(resolvedValue, value);
+        return Value.parseInt(resolvedValue);
     }
 }

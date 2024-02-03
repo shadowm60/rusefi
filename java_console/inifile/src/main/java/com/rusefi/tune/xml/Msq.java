@@ -14,6 +14,7 @@ import javax.xml.bind.annotation.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @XmlRootElement
@@ -31,8 +32,7 @@ public class Msq {
     }
 
     @NotNull
-    public static Msq valueOf(ConfigurationImage image, int totalConfigSize, String tsSignature) {
-        IniFileModel ini = IniFileModel.getInstance();
+    public static Msq valueOf(ConfigurationImage image, int totalConfigSize, String tsSignature, IniFileModel ini) {
         Msq tune = create(totalConfigSize, tsSignature);
         for (String key : ini.allIniFields.keySet())
             tune.loadConstant(ini, key, image);
@@ -66,7 +66,7 @@ public class Msq {
         return ci;
     }
 
-    public static Msq readTune(String fileName) throws Exception {
+    public static Msq readTune(String fileName) throws JAXBException {
         return XmlUtil.readModel(Msq.class, fileName);
     }
 
@@ -122,5 +122,9 @@ public class Msq {
 
     public VersionInfo getVersionInfo() {
         return versionInfo;
+    }
+
+    public Map<String, Constant> getConstantsAsMap() {
+        return findPage().getConstantsAsMap();
     }
 }

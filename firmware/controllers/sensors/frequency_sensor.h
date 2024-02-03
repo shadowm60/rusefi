@@ -2,7 +2,7 @@
  * @file frequency_sensor.h
  */
 #include "functional_sensor.h"
-#include "timer.h"
+#include <rusefi/timer.h>
 #include "biquad.h"
 
 class FrequencySensor : public FunctionalSensor {
@@ -17,7 +17,7 @@ public:
 	// sad workaround: we are not good at BiQuad configuring
 	bool useBiQuad = true;
 
-    void showInfo(const char* sensorName) const override;
+	void showInfo(const char* sensorName) const override;
 
 	void onEdge(efitick_t nowNt);
 

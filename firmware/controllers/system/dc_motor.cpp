@@ -13,7 +13,7 @@
 TwoPinDcMotor::TwoPinDcMotor(OutputPin& disablePin)
 	: m_disable(&disablePin)
 {
-	disable();
+	disable("init");
 }
 
 void TwoPinDcMotor::configure(IPwm& enable, IPwm& dir1, IPwm& dir2, bool isInverted) {
@@ -27,9 +27,12 @@ void TwoPinDcMotor::enable() {
 	if (m_disable) {
 		m_disable->setValue(false);
 	}
+
+	m_msg = nullptr;
 }
 
-void TwoPinDcMotor::disable() {
+void TwoPinDcMotor::disable(const char *msg) {
+	m_msg = msg;
 	if (m_disable) {
 		m_disable->setValue(true);
 	}

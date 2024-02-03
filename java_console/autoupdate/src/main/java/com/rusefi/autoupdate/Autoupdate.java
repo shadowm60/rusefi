@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class Autoupdate {
     private static final String LOGO_PATH = "/com/rusefi/";
     private static final String LOGO = LOGO_PATH + "logo.png";
-    private static final String TITLE = "rusEFI Bundle Updater 20221125";
+    private static final String TITLE = "rusEFI Bundle Updater 20230130";
     private static final String AUTOUPDATE_MODE = "autoupdate";
     private static final String RUSEFI_CONSOLE_JAR = "rusefi_console.jar";
     private static final String COM_RUSEFI_LAUNCHER = "com.rusefi.Launcher";
@@ -40,7 +40,12 @@ public class Autoupdate {
                 System.out.println("Snapshot requested");
                 if (bundleFullName != null) {
                     System.out.println("Handling " + bundleFullName);
-                    handleBundle(bundleFullName, mode, ConnectionAndMeta.BASE_URL_LATEST);
+                    String branchName = bundleFullName.split("\\.")[1];
+                    if ( branchName.equals("snapshot") ) {
+                        handleBundle(bundleFullName, mode, ConnectionAndMeta.BASE_URL_LATEST);
+                    } else {
+                        handleBundle(bundleFullName, mode, String.format(ConnectionAndMeta.BASE_URL_LTS, branchName));
+                    }
                 } else {
                     System.err.println("ERROR: Autoupdate: unable to perform without bundleFullName");
                 }
@@ -77,7 +82,8 @@ public class Autoupdate {
 
     private static void handleBundle(String bundleFullName, UpdateMode mode, String baseUrl) {
         try {
-            String zipFileName = bundleFullName + "_autoupdate" + ".zip";
+            String boardName = bundleFullName.split("\\.")[2];
+            String zipFileName = "rusefi_bundle_" + boardName + "_autoupdate" + ".zip";
             ConnectionAndMeta connectionAndMeta = new ConnectionAndMeta(zipFileName).invoke(baseUrl);
             System.out.println("Remote file " + zipFileName);
             System.out.println("Server has " + connectionAndMeta.getCompleteFileSize() + " from " + new Date(connectionAndMeta.getLastModified()));

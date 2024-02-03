@@ -1,5 +1,6 @@
 TESTS_SRC_CPP = \
 	tests/trigger/test_all_triggers.cpp \
+	tests/trigger/test_2_stroke.cpp \
 	tests/trigger/test_symmetrical_crank.cpp \
 	tests/trigger/test_trigger_decoder.cpp \
 	tests/trigger/test_trigger_decoder_2.cpp \
@@ -12,15 +13,20 @@ TESTS_SRC_CPP = \
 	tests/trigger/test_real_cranking_miata_NA.cpp \
 	tests/trigger/test_real_cranking_miata_na6.cpp \
 	tests/trigger/test_real_cranking_nissan_vq40.cpp \
+	tests/trigger/test_real_6g72_3000gt.cpp \
+	tests/trigger/test_real_cas_24_plus_1.cpp \
 	tests/trigger/test_trigger_skipped_wheel.cpp \
 	tests/trigger/test_real_4b11.cpp \
+	tests/trigger/test_real_4g93.cpp \
 	tests/trigger/test_real_volkswagen.cpp \
 	tests/trigger/test_real_nb2_cranking.cpp \
 	tests/trigger/test_real_gm_24x.cpp \
 	tests/trigger/test_real_k24a2.cpp \
 	tests/trigger/test_real_k20.cpp \
+	tests/trigger/test_real_toyota_3_tooth_cam.cpp \
 	tests/trigger/test_map_cam.cpp \
 	tests/trigger/test_rpm_multiplier.cpp \
+	tests/trigger/test_rpm_acceleration.cpp \
 	tests/trigger/test_quad_cam.cpp \
 	tests/trigger/test_nissan_vq_vvt.cpp \
 	tests/trigger/test_override_gaps.cpp \
@@ -36,16 +42,19 @@ TESTS_SRC_CPP = \
 	tests/lua/test_lua_basic.cpp \
 	tests/lua/test_lookup.cpp \
 	tests/lua/test_lua_e38.cpp \
+	tests/lua/test_lua_canam.cpp \
 	tests/lua/test_lua_e65.cpp \
 	tests/lua/test_lua_ford.cpp \
 	tests/lua/test_lua_vag.cpp \
+	tests/lua/test_lua_honda.cpp \
+	tests/lua/test_lua_hd.cpp \
+	tests/lua/test_lua_kia.cpp \
 	tests/lua/test_lua_nissan.cpp \
 	tests/lua/test_lua_with_engine.cpp \
 	tests/lua/test_lua_hooks.cpp \
 	tests/lua/test_lua_Leiderman_Khlystov.cpp \
 	tests/lua/test_can_filter.cpp \
 	tests/lua/test_lua_vin.cpp \
-	tests/sensor/test_cj125.cpp \
 	tests/test_change_engine_type.cpp \
 	tests/util/test_scaled_channel.cpp \
 	tests/util/test_timer.cpp \
@@ -54,8 +63,10 @@ TESTS_SRC_CPP = \
 	tests/test_start_stop.cpp \
 	tests/test_hardware_reinit.cpp \
 	tests/test_ion.cpp \
+	tests/test_kline_bytes_aggregator.cpp \
 	tests/test_hip9011.cpp \
 	tests/test_engine_math.cpp \
+	tests/test_throttle_model.cpp \
 	tests/test_fasterEngineSpinningUp.cpp \
 	tests/test_dwell_corner_case_issue_796.cpp \
 	tests/test_idle_controller.cpp \
@@ -69,12 +80,13 @@ TESTS_SRC_CPP = \
 	tests/test_log_buffer.cpp \
 	tests/test_signal_executor.cpp \
 	tests/test_cpp_memory_layout.cpp \
-	tests/test_pid_auto.cpp \
 	tests/test_pid.cpp \
 	tests/test_accel_enrichment.cpp \
 	tests/test_gpiochip.cpp \
 	tests/test_deadband.cpp \
+	tests/test_sticky_pps.cpp \
 	tests/test_knock.cpp \
+	tests/test_lambda_monitor.cpp \
 	tests/sensor/basic_sensor.cpp \
 	tests/sensor/func_sensor.cpp \
 	tests/sensor/function_pointer_sensor.cpp \
@@ -104,6 +116,7 @@ TESTS_SRC_CPP = \
 	tests/sensor/test_turbocharger_speed_converter.cpp \
 	tests/sensor/test_vehicle_speed_converter.cpp \
 	tests/actuators/test_aux_valves.cpp \
+	tests/actuators/test_antilag.cpp \
 	tests/actuators/test_boost.cpp \
 	tests/actuators/test_dc_motor.cpp \
 	tests/actuators/test_etb.cpp \
@@ -115,3 +128,4 @@ TESTS_SRC_CPP = \
 	tests/actuators/test_stepper.cpp \
 	tests/actuators/test_tacho.cpp \
 	tests/actuators/test_vvt.cpp \
+	tests/actuators/test_alternator.cpp \

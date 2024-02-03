@@ -8,10 +8,7 @@
 #include "linear_func.h"
 #include "tps.h"
 #include "auto_generated_sensor.h"
-
-#ifndef MAX_TPS_PPS_DISCREPANCY
-#define MAX_TPS_PPS_DISCREPANCY 5.0f
-#endif
+#include "defaults.h"
 
 struct TpsConfig {
 	adc_channel_e channel;
@@ -41,7 +38,7 @@ public:
 		return m_sens.Register();
 	}
 
-	void unsubscribe() {
+	void deinit() {
 		AdcSubscription::UnsubscribeSensor(m_sens);
 	}
 
@@ -70,7 +67,7 @@ private:
 
 		// If the voltage for closed vs. open is very near, something is wrong with your calibration
 		if (split < 0.5f) {
-			firmwareError(OBD_TPS_Configuration, "\"%s\" problem: open %.2f/closed %.2f cal values are too close together. Check your calibration and wiring!", name(),
+			firmwareError(ObdCode::OBD_TPS_Configuration, "\"%s\" problem: open %.2f/closed %.2f cal values are too close together. Check your calibration and wiring!", name(),
 					cfg.open,
 					cfg.closed);
 			return false;
@@ -78,7 +75,7 @@ private:
 
 		m_func.configure(
 			cfg.closed, 0,
-			cfg.open, 100, 
+			cfg.open, POSITION_FULLY_OPEN,
 			cfg.min, cfg.max
 		);
 
@@ -101,14 +98,14 @@ public:
 	{
 	}
 
-	void init(bool isFordTps, RedundantFordTps* fordTps, const TpsConfig& primary, const TpsConfig& secondary) {
+	void init(bool isFordTps, RedundantFordTps* fordTps, float secondaryMaximum, const TpsConfig& primary, const TpsConfig& secondary, bool allowIdenticalSensors = false) {
 		bool hasFirst = m_pri.init(primary);
 		if (!hasFirst) {
 			// no input if we have no first channel
 			return;
 		}
 
-		{
+		if (!allowIdenticalSensors) {
 			// Check that the primary and secondary aren't too close together - if so, the user may have done
 			// an unsafe thing where they wired a single sensor to both inputs. Don't do that!
 			bool hasBothSensors = isAdcChannelValid(primary.channel) && isAdcChannelValid(secondary.channel);
@@ -116,20 +113,24 @@ public:
 			bool tooCloseOpen = absF(primary.open - secondary.open) < 0.2f;
 
 			if (hasBothSensors && tooCloseClosed && tooCloseOpen) {
-				firmwareError(OBD_TPS_Configuration, "Configuration for redundant pair %s/%s are too similar - did you wire one sensor to both inputs...?", m_pri.name(), m_sec.name());
+				firmwareError(ObdCode::OBD_TPS_Configuration, "Configuration for redundant pair %s/%s are too similar - did you wire one sensor to both inputs...?", m_pri.name(), m_sec.name());
 				return;
 			}
 		}
 
 		bool hasSecond = m_sec.init(secondary);
 
+        if (engineConfiguration->etbSplit <= 0 || engineConfiguration->etbSplit > MAX_TPS_PPS_DISCREPANCY) {
+            engineConfiguration->etbSplit = MAX_TPS_PPS_DISCREPANCY;
+        }
+
 		if (isFordTps && fordTps) {
 			// we have a secondary
-			fordTps->configure(5.0f, 52.6f);
+			fordTps->configure(engineConfiguration->etbSplit, secondaryMaximum);
 			fordTps->Register();
 		} else {
 			// not ford TPS
-			m_redund.configure(MAX_TPS_PPS_DISCREPANCY, !hasSecond);
+			m_redund.configure(engineConfiguration->etbSplit, !hasSecond);
 #if EFI_UNIT_TEST
 printf("init m_redund.Register() %s\n", getSensorType(m_redund.type()));
 #endif
@@ -137,9 +138,16 @@ printf("init m_redund.Register() %s\n", getSensorType(m_redund.type()));
 		}
 	}
 
-	void unsubscribe() {
-		m_pri.unsubscribe();
-		m_sec.unsubscribe();
+	void deinit(bool isFordTps, RedundantFordTps* fordTps) {
+		m_pri.deinit();
+		m_sec.deinit();
+
+		if (isFordTps && fordTps) {
+			fordTps->unregister();
+		} else {
+			m_redund.unregister();
+		}
+
 	}
 
 private:
@@ -155,12 +163,15 @@ static FuncSensPair tps2p(TPS_TS_CONVERSION, SensorType::Tps2Primary);
 static FuncSensPair tps2s(TPS_TS_CONVERSION, SensorType::Tps2Secondary);
 
 // Used in case of "normal", non-Ford ETB TPS
-static RedundantPair tps1(tps1p, tps1s, SensorType::Tps1);
+static RedundantPair analogTps1(tps1p, tps1s, SensorType::Tps1);
 static RedundantPair tps2(tps2p, tps2s, SensorType::Tps2);
+
+SentTps sentTps;
 
 // Used only in case of weird Ford-style ETB TPS
 static RedundantFordTps fordTps1(SensorType::Tps1, SensorType::Tps1Primary, SensorType::Tps1Secondary);
 static RedundantFordTps fordTps2(SensorType::Tps2, SensorType::Tps2Primary, SensorType::Tps2Secondary);
+static RedundantFordTps fordPps(SensorType::AcceleratorPedal, SensorType::AcceleratorPedalPrimary, SensorType::AcceleratorPedalSecondary);
 
 // Pedal sensors and redundancy
 static FuncSensPair pedalPrimary(1, SensorType::AcceleratorPedalPrimary);
@@ -174,33 +185,56 @@ static ProxySensor driverIntent(SensorType::DriverThrottleIntent);
 static FuncSensPair wastegate(PACK_MULT_VOLTAGE, SensorType::WastegatePosition);
 static FuncSensPair idlePos(PACK_MULT_VOLTAGE, SensorType::IdlePosition);
 
+bool isDigitalTps1() {
+    return isBrainPinValid(engineConfiguration->sentInputPins[0]) && engineConfiguration->sentEtbType != SentEtbType::NONE;
+}
+
 void initTps() {
-    efiAssertVoid(OBD_PCM_Processor_Fault, engineConfiguration != nullptr, "null engineConfiguration");
+    criticalAssertVoid(engineConfiguration != nullptr, "null engineConfiguration");
 	percent_t min = engineConfiguration->tpsErrorDetectionTooLow;
 	percent_t max = engineConfiguration->tpsErrorDetectionTooHigh;
 
 	if (!engineConfiguration->consumeObdSensors) {
 		bool isFordTps = engineConfiguration->useFordRedundantTps;
+		bool isFordPps = engineConfiguration->useFordRedundantPps;
 
-		tps1.init(isFordTps, &fordTps1,
-			{ engineConfiguration->tps1_1AdcChannel, (float)engineConfiguration->tpsMin, (float)engineConfiguration->tpsMax, min, max },
-			{ engineConfiguration->tps1_2AdcChannel, (float)engineConfiguration->tps1SecondaryMin, (float)engineConfiguration->tps1SecondaryMax, min, max }
-		);
+		float tpsSecondaryMaximum = engineConfiguration->tpsSecondaryMaximum;
+		if (tpsSecondaryMaximum < 20) {
+			// don't allow <20% split point
+			tpsSecondaryMaximum = 20;
+		}
 
-		tps2.init(isFordTps, &fordTps2,
+
+        if (isDigitalTps1()) {
+            sentTps.Register();
+        } else {
+		    analogTps1.init(isFordTps, &fordTps1, tpsSecondaryMaximum,
+    			{ engineConfiguration->tps1_1AdcChannel, (float)engineConfiguration->tpsMin, (float)engineConfiguration->tpsMax, min, max },
+	    		{ engineConfiguration->tps1_2AdcChannel, (float)engineConfiguration->tps1SecondaryMin, (float)engineConfiguration->tps1SecondaryMax, min, max }
+		    );
+		}
+
+		tps2.init(isFordTps, &fordTps2, tpsSecondaryMaximum,
 			{ engineConfiguration->tps2_1AdcChannel, (float)engineConfiguration->tps2Min, (float)engineConfiguration->tps2Max, min, max },
 			{ engineConfiguration->tps2_2AdcChannel, (float)engineConfiguration->tps2SecondaryMin, (float)engineConfiguration->tps2SecondaryMax, min, max }
 		);
 
-		// Pedal sensors
-		pedal.init(false, nullptr,
-			{ engineConfiguration->throttlePedalPositionAdcChannel, engineConfiguration->throttlePedalUpVoltage, engineConfiguration->throttlePedalWOTVoltage, min, max },
-			{ engineConfiguration->throttlePedalPositionSecondAdcChannel, engineConfiguration->throttlePedalSecondaryUpVoltage, engineConfiguration->throttlePedalSecondaryWOTVoltage, min, max }
-		);
+		float ppsSecondaryMaximum = engineConfiguration->ppsSecondaryMaximum;
+		if (ppsSecondaryMaximum < 20) {
+			// don't allow <20% split point
+			ppsSecondaryMaximum = 20;
+		}
+
+	// Pedal sensors
+	pedal.init(isFordPps, &fordPps, ppsSecondaryMaximum,
+		{ engineConfiguration->throttlePedalPositionAdcChannel, engineConfiguration->throttlePedalUpVoltage, engineConfiguration->throttlePedalWOTVoltage, min, max },
+		{ engineConfiguration->throttlePedalPositionSecondAdcChannel, engineConfiguration->throttlePedalSecondaryUpVoltage, engineConfiguration->throttlePedalSecondaryWOTVoltage, min, max },
+		engineConfiguration->allowIdenticalPps
+	);
 
 		// TPS-like stuff that isn't actually a TPS
 		wastegate.init({ engineConfiguration->wastegatePositionSensor, (float)engineConfiguration->wastegatePositionMin, (float)engineConfiguration->wastegatePositionMax, min, max });
-		idlePos.init({ engineConfiguration->idlePositionSensor, (float)engineConfiguration->idlePositionMin, (float)engineConfiguration->idlePositionMax, min, max });
+		idlePos.init({ engineConfiguration->idlePositionChannel, (float)engineConfiguration->idlePositionMin, (float)engineConfiguration->idlePositionMax, min, max });
 	}
 
 	// Route the pedal or TPS to driverIntent as appropriate
@@ -214,10 +248,15 @@ void initTps() {
 }
 
 void deinitTps() {
-	tps1.unsubscribe();
-	tps2.unsubscribe();
-	pedal.unsubscribe();
+	bool isFordTps = activeConfiguration.useFordRedundantTps;
+	bool isFordPps = activeConfiguration.useFordRedundantPps;
 
-	wastegate.unsubscribe();
-	idlePos.unsubscribe();
+	analogTps1.deinit(isFordTps, &fordTps1);
+	tps2.deinit(isFordTps, &fordTps2);
+	pedal.deinit(isFordPps, &fordPps);
+
+	sentTps.unregister();
+
+	wastegate.deinit();
+	idlePos.deinit();
 }

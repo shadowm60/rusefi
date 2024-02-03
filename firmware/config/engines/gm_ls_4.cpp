@@ -11,25 +11,19 @@
 void setGmLs4() {
 	engineConfiguration->globalTriggerAngleOffset = 86;
 
-    // would not hurt just in case no cam
-	engineConfiguration->twoWireBatchInjection = true;
-
-
 	engineConfiguration->fuelReferencePressure = 400; // 400 kPa, 58 psi
 	engineConfiguration->injectorCompensationMode = ICM_FixedRailPressure;
 	engineConfiguration->injector.flow = 440;
 
-	engineConfiguration->specs.cylindersCount = 8;
+	engineConfiguration->cylindersCount = 8;
 	setLeftRightBanksNeedBetterName();
-	engineConfiguration->specs.firingOrder = FO_1_8_7_2_6_5_4_3;
-	engineConfiguration->specs.displacement = 6.2;
-
-	engineConfiguration->useETBforIdleControl = true;
-	engineConfiguration->etbIdleThrottleRange = 15;
+	engineConfiguration->firingOrder = FO_1_8_7_2_6_5_4_3;
+	engineConfiguration->displacement = 6.2;
 
 	engineConfiguration->tChargeAirIncrLimit = 5;
 	engineConfiguration->tChargeAirDecrLimit = 15;
 
+// see https://github.com/rusefi/rusefi_documentation/tree/master/OEM-Docs/GM/Tahoe-2011
     strncpy(config->luaScript, R"(
 
 function getBitRange(data, bitIndex, bitWidth)
@@ -142,9 +136,8 @@ end
 
 void setProteusGmLs4() {
 #if HW_PROTEUS
-	engineConfiguration->etbFunctions[1] = ETB_None;
+	engineConfiguration->etbFunctions[1] = DC_None;
 
-	engineConfiguration->mainRelayPin = PROTEUS_LS_12;
 	setPPSInputs(PROTEUS_IN_ANALOG_VOLT_2, PROTEUS_IN_ANALOG_VOLT_11);
 	setTPS1Inputs(PROTEUS_IN_ANALOG_VOLT_4, PROTEUS_IN_ANALOG_VOLT_3);
 

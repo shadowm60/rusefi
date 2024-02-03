@@ -1,17 +1,15 @@
 package com.rusefi.test;
 
-import com.rusefi.ReaderState;
+import com.rusefi.ReaderStateImpl;
 import com.rusefi.output.FragmentDialogConsumer;
-import org.junit.Test;
-
-import java.io.IOException;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.assertEquals;
 
 public class FragmentDialogConsumerTest {
     @Test
     public void generateFragmentDialog() {
-        ReaderState state = new ReaderState();
+        ReaderStateImpl state = new ReaderStateImpl();
         String outputChannels = "" +
                 "\n" +
                 "" +
@@ -36,7 +34,7 @@ public class FragmentDialogConsumerTest {
                 "\tint8_t autoscale internalMcuTemperature;mcu;\"deg C\",1, 0, 0, 0, 0\n" +
                 "end_struct\n";
 
-        FragmentDialogConsumer fragmentDialogConsumer = new FragmentDialogConsumer("ac_state");
+        FragmentDialogConsumer fragmentDialogConsumer = new FragmentDialogConsumer("ac_state", "");
 
         state.readBufferedReader(outputChannels, fragmentDialogConsumer);
 

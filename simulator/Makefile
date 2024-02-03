@@ -7,16 +7,15 @@
 # As of Sep 2019, this is known to compile on Linux
 # in my case I had to
 # sudo apt-get install gcc-multilib g++-multilib
-# 
+#
 # todo: automatically execute that command same as we automatically fetch submodules?
-# 
+#
 
 
 
 CHIBIOS = ../firmware/ChibiOS
 CHIBIOS_CONTRIB= ../firmware/ChibiOS-Contrib
 RULESPATH = $(CHIBIOS)/os/common/startup/SIMIA32/compilers/GCC
-RULESFILE = $(RULESPATH)/rules.mk
 
 PROJECT_CPU=simulator
 
@@ -37,13 +36,14 @@ else
   SANITIZE = no
 endif
 
+ifeq ($(SIMULATOR_DEBUG_LEVEL_OPT),)
+# If you would like to debug the simulator, swap which of these lines is commented. It's commented because debug info causes a 10-15x increase in binary size.
+  SIMULATOR_DEBUG_LEVEL_OPT = -O0 -g
+endif
+
 # Compiler options here.
 ifeq ($(USE_OPT),)
-  USE_OPT = -Wall -Wno-error=implicit-fallthrough -Wno-error=write-strings -Wno-error=strict-aliasing
-
-# If you would like to debug the simulator, swap which of these lines is commented. It's commented because debug info causes a 10-15x increase in binary size.
-  USE_OPT += -O2
-#  USE_OPT += -O0 -g
+  USE_OPT = -Wall -Wno-error=implicit-fallthrough -Wno-error=write-strings -Wno-error=strict-aliasing -Werror=nonnull
 
   ifeq ($(OS),Windows_NT)
     USE_OPT += -DEFI_SIM_IS_WINDOWS=1
@@ -52,30 +52,30 @@ ifeq ($(USE_OPT),)
   endif
 endif
 
+# Pretend we are all different hardware so that all canned engine configs are included
+USE_OPT += -DHW_HELLEN_HYUNDAI=1
+USE_OPT += -DHW_PROTEUS=1
+USE_OPT += -DHW_MICRO_RUSEFI=1
+
 # See explanation in main firmware Makefile for these three defines
-USE_OPT += $(RUSEFI_OPT) -DEFI_UNIT_TEST=0 -DEFI_PROD_CODE=0 -DEFI_SIMULATOR=1
+USE_OPT += $(SIMULATOR_DEBUG_LEVEL_OPT) $(RUSEFI_OPT) -DEFI_UNIT_TEST=0 -DEFI_PROD_CODE=0 -DEFI_SIMULATOR=1
 
 # Enable address sanitizer, but not on Windows since x86_64-w64-mingw32-g++ doesn't support it.
 ifeq ($(SANITIZE),yes)
   USE_OPT += -fsanitize=address
 endif
 
-ifeq ($(CCACHE_DIR),)
-  $(info No CCACHE_DIR)
-else
-  $(info CCACHE_DIR is ${CCACHE_DIR})
-  CCPREFIX=ccache
-endif
-
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
-  USE_COPT = -std=gnu99
+  USE_COPT = -std=gnu17
 endif
 
 # C++ specific options here (added to USE_OPT).
 ifeq ($(USE_CPPOPT),)
   USE_CPPOPT = -std=c++2a -Wno-register -fno-rtti
 endif
+
+USE_CPPOPT += $(RUSEFI_CPPOPT)
 
 # Enable this if you want the linker to remove unused code and data.
 ifeq ($(USE_LINK_GC),)
@@ -84,7 +84,7 @@ endif
 
 # Linker extra options here.
 ifeq ($(USE_LDOPT),)
-  USE_LDOPT = 
+  USE_LDOPT =
 endif
 
 # Enable this if you want link time optimizations (LTO)
@@ -169,14 +169,14 @@ CSRC =  $(ALLCSRC) \
 # setting.
 CPPSRC = $(ALLCPPSRC) \
   $(CHIBIOS)/os/various/cpp_wrappers/ch.cpp \
-  $(PROJECT_DIR)/development/sensor_chart.cpp \
   $(HW_LAYER_DRIVERS_CPP) \
   $(HW_LAYER_DRIVERS_CORE_CPP) \
   $(CONSOLE_SRC_CPP) \
-  $(DEV_SIMULATOR_SRC_CPP) \
+  $(DEV_SRC_CPP) \
   simulator/rusEfiFunctionalTest.cpp \
   simulator/can/hal_can_lld.cpp \
   simulator/framework.cpp \
+  simulator/system/signal_executor_sleep.cpp \
   simulator/boards.cpp \
   $(TEST_SRC_CPP) \
   $(RUSEFI_LIB_CPP) \
@@ -192,8 +192,10 @@ INCDIR = . \
   $(CHIBIOS)/os/various/cpp_wrappers \
   $(PROJECT_DIR)/hw_layer/drivers/can \
   ${CHIBIOS}/os/various \
+  $(PROJECT_DIR)/development/hw_layer \
   $(CHIBIOS)/os/hal/lib/streams \
   $(RUSEFI_LIB_INC) \
+  simulator/system \
   simulator/can \
   simulator
 
@@ -213,17 +215,17 @@ $(info OS is [${OS}])
 
 ifeq ($(OS),Windows_NT)
   # ChibiOS seem to require 32 bit compiler at least on Windows
-  # base 32-bit Cygwin is needed with mingw64 32-bit version 
+  # base 32-bit Cygwin is needed with mingw64 32-bit version
   # Cygwin64 would not debug if used with mingw64 32-bit version
   # 32 bit GDB available at http://www.equation.com/servlet/equation.cmd?fa=gdb
 
   TRGT = i686-w64-mingw32-
 else
-  TRGT = 
+  TRGT =
 endif
 
-CC   = $(CCPREFIX) $(TRGT)gcc
-CPPC = $(CCPREFIX) $(TRGT)g++
+CC   = $(TRGT)gcc
+CPPC = $(TRGT)g++
 # Enable loading with g++ only if you need C++ runtime support.
 # NOTE: You can use C++ even without C++ support if you are careful. C++
 #       runtime support makes code size explode.
@@ -253,7 +255,7 @@ CPPWARN = -Wall -Wextra -Wundef
 
 # List all user C define here, like -D_DEBUG=1
 UDEFS = -DSIMULATOR
-DDEFS += -DFIRMWARE_ID=\"simulator\"
+DDEFS += -DFIRMWARE_ID=\"simulator\" -DSHORT_BOARD_NAME=f407-discovery
 
 
 # Define ASM defines here

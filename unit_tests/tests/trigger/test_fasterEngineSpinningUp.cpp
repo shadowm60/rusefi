@@ -7,7 +7,7 @@
 #include "pch.h"
 
 TEST(cranking, testFasterEngineSpinningUp) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
 	engine->tdcMarkEnabled = false;
 	// turn on FasterEngineSpinUp mode
@@ -79,7 +79,7 @@ TEST(cranking, testFasterEngineSpinningUp) {
 	eth.assertEvent5("inj end#2", 1, (void*)endSimultaneousInjection, 149999);
 
 	// Now perform a fake VVT sync and check that ignition mode changes to sequential
-	engine->triggerCentral.syncAndReport(1, 0);
+	engine->triggerCentral.syncAndReport(2, 0);
 	ASSERT_EQ(IM_SEQUENTIAL, getCurrentIgnitionMode());
 
 	// skip, clear & advance 1 more revolution at higher RPM
@@ -104,11 +104,11 @@ TEST(cranking, testFasterEngineSpinningUp) {
 }
 
 static void doTestFasterEngineSpinningUp60_2(int startUpDelayMs, int rpm1, int expectedRpm) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	// turn on FasterEngineSpinUp mode
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
 
-	setupSimpleTestEngineWithMaf(&eth, IM_SEQUENTIAL, TT_TOOTHED_WHEEL_60_2);
+	setupSimpleTestEngineWithMaf(&eth, IM_SEQUENTIAL, trigger_type_e::TT_TOOTHED_WHEEL_60_2);
 	eth.moveTimeForwardMs(startUpDelayMs);
 
 	// fire 30 tooth rise/fall signals

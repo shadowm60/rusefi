@@ -8,7 +8,7 @@ pins:
     id: EFI_ADC_11
     class: analog_inputs
     color: white right
-    function: 12V Supply from main relay output, see also pin #29
+    function: 12V Supply from main relay output, see also pin 29. DO NOT FORGET ABOUT PIN 5.
     ts_name: Battery Sense
     type: 12V
 
@@ -32,7 +32,7 @@ pins:
     color: white
 
   - pin: 5
-    function: 12V supply from Key (turn on/off power)
+    function: 12V supply from Key (turn on/off power) primary source of +12v
     type: 12V
     color: black
 
@@ -132,7 +132,7 @@ pins:
     id: [C2, EFI_ADC_12]
     class: [switch_inputs, analog_inputs]
     color: red
-    function: Starting from version 0.5.0 this pin can be used as 5V input for USB connection through main connector (No need to open case to access micro-USB connector)
+    function: Starting from version 0.5.0 this pin can be used as 5V input for USB connection through main connector (No need to open case to access micro-USB connector) WATCH OUT FOR D7
     ts_name: 19 - AN volt 4
     type: av
   
@@ -153,14 +153,14 @@ pins:
     id: [A3, A3, EFI_ADC_3]
     class: [event_inputs, switch_inputs, analog_inputs]
     color: dark green
-    ts_name: 22 - AN temp 4
+    ts_name: 22 - AN temp 4 or Hall Input
     type: at
 
   - pin: 23
-    id: [A1, A1, EFI_ADC_1]
-    class: [event_inputs, switch_inputs, analog_inputs]
+    id: [A1, A1, EFI_ADC_1, A1]
+    class: [event_inputs, switch_inputs, analog_inputs, sent_inputs]
     color: dark green
-    function: IAT sensor
+    function: IAT sensor or SENT input!
     ts_name: 23 - AN temp 2
     type: at
 
@@ -168,7 +168,7 @@ pins:
     id: [A2, A2, EFI_ADC_2]
     class: [event_inputs, switch_inputs, analog_inputs]
     color: dark green
-    ts_name: 24 - AN temp 3
+    ts_name: 24 - AN temp 3 or Hall Input
     type: at
 
   # RC filter input for hall
@@ -183,6 +183,7 @@ pins:
     id: [A6, EFI_ADC_6]
     class: [switch_inputs, analog_inputs]
     color: light blue
+    function: TPS2
     ts_name: 26 - AN volt 2
     type: av
 
@@ -223,6 +224,7 @@ pins:
     id: [C5, EFI_ADC_15]
     class: [switch_inputs, analog_inputs]
     color: pink
+    function: Throttle Pedal Position Sensor 2 (PPS2)
     ts_name: 30 - AN volt 7
     type: av
 
@@ -302,7 +304,7 @@ pins:
     id: [B1, B1, EFI_ADC_9]
     class: [outputs, switch_inputs, analog_inputs]
     color: grey
-    function: AN volt 9, for aux see R30
+    function: AN volt 9 without R30, low side output with R30
     ts_name: 40 - AN volt 9, Aux Reuse
     type: av
 
@@ -363,7 +365,8 @@ info:
   title: microRusEFI
   name: Main Connector
   board_url: https://rusefi.com/s/microrusefi
-  id: main
+  directory: microrusefi
+  cid: main
   order: 0
   image:
     file: main.jpg

@@ -9,7 +9,8 @@
 
 #include "pch.h"
 
-#if EFI_INTERNAL_FLASH
+/* If any setting storage is exist */
+#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
 
 #include "mpu_util.h"
 #include "flash_main.h"
@@ -21,8 +22,7 @@
 #include "tunerstudio.h"
 #endif
 
-#if EFI_STORAGE_EXT_SNOR == TRUE
-#include "hal_serial_nor.h"
+#if EFI_STORAGE_MFS == TRUE
 #include "hal_mfs.h"
 #endif
 
@@ -30,38 +30,16 @@
 
 static bool needToWriteConfiguration = false;
 
-/* if we store settings externally */
-#if EFI_STORAGE_EXT_SNOR == TRUE
+/* if we use ChibiOS MFS for settings */
+#if EFI_STORAGE_MFS == TRUE
 
-/* Some fields in following struct is used for DMA transfers, so do no cache */
-NO_CACHE SNORDriver snor1;
-
-const WSPIConfig WSPIcfg1 = {
-	.end_cb			= NULL,
-	.error_cb		= NULL,
-	.dcr			= STM32_DCR_FSIZE(23U) |	/* 8MB device.          */
-					  STM32_DCR_CSHT(1U)		/* NCS 2 cycles delay.  */
-};
-
-const SNORConfig snorcfg1 = {
-	.busp			= &WSPID1,
-	.buscfg			= &WSPIcfg1
-};
-
-/* Managed Flash Storage stuff */
+/* Managed Flash Storage driver */
 MFSDriver mfsd;
 
-const MFSConfig mfsd_nor_config = {
-	.flashp			= (BaseFlash *)&snor1,
-	.erased			= 0xFFFFFFFFU,
-	.bank_size		= 64 * 1024U,
-	.bank0_start	= 0U,
-	.bank0_sectors	= 128U,	/* 128 * 4 K = 0.5 Mb */
-	.bank1_start	= 128U,
-	.bank1_sectors	= 128U
-};
-
 #define EFI_MFS_SETTINGS_RECORD_ID		1
+
+extern void boardInitMfs(void);
+extern const MFSConfig *boardGetMfsConfig(void);
 
 #endif
 
@@ -79,7 +57,7 @@ static uint32_t flashStateCrc(const persistent_config_container_s& state) {
 #if EFI_FLASH_WRITE_THREAD
 chibios_rt::BinarySemaphore flashWriteSemaphore(/*taken =*/ true);
 
-#if EFI_STORAGE_EXT_SNOR == TRUE
+#if EFI_STORAGE_MFS == TRUE
 /* in case of MFS we need more stack */
 static THD_WORKING_AREA(flashWriteStack, 3 * UTILITY_THREAD_STACK_SIZE);
 #else
@@ -98,19 +76,19 @@ static void flashWriteThread(void*) {
 }
 #endif // EFI_FLASH_WRITE_THREAD
 
-void setNeedToWriteConfiguration(void) {
+void setNeedToWriteConfiguration() {
 	efiPrintf("Scheduling configuration write");
 	needToWriteConfiguration = true;
 
 #if EFI_FLASH_WRITE_THREAD
-	if (allowFlashWhileRunning() || (EFI_STORAGE_EXT_SNOR == TRUE)) {
+	if (allowFlashWhileRunning() || (EFI_STORAGE_MFS == TRUE)) {
 		// Signal the flash writer thread to wake up and write at its leisure
 		flashWriteSemaphore.signal();
 	}
 #endif // EFI_FLASH_WRITE_THREAD
 }
 
-bool getNeedToWriteConfiguration(void) {
+bool getNeedToWriteConfiguration() {
 	return needToWriteConfiguration;
 }
 
@@ -139,13 +117,13 @@ int eraseAndFlashCopy(flashaddr_t storageAddress, const TStorage& data) {
 
 	auto err = intFlashErase(storageAddress, sizeof(TStorage));
 	if (FLASH_RETURN_SUCCESS != err) {
-		firmwareError(OBD_PCM_Processor_Fault, "Failed to erase flash at 0x%08x: %d", storageAddress, err);
+		criticalError("Failed to erase flash at 0x%08x: %d", storageAddress, err);
 		return err;
 	}
 
 	err = intFlashWrite(storageAddress, reinterpret_cast<const char*>(&data), sizeof(TStorage));
 	if (FLASH_RETURN_SUCCESS != err) {
-		firmwareError(OBD_PCM_Processor_Fault, "Failed to write flash at 0x%08x: %d", storageAddress, err);
+		criticalError("Failed to write flash at 0x%08x: %d", storageAddress, err);
 		return err;
 	}
 
@@ -154,7 +132,7 @@ int eraseAndFlashCopy(flashaddr_t storageAddress, const TStorage& data) {
 
 bool burnWithoutFlash = false;
 
-void writeToFlashNow(void) {
+void writeToFlashNow() {
 	engine->configBurnTimer.reset();
 	bool isSuccess = false;
 
@@ -167,9 +145,13 @@ void writeToFlashNow(void) {
 	// Set up the container
 	persistentState.size = sizeof(persistentState);
 	persistentState.version = FLASH_DATA_VERSION;
-	persistentState.value = flashStateCrc(persistentState);
+	persistentState.crc = flashStateCrc(persistentState);
 
-#if EFI_STORAGE_EXT_SNOR == TRUE
+	// there's no wdgStop() for STM32, so we cannot disable it.
+	// we just set a long timeout of 5 secs to wait until flash is done.
+	startWatchdog(WATCHDOG_FLASH_TIMEOUT_MS);
+
+#if EFI_STORAGE_MFS == TRUE
 	mfs_error_t err;
 	/* In case of MFS:
 	 * do we need to have two copies?
@@ -178,18 +160,25 @@ void writeToFlashNow(void) {
 	err = mfsWriteRecord(&mfsd, EFI_MFS_SETTINGS_RECORD_ID,
 						 sizeof(persistentState), (uint8_t *)&persistentState);
 
-	if (err == MFS_NO_ERROR)
+	if (err >= MFS_NO_ERROR)
 		isSuccess = true;
 #endif
 
 #if EFI_STORAGE_INT_FLASH == TRUE
 	// Flash two copies
 	int result1 = eraseAndFlashCopy(getFlashAddrFirstCopy(), persistentState);
-	int result2 = eraseAndFlashCopy(getFlashAddrSecondCopy(), persistentState);
+	int result2 = FLASH_RETURN_SUCCESS;
+	/* Only if second copy is supported */
+	if (getFlashAddrSecondCopy()) {
+		result2 = eraseAndFlashCopy(getFlashAddrSecondCopy(), persistentState);
+	}
 
 	// handle success/failure
 	isSuccess = (result1 == FLASH_RETURN_SUCCESS) && (result2 == FLASH_RETURN_SUCCESS);
 #endif
+
+	// restart the watchdog with the default timeout
+	startWatchdog();
 
 	if (isSuccess) {
 		efiPrintf("FLASH_SUCCESS");
@@ -215,8 +204,26 @@ enum class FlashState {
 	BlankChip,
 };
 
+static FlashState validatePersistentState() {
+	auto flashCrc = flashStateCrc(persistentState);
+
+	if (flashCrc != persistentState.crc) {
+		// If the stored crc is all 1s, that probably means the flash is actually blank, not that the crc failed.
+		if (persistentState.crc == ((decltype(persistentState.crc))-1)) {
+			return FlashState::BlankChip;
+		} else {
+			return FlashState::CrcFailed;
+		}
+	} else if (persistentState.version != FLASH_DATA_VERSION || persistentState.size != sizeof(persistentState)) {
+		return FlashState::IncompatibleVersion;
+	} else {
+        return FlashState::Ok;
+    }
+}
+
+#if EFI_STORAGE_INT_FLASH == TRUE
 /**
- * Read single copy of rusEFI configuration from flash
+ * Read single copy of rusEFI configuration from interan flash using custom driver
  */
 static FlashState readOneConfigurationCopy(flashaddr_t address) {
 	efiPrintf("readFromFlash %x", address);
@@ -228,21 +235,9 @@ static FlashState readOneConfigurationCopy(flashaddr_t address) {
 
 	intFlashRead(address, (char *) &persistentState, sizeof(persistentState));
 
-	auto flashCrc = flashStateCrc(persistentState);
-
-	if (flashCrc != persistentState.value) {
-		// If the stored crc is all 1s, that probably means the flash is actually blank, not that the crc failed.
-		if (persistentState.value == ((decltype(persistentState.value))-1)) {
-			return FlashState::BlankChip;
-		} else {
-			return FlashState::CrcFailed;
-		}
-	} else if (persistentState.version != FLASH_DATA_VERSION || persistentState.size != sizeof(persistentState)) {
-		return FlashState::IncompatibleVersion;
-	} else {
-		return FlashState::Ok;
-	}
+	return validatePersistentState();
 }
+#endif
 
 /**
  * this method could and should be executed before we have any
@@ -251,16 +246,17 @@ static FlashState readOneConfigurationCopy(flashaddr_t address) {
  * in this method we read first copy of configuration in flash. if that first copy has CRC or other issues we read second copy.
  */
 static FlashState readConfiguration() {
-#if EFI_STORAGE_EXT_SNOR == TRUE
+#if EFI_STORAGE_MFS == TRUE
 	size_t settings_size = sizeof(persistentState);
 	mfs_error_t err = mfsReadRecord(&mfsd, EFI_MFS_SETTINGS_RECORD_ID,
 						&settings_size, (uint8_t *)&persistentState);
 
-	// TODO: check err result better?
-	if (err == MFS_NO_ERROR) {
-		return FlashState::Ok;
+	if (err >= MFS_NO_ERROR) {
+		// readed size is not exactly the same
+		if (settings_size != sizeof(persistentState))
+			return FlashState::IncompatibleVersion;
+		return validatePersistentState();
 	} else {
-		// TODO: is this correct?
 		return FlashState::BlankChip;
 	}
 #endif
@@ -273,6 +269,11 @@ static FlashState readConfiguration() {
 
 	if (firstCopy == FlashState::Ok) {
 		// First copy looks OK, don't even need to check second copy.
+		return firstCopy;
+	}
+
+	/* no second copy? */
+	if (getFlashAddrSecondCopy() == 0x0) {
 		return firstCopy;
 	}
 
@@ -303,7 +304,7 @@ void readFromFlash() {
 
 	switch (result) {
 		case FlashState::CrcFailed:
-			warning(CUSTOM_ERR_FLASH_CRC_FAILED, "flash CRC failed");
+			warning(ObdCode::CUSTOM_ERR_FLASH_CRC_FAILED, "flash CRC failed");
 			efiPrintf("Need to reset flash to default due to CRC mismatch");
 			[[fallthrough]];
 		case FlashState::BlankChip:
@@ -323,7 +324,7 @@ void readFromFlash() {
 
 	// we can only change the state after the CRC check
 	engineConfiguration->byFirmwareVersion = getRusEfiVersion();
-	memset(persistentState.persistentConfiguration.warning_message , 0, ERROR_BUFFER_SIZE);
+	memset(persistentState.persistentConfiguration.warning_message , 0, sizeof(persistentState.persistentConfiguration.warning_message));
 	validateConfiguration();
 }
 
@@ -333,21 +334,14 @@ static void rewriteConfig() {
 }
 
 void initFlash() {
-#if EFI_STORAGE_EXT_SNOR == TRUE
-	mfs_error_t err;
-
-#if SNOR_SHARED_BUS == FALSE
-	wspiStart(&WSPID1, &WSPIcfg1);
-#endif
-
-	/* Initializing and starting snor1 driver.*/
-	snorObjectInit(&snor1);
-	snorStart(&snor1, &snorcfg1);
+#if EFI_STORAGE_MFS == TRUE
+	boardInitMfs();
+	const MFSConfig *config = boardGetMfsConfig();
 
 	/* MFS */
 	mfsObjectInit(&mfsd);
-	err = mfsStart(&mfsd, &mfsd_nor_config);
-	if (err != MFS_NO_ERROR) {
+	mfs_error_t err = mfsStart(&mfsd, config);
+	if (err < MFS_NO_ERROR) {
 		/* hm...? */
 	}
 #endif
@@ -373,4 +367,4 @@ void initFlash() {
 #endif
 }
 
-#endif /* EFI_INTERNAL_FLASH */
+#endif /* (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE) */

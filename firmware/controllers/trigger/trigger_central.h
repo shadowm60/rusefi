@@ -12,7 +12,7 @@
 #include "trigger_decoder.h"
 #include "instant_rpm_calculator.h"
 #include "trigger_central_generated.h"
-#include "timer.h"
+#include <rusefi/timer.h>
 #include "pin_repository.h"
 #include "local_version_holder.h"
 #include "cyclic_buffer.h"
@@ -76,7 +76,7 @@ public:
 	cyclic_buffer<int> triggerErrorDetection;
 
 	/**
-	 * See also triggerSimulatorFrequency
+	 * See also triggerSimulatorRpm
 	 */
 	bool directSelfStimulation = false;
 
@@ -101,7 +101,6 @@ public:
 	 */
 	bool isSpinningJustForWatchdog = false;
 
-	angle_t mapCamPrevToothAngle = -1;
 	float mapCamPrevCycleValue = 0;
 	int prevChangeAtCycle = 0;
 
@@ -199,6 +198,8 @@ public:
 private:
 	void decodeMapCam(efitick_t nowNt, float currentPhase);
 
+	bool isToothExpectedNow(efitick_t timestamp);
+
 	// Time since the last tooth
 	Timer m_lastToothTimer;
 	// Phase of the last tooth relative to the sync point
@@ -206,13 +207,15 @@ private:
 
 	// At what engine phase do we expect the next tooth to arrive?
 	// Used for checking whether your trigger pattern is correct.
-	float expectedNextPhase;
+	expected<float> expectedNextPhase = unexpected;
 };
 
 void triggerInfo(void);
 void hwHandleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp);
 void handleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp);
 void hwHandleVvtCamSignal(TriggerValue front, efitick_t timestamp, int index);
+void hwHandleVvtCamSignal(bool isRising, efitick_t timestamp, int index);
+void handleVvtCamSignal(TriggerValue front, efitick_t timestamp, int index);
 
 void validateTriggerInputs();
 
@@ -222,8 +225,10 @@ int isSignalDecoderError(void);
 
 void onConfigurationChangeTriggerCallback();
 
-#define SYMMETRICAL_CRANK_SENSOR_DIVIDER 4
-#define SYMMETRICAL_THREE_TIMES_CRANK_SENSOR_DIVIDER 6
-#define SYMMETRICAL_TWELVE_TIMES_CRANK_SENSOR_DIVIDER 24
+#define SYMMETRICAL_CRANK_SENSOR_DIVIDER (2 * 2)
+#define SYMMETRICAL_THREE_TIMES_CRANK_SENSOR_DIVIDER (3 * 2)
+#define SYMMETRICAL_SIX_TIMES_CRANK_SENSOR_DIVIDER (6 * 2)
+#define SYMMETRICAL_TWELVE_TIMES_CRANK_SENSOR_DIVIDER (12 * 2)
 
 TriggerCentral * getTriggerCentral();
+int getCrankDivider(operation_mode_e operationMode);

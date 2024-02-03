@@ -4,30 +4,27 @@ import com.devexperts.logging.Logging;
 import com.rusefi.autodetect.PortDetector;
 import com.rusefi.autodetect.SerialAutoChecker;
 import com.rusefi.core.io.BundleUtil;
-import com.rusefi.core.ui.AutoupdateUtil;
+import com.rusefi.core.preferences.storage.PersistentConfiguration;
+import com.rusefi.core.ui.FrameHelper;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.serial.BaudRateHolder;
 import com.rusefi.maintenance.DriverInstall;
-import com.rusefi.maintenance.ExecHelper;
-import com.rusefi.maintenance.FirmwareFlasher;
+import com.rusefi.maintenance.StLinkFlasher;
 import com.rusefi.maintenance.ProgramSelector;
-import com.rusefi.ui.PcanConnectorUI;
+import com.rusefi.ui.LogoHelper;
 import com.rusefi.ui.util.HorizontalLine;
 import com.rusefi.ui.util.URLLabel;
 import com.rusefi.ui.util.UiUtils;
+import com.rusefi.ui.widgets.ToolButtons;
 import com.rusefi.util.IoUtils;
 import net.miginfocom.swing.MigLayout;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.putgemin.VerticalFlowLayout;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import static com.devexperts.logging.Logging.getLogging;
@@ -42,21 +39,18 @@ import static javax.swing.JOptionPane.YES_NO_OPTION;
  * <p/>
  * 2/14/14
  * @see SimulatorHelper
- * @see FirmwareFlasher
+ * @see StLinkFlasher
  */
 public class StartupFrame {
     private static final Logging log = getLogging(Launcher.class);
+    public static final String ALWAYS_AUTO_PORT = "always_auto_port";
 
-    public static final String LOGO_PATH = "/com/rusefi/";
-    private static final String LOGO = LOGO_PATH + "logo.png";
-    public static final String LINK_TEXT = "rusEFI (c) 2012-2022";
-    private static final String URI = "http://rusefi.com/?java_console";
     // private static final int RUSEFI_ORANGE = 0xff7d03;
 
     private final JFrame frame;
     private final JPanel connectPanel = new JPanel(new FlowLayout());
     // todo: move this line to the connectPanel
-    private final JComboBox<String> comboPorts = new JComboBox<>();
+    private final JComboBox<SerialPortScanner.PortResult> comboPorts = new JComboBox<>();
     private final JPanel leftPanel = new JPanel(new VerticalFlowLayout());
 
     private final JPanel realHardwarePanel = new JPanel(new MigLayout());
@@ -78,8 +72,8 @@ public class StartupFrame {
     public StartupFrame() {
 //        AudioPlayback.start();
         String title = "rusEFI console version " + Launcher.CONSOLE_VERSION;
-        frame = new JFrame(appendBundleName(title));
-        frame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        log.info(title);
+        frame = FrameHelper.createFrame(title).getFrame();
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent ev) {
@@ -89,13 +83,6 @@ public class StartupFrame {
                 }
             }
         });
-        AutoupdateUtil.setAppIcon(frame);
-    }
-
-    @NotNull
-    public static String appendBundleName(String title) {
-        String bundleName = BundleUtil.readBundleFullNameNotNull();
-        return title + " " + bundleName;
     }
 
     public void chooseSerialPort() {
@@ -117,6 +104,22 @@ public class StartupFrame {
         final JButton connectButton = new JButton("Connect", new ImageIcon(getClass().getResource("/com/rusefi/connect48.png")));
         //connectButton.setBackground(new Color(RUSEFI_ORANGE)); // custom orange
         setToolTip(connectButton, "Connect to real hardware");
+
+        JCheckBoxMenuItem menuItem = new JCheckBoxMenuItem("Always auto-connect port");
+        menuItem.setState(PersistentConfiguration.getBoolProperty(ALWAYS_AUTO_PORT));
+        menuItem.addActionListener(e -> PersistentConfiguration.setBoolProperty(ALWAYS_AUTO_PORT, menuItem.getState()));
+
+        connectButton.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (!SwingUtilities.isRightMouseButton(e))
+                    return;
+                JPopupMenu menu = new JPopupMenu();
+                menu.add(menuItem);
+                menu.show(connectButton, e.getX(), e.getY());
+            }
+        });
+
         connectPanel.add(connectButton);
         connectPanel.setVisible(false);
 
@@ -137,14 +140,14 @@ public class StartupFrame {
 
         if (FileLog.isWindows()) {
             JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
-            topButtons.add(createShowDeviceManagerButton());
+            topButtons.add(ToolButtons.createShowDeviceManagerButton());
             topButtons.add(DriverInstall.createButton());
-            topButtons.add(createPcanConnectorButton());
+            topButtons.add(ToolButtons.createPcanConnectorButton());
             realHardwarePanel.add(topButtons, "right, wrap");
         }
         realHardwarePanel.add(connectPanel, "right, wrap");
         realHardwarePanel.add(noPortsMessage, "right, wrap");
-        installMessage(noPortsMessage, "Check you cables. Check your drivers. Do you want to start simulator maybe?");
+        noPortsMessage.setToolTipText("Check you cables. Check your drivers. Do you want to start simulator maybe?");
 
         ProgramSelector selector = new ProgramSelector(comboPorts);
 
@@ -155,11 +158,6 @@ public class StartupFrame {
 
             // for F7 builds we just build one file at the moment
 //            realHardwarePanel.add(new FirmwareFlasher(FirmwareFlasher.IMAGE_FILE, "ST-LINK Program Firmware", "Default firmware version for most users").getButton());
-            if (new File(FirmwareFlasher.IMAGE_NO_ASSERTS_FILE).exists()) {
-                // 407 build
-                FirmwareFlasher firmwareFlasher = new FirmwareFlasher(FirmwareFlasher.IMAGE_NO_ASSERTS_FILE, "ST-LINK Program Firmware/NoAsserts", "Please only use this version if you know that you need this version");
-                realHardwarePanel.add(firmwareFlasher.getButton(), "right, wrap");
-            }
             JComponent updateHelp = ProgramSelector.createHelpButton();
 
             realHardwarePanel.add(updateHelp, "right, wrap");
@@ -206,10 +204,10 @@ public class StartupFrame {
             rightPanel.add(urlLabel);
         }
 
-        JLabel logo = createLogoLabel();
+        JLabel logo = LogoHelper.createLogoLabel();
         if (logo != null)
             rightPanel.add(logo);
-        rightPanel.add(new URLLabel(LINK_TEXT, URI));
+        rightPanel.add(LogoHelper.createUrlLabel());
         rightPanel.add(new JLabel("Version " + Launcher.CONSOLE_VERSION));
 
         JPanel content = new JPanel(new BorderLayout());
@@ -218,6 +216,7 @@ public class StartupFrame {
         frame.add(content);
         frame.pack();
         setFrameIcon(frame);
+        log.info("setVisible");
         frame.setVisible(true);
         UiUtils.centerWindow(frame);
 
@@ -229,47 +228,19 @@ public class StartupFrame {
     }
 
     private void applyKnownPorts(SerialPortScanner.AvailableHardware currentHardware) {
-        List<String> ports = currentHardware.getKnownPorts();
-            log.info("Rendering available ports: " + ports);
-            connectPanel.setVisible(!ports.isEmpty());
-            noPortsMessage.setVisible(ports.isEmpty());
+        List<SerialPortScanner.PortResult> ports = currentHardware.getKnownPorts();
+        log.info("Rendering available ports: " + ports);
+        connectPanel.setVisible(!ports.isEmpty());
+        noPortsMessage.setVisible(ports.isEmpty());
 
-            applyPortSelectionToUIcontrol(ports);
-            UiUtils.trueLayout(connectPanel);
+        applyPortSelectionToUIcontrol(ports);
+        UiUtils.trueLayout(connectPanel);
     }
 
     public static void setFrameIcon(Frame frame) {
-        ImageIcon icon = getBundleIcon();
+        ImageIcon icon = LogoHelper.getBundleIcon();
         if (icon != null)
             frame.setIconImage(icon.getImage());
-    }
-
-    public static JLabel createLogoLabel() {
-        ImageIcon logoIcon = getBundleIcon();
-        if (logoIcon == null)
-            return null;
-        JLabel logo = new JLabel(logoIcon);
-        logo.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 10));
-        URLLabel.addUrlAction(logo, URLLabel.createUri(URI));
-        logo.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        return logo;
-    }
-
-    @Nullable
-    private static ImageIcon getBundleIcon() {
-        String bundle = BundleUtil.readBundleFullNameNotNull();
-        String logoName;
-        // these should be about 213px wide
-        if (bundle.contains("proteus")) {
-            logoName = LOGO_PATH + "logo_proteus.png";
-        } else if (bundle.contains("_alphax")) {
-            logoName = LOGO_PATH + "logo_alphax.png";
-        } else if (bundle.contains("_mre")) {
-            logoName = LOGO_PATH + "logo_mre.png";
-        } else {
-            logoName = LOGO;
-        }
-        return AutoupdateUtil.loadIcon(logoName);
     }
 
     private void connectButtonAction(JComboBox<String> comboSpeeds) {
@@ -310,35 +281,10 @@ public class StartupFrame {
             }
 
             private void runFunctionalHardwareTest() {
-                boolean isSuccess = RealHardwareTestLauncher.runHardwareTest();
+                boolean isSuccess = HwCiF4Discovery.runHardwareTest();
                 JOptionPane.showMessageDialog(null, "Function test passed: " + isSuccess + "\nSee log folder for details.");
             }
         };
-    }
-
-    private Component createPcanConnectorButton() {
-        JButton button = new JButton("PCAN");
-        button.setToolTipText("PCAN connector for TS");
-        button.addActionListener(e -> PcanConnectorUI.show());
-        return button;
-    }
-
-    private Component createShowDeviceManagerButton() {
-        JButton showDeviceManager = new JButton(AutoupdateUtil.loadIcon("DeviceManager.png"));
-        showDeviceManager.setMargin(new Insets(0, 0, 0, 0));
-        showDeviceManager.setToolTipText("Show Device Manager");
-        showDeviceManager.addActionListener(event -> {
-            try {
-                Runtime.getRuntime().exec(ExecHelper.getBatchCommand("devmgmt.msc"));
-            } catch (IOException ex) {
-                throw new IllegalStateException(ex);
-            }
-        });
-        return showDeviceManager;
-    }
-
-    private void installMessage(JComponent component, String s) {
-        component.setToolTipText(s);
     }
 
     public void disposeFrameAndProceed() {
@@ -347,12 +293,16 @@ public class StartupFrame {
         SerialPortScanner.INSTANCE.stopTimer();
     }
 
-    private void applyPortSelectionToUIcontrol(List<String> ports) {
+    private void applyPortSelectionToUIcontrol(List<SerialPortScanner.PortResult> ports) {
         comboPorts.removeAllItems();
-        for (final String port : ports)
+        for (final SerialPortScanner.PortResult port : ports) {
             comboPorts.addItem(port);
+        }
         String defaultPort = getConfig().getRoot().getProperty(ConsoleUI.PORT_KEY);
-        comboPorts.setSelectedItem(defaultPort);
+        if (!PersistentConfiguration.getBoolProperty(ALWAYS_AUTO_PORT)) {
+            comboPorts.setSelectedItem(defaultPort);
+        }
+
         trueLayout(comboPorts);
     }
 

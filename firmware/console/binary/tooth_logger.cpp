@@ -1,15 +1,19 @@
 /*
  * @file tooth_logger.cpp
  *
+ * At least some of the code here is related to xxx.teeth files
+ * See also misc\tooth_log_converter\log_convert.cpp
+ *
  * @date Jul 7, 2019
  * @author Matthew Kennedy
  */
 
 #include "pch.h"
 
-#include "tooth_logger.h"
-
 #if EFI_TOOTH_LOGGER
+#if !EFI_SHAFT_POSITION_INPUT
+	fail("EFI_SHAFT_POSITION_INPUT required to have EFI_EMULATE_POSITION_SENSORS")
+#endif
 
 /**
  * Engine idles around 20Hz and revs up to 140Hz, at 60/2 and 8 cylinders we have about 20Khz events
@@ -19,7 +23,7 @@
 static_assert(sizeof(composite_logger_s) == COMPOSITE_PACKET_SIZE, "composite packet size");
 
 static volatile bool ToothLoggerEnabled = false;
-static uint32_t lastEdgeTimestamp = 0;
+//static uint32_t lastEdgeTimestamp = 0;
 
 static bool currentTrigger1 = false;
 static bool currentTrigger2 = false;
@@ -63,12 +67,12 @@ void DisableToothLogger() {
 
 #else // not EFI_UNIT_TEST
 
-static constexpr size_t totalEntryCount = BIG_BUFFER_SIZE / sizeof(composite_logger_s);
-static constexpr size_t bufferCount = totalEntryCount / toothLoggerEntriesPerBuffer;
+static constexpr size_t BUFFER_COUNT = BIG_BUFFER_SIZE / sizeof(CompositeBuffer);
+static_assert(BUFFER_COUNT >= 2);
 
 static CompositeBuffer* buffers = nullptr;
-static chibios_rt::Mailbox<CompositeBuffer*, bufferCount> freeBuffers CCM_OPTIONAL;
-static chibios_rt::Mailbox<CompositeBuffer*, bufferCount> filledBuffers CCM_OPTIONAL;
+static chibios_rt::Mailbox<CompositeBuffer*, BUFFER_COUNT> freeBuffers CCM_OPTIONAL;
+static chibios_rt::Mailbox<CompositeBuffer*, BUFFER_COUNT> filledBuffers CCM_OPTIONAL;
 
 static CompositeBuffer* currentBuffer = nullptr;
 
@@ -91,7 +95,7 @@ void EnableToothLogger() {
 	buffers = bufferHandle.get<CompositeBuffer>();
 
 	// Reset all buffers
-	for (size_t i = 0; i < bufferCount; i++) {
+	for (size_t i = 0; i < BUFFER_COUNT; i++) {
 		buffers[i].nextIdx = 0;
 	}
 
@@ -103,12 +107,12 @@ void EnableToothLogger() {
 	while (MSG_TIMEOUT != filledBuffers.fetchI(&dummy)) ;
 
 	// Put all buffers in the free list
-	for (size_t i = 0; i < bufferCount; i++) {
+	for (size_t i = 0; i < BUFFER_COUNT; i++) {
 		freeBuffers.postI(&buffers[i]);
 	}
 
 	// Reset the last edge to now - this prevents the first edge logged from being bogus
-	lastEdgeTimestamp = getTimeNowUs();
+	//lastEdgeTimestamp = getTimeNowUs();
 
 	// Enable logging of edges as they come
 	ToothLoggerEnabled = true;
@@ -119,12 +123,12 @@ void EnableToothLogger() {
 void DisableToothLogger() {
 	chibios_rt::CriticalSectionLocker csl;
 
+	ToothLoggerEnabled = false;
+	setToothLogReady(false);
+
 	// Release the big buffer for another user
 	bufferHandle = {};
 	buffers = nullptr;
-
-	ToothLoggerEnabled = false;
-	setToothLogReady(false);
 }
 
 static CompositeBuffer* GetToothLoggerBufferImpl(sysinterval_t timeout) {
@@ -139,6 +143,13 @@ static CompositeBuffer* GetToothLoggerBufferImpl(sysinterval_t timeout) {
 	if (msg != MSG_OK) {
 		// What even happened if we didn't get timeout, but also didn't get OK?
 		return nullptr;
+	}
+
+	chibios_rt::CriticalSectionLocker csl;
+
+	// If the used list is empty, clear the ready flag
+	if (filledBuffers.getUsedCountI() == 0) {
+		setToothLogReady(false);
 	}
 
 	return buffer;
@@ -156,12 +167,7 @@ void ReturnToothLoggerBuffer(CompositeBuffer* buffer) {
 	chibios_rt::CriticalSectionLocker csl;
 
 	msg_t msg = freeBuffers.postI(buffer);
-	efiAssertVoid(OBD_PCM_Processor_Fault, msg == MSG_OK, "Composite logger post to free buffer fail");
-
-	// If the used list is empty, clear the ready flag
-	if (filledBuffers.getUsedCountI() == 0) {
-		setToothLogReady(false);
-	}
+	criticalAssertVoid(msg == MSG_OK, "Composite logger post to free buffer fail");
 }
 
 static CompositeBuffer* findBuffer(efitick_t timestamp) {
@@ -236,6 +242,7 @@ static void SetNextCompositeEntry(efitick_t timestamp) {
 #endif // EFI_UNIT_TEST
 
 void LogTriggerTooth(trigger_event_e tooth, efitick_t timestamp) {
+    efiAssertVoid(ObdCode::CUSTOM_ERR_6650, hasLotsOfRemainingStack(), "l-t-t");
 	// bail if we aren't enabled
 	if (!ToothLoggerEnabled) {
 		return;

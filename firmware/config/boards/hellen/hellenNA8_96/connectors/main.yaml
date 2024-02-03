@@ -1,7 +1,4 @@
-#
-# CONNECTOR MAPPING NEEDED
-# https://github.com/rusefi/rusefi/blob/master/firmware/config/boards/hellen/hellen_meta.h
-#
+meta: config/boards/hellen_meta.h
 
 pins:
   - pin: p18_p22
@@ -321,6 +318,7 @@ pins:
 
 info:
   title: Hellen Miata NB1
+  directory: hellen/hellenNA8_96
   image:
     file: main.jpg
   pins:

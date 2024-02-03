@@ -56,7 +56,7 @@ function arrayToString(arr)  \
 	local index = 1   \
 	while arr[index] ~= nil do  \
 		str = str..\" \"..toHexString(math.floor(arr[index]))  \
-		index = index + 1  \
+		index = index + 1\
 	end  \
 	return str  \
 end  \
@@ -65,17 +65,19 @@ end  \
 "
 
 // LSB (Least Significant Byte comes first) "Intel"
-#define TWO_BYTES_LSB "function getTwoBytesLSB(data, offset, factor)        \
-		return (data[offset + 2] * 256 + data[offset + 1]) * factor   \
-	end"
+#define TWO_BYTES_LSB "function getTwoBytesLSB(data, offset, factor)\
+		return (data[offset + 2] * 256 + data[offset + 1]) * factor \n\
+	end\n\
+\
+"
 
 // Little-endian System, "Intel"
-#define SET_TWO_BYTES "	function setTwoBytes(data, offset, value) \
-		value = math.floor(value) \
-		data[offset + 2] = value >> 8 \
-		data[offset + 1] = value & 0xff \
+#define SET_TWO_BYTES_LSB "	function setTwoBytesLsb(data, offset, value) \
+		value = math.floor(value)\
+		data[offset + 2] = value >> 8\
+		data[offset + 1] = value & 0xff\
 	end \
-	"
+"
 
 // MOTOROLA order, MSB (Most Significant Byte/Big Endian) comes first.
 #define TWO_BYTES_MSB "function getTwoBytesMSB(data, offset, factor)        \
@@ -87,23 +89,36 @@ end  \
 		value = math.floor(value) \
 		data[offset + 1] = value >> 8 \
 		data[offset + 2] = value & 0xff \
-	end \
-	"
+	end\
+"
 
 // one day we shall get Preprocessor macros with C++11 raw string literals
 // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=55971
 // for when you want "I want bitWidth number of bits starting at bitIndex in data array
 #define GET_BIT_RANGE_LSB " \
-function getBitRange(data, bitIndex, bitWidth) \
-	byteIndex = bitIndex >> 3 \
-	shift = bitIndex - byteIndex * 8 \
-	value = data[1 + byteIndex] \
-	if (shift + bitWidth > 8) then \
+function getBitRange(data, bitIndex, bitWidth) \n\
+	byteIndex = bitIndex >> 3 \n\
+	shift = bitIndex - byteIndex * 8 \n\
+	value = data[1 + byteIndex] \n\
+	if (shift + bitWidth > 8) then \n\
 		value = value + data[2 + byteIndex] * 256 \
-	end \
-	mask = (1 << bitWidth) - 1 \
-	return (value >> shift) & mask \
-end \
+	end \n\
+	mask = (1 << bitWidth) - 1 \n\
+	return (value >> shift) & mask \n\
+end \n\
+"
+
+#define GET_BIT_RANGE_MSB " \
+function getBitRangeMsb(data, bitIndex, bitWidth) \n\
+	byteIndex = bitIndex >> 3 \n\
+	shift = bitIndex - byteIndex * 8 \n\
+	value = data[1 + byteIndex] \n\
+	if (shift + bitWidth > 8) then \n\
+		value = value + data[0 + byteIndex] * 256 \
+	end \n\
+	mask = (1 << bitWidth) - 1 \n\
+	return (value >> shift) & mask \n\
+end \n\
 "
 
 #define SET_BIT_RANGE_LSB " \
@@ -120,7 +135,33 @@ function setBitRange(data, totalBitIndex, bitWidth, value) \
 	maskedValue = value & mask \
 	shiftedValue = maskedValue << bitInByteIndex \
 	data[1 + byteIndex] = data[1 + byteIndex] | shiftedValue \
-end \
+end \n\
 "
 
+#define HYUNDAI_SUM_NIBBLES "\
+function hyundaiSumNibbles(data, seed) \n\
+  local sum = seed \n\
+  for i = 1, 7, 1 \n\
+  do \n\
+    b = data[i] \n\
+    sum =  sum +  (b % 16) + math.floor(b / 16) \
+  end \
+  return (16 - sum) % 16 \
+end\
+"
 
+// XOR of the array, skipping target index
+#define VAG_CHECKSUM " \
+function xorChecksum(data, targetIndex) \
+	local index = 1 \
+	local result = 0 \
+	while data[index] ~= nil do \
+		if index ~= targetIndex then \
+			result = result ~ data[index] \
+		end \
+		index = index + 1 \
+	end \
+	data[targetIndex] = result \
+	return result \
+end \
+"

@@ -7,12 +7,12 @@
 
 #pragma once
 
+#include "unused.h"
+#include "efi_quote.h"
 #include <stdint.h>
-#ifdef __cplusplus
-#include <rusefi/arrays.h>
-#endif
 
-#define TO_LOWER(x) (((x)>='A' && (x)<='Z') ? (x) - 'A' + 'a' : (x))
+#include <rusefi/arrays.h>
+
 int djb2lowerCase(const char *str);
 
 #define _MAX_FILLER 11
@@ -43,28 +43,13 @@ static inline uint32_t SWAP_UINT32(uint32_t x)
 // number of microseconds in one period of given frequency (per second)
 #define frequency2periodUs(freq) ((1000000.0f) / (freq))
 
-#define ATOI_ERROR_CODE 311223344
-
-#define Q(x) #x
-#define QUOTE(x) Q(x)
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif /* __cplusplus */
-
 const char * boolToString(bool value);
 
 char * efiTrim(char *param);
 int mytolower(const char c);
-uint32_t efiStrlen(const char *param);
 int efiPow10(int param);
 bool startsWith(const char *line, const char *prefix);
-int indexOf(const char *string, char ch);
-float atoff(const char *string);
-int atoi(const char *string);
 
-#define UNUSED(x) (void)(x)
 
 /**
  * Rounds value to specified precision.
@@ -80,16 +65,10 @@ char* itoa10(char *p, int num);
  */
 #define clampPercentValue(x) (clampF(0, x, 100))
 
-bool strEqualCaseInsensitive(const char *str1, const char *str2);
-bool strEqual(const char *str1, const char *str2);
-
 // Currently used by air-interp. tCharge mode (see EngineState::updateTChargeK()).
 float limitRateOfChange(float newValue, float oldValue, float incrLimitPerSec, float decrLimitPerSec, float secsPassed);
 
 bool isPhaseInRange(float test, float current, float next);
-
-#ifdef __cplusplus
-}
 
 #include <cstddef>
 #include <cstring>
@@ -97,9 +76,9 @@ bool isPhaseInRange(float test, float current, float next);
 #define IS_NEGATIVE_ZERO(value) (__builtin_signbit(value) && value==0)
 #define fixNegativeZero(value) (IS_NEGATIVE_ZERO(value) ? 0 : value)
 
-#define assertIsInBounds(length, array, msg) efiAssertVoid(OBD_PCM_Processor_Fault, std::is_unsigned_v<decltype(length)> && (length) < efi::size(array), msg)
+#define assertIsInBounds(length, array, msg) criticalAssertVoid(std::is_unsigned_v<decltype(length)> && (length) < efi::size(array), msg)
 
-#define assertIsInBoundsWithResult(length, array, msg, failedResult) efiAssert(OBD_PCM_Processor_Fault, std::is_unsigned_v<decltype(length)> && (length) < efi::size(array), msg, failedResult)
+#define assertIsInBoundsWithResult(length, array, msg, failedResult) efiAssert(ObdCode::OBD_PCM_Processor_Fault, std::is_unsigned_v<decltype(length)> && (length) < efi::size(array), msg, failedResult)
 
 template <typename T>
 bool isInRange(T min, T val, T max) {
@@ -150,4 +129,4 @@ constexpr remove_reference_t<_Ty>&& move(_Ty&& _Arg) noexcept {
 }
 }
 
-#endif /* __cplusplus */
+int getBitRangeLsb(const uint8_t data[], int bitIndex, int bitWidth);

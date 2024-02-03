@@ -20,7 +20,7 @@ floatms_t PrimeController::getPrimeDuration() const {
 		0.001f *	// convert milligram to gram
 		interpolate2d(clt.Value, engineConfiguration->primeBins, engineConfiguration->primeValues);
 
-	return engine->module<InjectorModel>()->getInjectionDuration(primeMass);
+	return engine->module<InjectorModelPrimary>()->getInjectionDuration(primeMass);
 }
 
 // Check if the engine is not stopped or cylinder cleanup is activated
@@ -69,21 +69,19 @@ void PrimeController::onIgnitionStateChanged(bool ignitionOn) {
 	setKeyCycleCounter(ignSwitchCounter + 1);
 }
 
-#if EFI_PROD_CODE
-uint32_t PrimeController::getKeyCycleCounter() const {
-	return backupRamLoad(BACKUP_IGNITION_SWITCH_COUNTER);
-}
-
 void PrimeController::setKeyCycleCounter(uint32_t count) {
+#if EFI_BACKUP_SRAM
 	backupRamSave(BACKUP_IGNITION_SWITCH_COUNTER, count);
-}
-#else // not EFI_PROD_CODE
-uint32_t PrimeController::getKeyCycleCounter() const {
-	return 0;
+#endif // EFI_BACKUP_SRAM
 }
 
-void PrimeController::setKeyCycleCounter(uint32_t) { }
-#endif
+uint32_t PrimeController::getKeyCycleCounter() const {
+#if EFI_BACKUP_SRAM
+	return backupRamLoad(BACKUP_IGNITION_SWITCH_COUNTER);
+#else // not EFI_BACKUP_SRAM
+	return 0;
+#endif // EFI_BACKUP_SRAM
+}
 
 void PrimeController::onPrimeStart() {
 	auto durationMs = getPrimeDuration();
@@ -112,8 +110,8 @@ void PrimeController::onPrimeEnd() {
 
 void PrimeController::onSlowCallback() {
 	if (!getEngineRotationState()->isStopped()) {
-#if EFI_PROD_CODE
+#if EFI_BACKUP_SRAM
 		backupRamSave(BACKUP_IGNITION_SWITCH_COUNTER, 0);
-#endif /* EFI_PROD_CODE */
+#endif /* EFI_BACKUP_SRAM */
 	}
 }

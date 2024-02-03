@@ -12,8 +12,6 @@
 
 #if EFI_GPIO_HARDWARE
 
-#define PORT_SIZE 16
-
 static ioportid_t ports[] = {GPIOA,
 		GPIOB,
 		GPIOC,
@@ -55,6 +53,18 @@ static ioportid_t ports[] = {GPIOA,
 #endif /* STM32_HAS_GPIOK */
 };
 
+ioportid_t * getGpioPorts() {
+    return ports;
+}
+
+int getBrainPinIndex(brain_pin_e brainPin) {
+	return (brainPin - Gpio::A0) % PORT_SIZE;
+}
+
+ioportid_t getBrainPinPort(brain_pin_e brainPin) {
+	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
+}
+
 /**
  * @deprecated - use hwPortname() instead
  */
@@ -67,39 +77,39 @@ const char *portname(ioportid_t GPIOx) {
 		return "PC";
 	if (GPIOx == GPIOD)
 		return "PD";
-#if STM32_HAS_GPIOE
+#if defined(GPIOF)
 	if (GPIOx == GPIOE)
 		return "PE";
-#endif /* STM32_HAS_GPIOE */
-#if STM32_HAS_GPIOF
+#endif /* GPIOE */
+#if defined(GPIOF)
 	if (GPIOx == GPIOF)
 		return "PF";
-#endif /* STM32_HAS_GPIOF */
-#if STM32_HAS_GPIOG
+#endif /* GPIOF */
+#if defined(GPIOG)
 	if (GPIOx == GPIOG)
 		return "PG";
-#endif /* STM32_HAS_GPIOG */
-#if STM32_HAS_GPIOH
+#endif /* GPIOG */
+#if defined(GPIOH)
 	if (GPIOx == GPIOH)
 		return "PH";
-#endif /* STM32_HAS_GPIOH */
-#if STM32_HAS_GPIOI
+#endif /* GPIOH */
+#if defined(GPIOI)
 	if (GPIOx == GPIOI)
 		return "PI";
-#endif /* STM32_HAS_GPIOI */
-#if STM32_HAS_GPIOJ
+#endif /* GPIOI */
+#if defined(GPIOJ_BASE)
 	if (GPIOx == GPIOJ)
 		return "PJ";
-#endif /* STM32_HAS_GPIOJ */
-#if STM32_HAS_GPIOK
+#endif /* GPIOJ_BASE */
+#if defined(GPIOK_BASE)
 	if (GPIOx == GPIOK)
 		return "PK";
-#endif /* STM32_HAS_GPIOK */
+#endif /* GPIOK_BASE */
 	return "unknown";
 }
 
 static int getPortIndex(ioportid_t port) {
-	efiAssert(CUSTOM_ERR_ASSERT, port != NULL, "null port", -1);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, port != NULL, "null port", -1);
 	if (port == GPIOA)
 		return 0;
 	if (port == GPIOB)
@@ -108,44 +118,36 @@ static int getPortIndex(ioportid_t port) {
 		return 2;
 	if (port == GPIOD)
 		return 3;
-#if STM32_HAS_GPIOE
+#if defined(GPIOF)
 	if (port == GPIOE)
 		return 4;
-#endif /* STM32_HAS_GPIOE */
-#if STM32_HAS_GPIOF
+#endif /* GPIOE */
+#if defined(GPIOF)
 	if (port == GPIOF)
 		return 5;
-#endif /* STM32_HAS_GPIOF */
-#if STM32_HAS_GPIOG
+#endif /* GPIOF */
+#if defined(GPIOG)
 	if (port == GPIOG)
 		return 6;
-#endif /* STM32_HAS_GPIOG */
-#if STM32_HAS_GPIOH
+#endif /* GPIOG */
+#if defined(GPIOH)
 	if (port == GPIOH)
 		return 7;
-#endif /* STM32_HAS_GPIOH */
-#if STM32_HAS_GPIOI
+#endif /* GPIOH */
+#if defined(GPIOI)
 	if (port == GPIOI)
 		return 8;
 #endif /* STM32_HAS_GPIOI */
-#if STM32_HAS_GPIOJ
+#if defined(GPIOJ_BASE)
 	if (port == GPIOJ)
 		return 9;
-#endif /* STM32_HAS_GPIOJ */
-#if STM32_HAS_GPIOK
+#endif /* GPIOJ_BASE */
+#if defined(GPIOK_BASE)
 	if (port == GPIOK)
 		return 10;
-#endif /* STM32_HAS_GPIOK */
-	firmwareError(CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
+#endif /* GPIOK_BASE */
+	firmwareError(ObdCode::CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
 	return -1;
-}
-
-ioportid_t getBrainPinPort(brain_pin_e brainPin) {
-	return ports[(brainPin - Gpio::A0) / PORT_SIZE];
-}
-
-int getBrainPinIndex(brain_pin_e brainPin) {
-	return (brainPin - Gpio::A0) % PORT_SIZE;
 }
 
 int getPortPinIndex(ioportid_t port, ioportmask_t pin) {
@@ -159,25 +161,28 @@ ioportid_t getHwPort(const char *msg, brain_pin_e brainPin) {
 	if (!isBrainPinValid(brainPin)) {
 /*
  *  https://github.com/dron0gus please help
-		firmwareError(CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
+		firmwareError(ObdCode::CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
  */
 		return GPIO_NULL;
 	}
-	return ports[(brainPin - Gpio::A0) / PORT_SIZE];
+	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
 }
 
 /**
  * this method returns the numeric part of pin name. For instance, for PC13 this would return '13'
  */
-ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin)
-{
+ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin) {
 	if (!isBrainPinValid(brainPin))
 			return EFI_ERROR_CODE;
 
 	if (brain_pin_is_onchip(brainPin))
 		return getBrainPinIndex(brainPin);
 
-	firmwareError(CUSTOM_ERR_INVALID_PIN, "%s: Invalid on-chip Gpio: %d", msg, brainPin);
+
+// huh why conditional on EFI_BOOTLOADER? some weird technical debt while does it fail only with debug options?
+#if ! EFI_BOOTLOADER
+	criticalError("%s: Invalid on-chip Gpio: %d", msg, brainPin);
+#endif // EFI_BOOTLOADER
 	return EFI_ERROR_CODE;
 }
 

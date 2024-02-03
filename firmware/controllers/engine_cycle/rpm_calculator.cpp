@@ -15,9 +15,7 @@
 
 #include "pch.h"
 
-
 #include "trigger_central.h"
-#include "tooth_logger.h"
 
 #if EFI_SENSOR_CHART
 #include "sensor_chart.h"
@@ -68,22 +66,24 @@ operation_mode_e lookupOperationMode() {
 	}
 }
 
+#if EFI_SHAFT_POSITION_INPUT
 // see also in TunerStudio project '[doesTriggerImplyOperationMode] tag
 // this is related to 'knownOperationMode' flag
 static bool doesTriggerImplyOperationMode(trigger_type_e type) {
 	switch (type) {
-		case TT_TOOTHED_WHEEL:
-		case TT_ONE:
-		case TT_3_1_CAM:
-		case TT_36_2_2_2:	// TODO: should this one be in this list?
-		case TT_TOOTHED_WHEEL_60_2:
-		case TT_TOOTHED_WHEEL_36_1:
+		case trigger_type_e::TT_TOOTHED_WHEEL:
+		case trigger_type_e::TT_HALF_MOON:
+		case trigger_type_e::TT_3_1_CAM:   // huh why is this trigger with CAM suffix right in the name on this exception list?!
+		case trigger_type_e::TT_36_2_2_2:	// this trigger is special due to rotary application https://github.com/rusefi/rusefi/issues/5566
+		case trigger_type_e::TT_TOOTHED_WHEEL_60_2:
+		case trigger_type_e::TT_TOOTHED_WHEEL_36_1:
 			// These modes could be either cam or crank speed
 			return false;
 		default:
 			return true;
 	}
 }
+#endif // EFI_SHAFT_POSITION_INPUT
 
 // todo: move to triggerCentral/triggerShape since has nothing to do with rotation state!
 operation_mode_e RpmCalculator::getOperationMode() const {
@@ -378,7 +378,7 @@ void tdcMarkCallback(
 		if (isValidRpm(rpm)) {
 			angle_t tdcPosition = tdcPosition();
 			// we need a positive angle offset here
-			fixAngle(tdcPosition, "tdcPosition", CUSTOM_ERR_6553);
+			wrapAngle(tdcPosition, "tdcPosition", ObdCode::CUSTOM_ERR_6553);
 			scheduleByAngle(&engine->tdcScheduler[revIndex2], edgeTimestamp, tdcPosition, onTdcCallback);
 		}
 	}

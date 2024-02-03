@@ -21,6 +21,15 @@ extern "C" {
 	void HardFaultVector(void);
 }
 
+void startWatchdog(int) {
+}
+
+void tryResetWatchdog() {
+}
+
+void setWatchdogResetPeriod(int) {
+}
+
 void baseMCUInit(void) {
 }
 
@@ -177,12 +186,17 @@ void initSpiModule(SPIDriver *driver, brain_pin_e sck, brain_pin_e miso,
 	efiSetPadMode("SPI master in ", miso, PAL_MODE_ALTERNATE(getSpiAf(driver)) /*| misoMode | PAL_STM32_OSPEED_HIGHEST*/);
 }
 
-void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
-	spiConfig->end_cb = NULL;
+void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
 	ioportid_t port = getHwPort("spi", csPin);
 	ioportmask_t pin = getHwPin("spi", csPin);
 	spiConfig->ssport = port;
 	spiConfig->sspad = pin;
+}
+
+void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
+	/* TODO: why this is here? */
+	spiConfig->end_cb = nullptr;
+	initSpiCsNoOccupy(spiConfig, csPin);
 	// CS is controlled inside 'hal_spi_lld' driver using both software and hardware methods.
 	//efiSetPadMode("chip select", csPin, PAL_MODE_OUTPUT_OPENDRAIN);
 }
@@ -229,6 +243,12 @@ CANDriver* detectCanDevice(brain_pin_e pinRx, brain_pin_e pinTx) {
    if (isValidCan2RxPin(pinRx) && isValidCan2TxPin(pinTx))
       return &CAND2;
    return NULL;
+}
+
+void canHwInfo(CANDriver* cand)
+{
+	/* TODO: */
+	(void)cand;
 }
 
 #endif /* EFI_CAN_SUPPORT */
@@ -292,6 +312,14 @@ adcsample_t getFastAdc(FastAdcToken token) {
 
 	// TODO: implement me!
 	return 0;
+}
+
+Reset_Cause_t getMCUResetCause() {
+	return Reset_Cause_Unknown;
+}
+
+const char *getMCUResetCause(Reset_Cause_t) {
+	return "Unknown";
 }
 
 #endif /* EFI_PROD_CODE */

@@ -6,35 +6,56 @@
  */
 
 #include "pch.h"
+using ::testing::_;
+
+static size_t hpfpTotalToggle = 0;
+
+static void assertToggleCounterExtra(EngineTestHelper *eth, size_t extra) {
+	eth->smartFireTriggerEvents2(/*count*/4, /*delay*/ 16);
+	ASSERT_EQ(hpfpTotalToggle + extra, enginePins.hpfpValve.pinToggleCounter);
+	hpfpTotalToggle += extra;
+}
 
 TEST(HPFP, IntegratedSchedule) {
-	EngineTestHelper eth(TEST_ENGINE, [](engine_configuration_s* engineConfiguration) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE, [](engine_configuration_s* engineConfiguration) {
 		engineConfiguration->hpfpValvePin = Gpio::A2; // arbitrary
 	});
 
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->hpfpCamLobes = 3;
 	engineConfiguration->hpfpPumpVolume = 0.2; // cc/lobe
 
+	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
+		.WillRepeatedly(Return(AirmassResult{/*airmass*/1, /*load*/50.0f}));
 
-	engineConfiguration->trigger.customTotalToothCount = 16;
+	engineConfiguration->trigger.customTotalToothCount = 4;
 	engineConfiguration->trigger.customSkippedToothCount = 0;
-	eth.setTriggerType(TT_TOOTHED_WHEEL);
+	eth.setTriggerType(trigger_type_e::TT_TOOTHED_WHEEL);
     setCamOperationMode();
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
+	engineConfiguration->hpfpCam = HPFP_CAM_IN1;
 
-
-	eth.smartFireTriggerEvents2(/*count*/40, /*delay*/ 4);
+	eth.smartFireTriggerEvents2(/*count*/8, /*delay*/ 16);
 	ASSERT_EQ(937, round(Sensor::getOrZero(SensorType::Rpm)));
 
-	for (int i = 0;i<100;i++) {
-		eth.smartFireTriggerEvents2(/*count*/1, /*delay*/ 4);
-		engine->periodicFastCallback();
-	}
+
+	hpfpTotalToggle = 10;
 	/**
 	 * overall this is a pretty lame test but helps to know that the whole on/off/on dance does in fact happen for HPFP
 	 */
-	ASSERT_EQ(31, enginePins.hpfpValve.unitTestTurnedOnCounter);
+	ASSERT_EQ(hpfpTotalToggle, enginePins.hpfpValve.pinToggleCounter);
+
+	assertToggleCounterExtra(&eth, 6);
+
+	engine->triggerCentral.vvtPosition[0][0] = -50; // Bank 0
+
+	assertToggleCounterExtra(&eth, 8);
+
+	assertToggleCounterExtra(&eth, 6);
+
+	assertToggleCounterExtra(&eth, 6);
+
+	assertToggleCounterExtra(&eth, 6);
 }
 
 

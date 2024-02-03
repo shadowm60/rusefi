@@ -52,7 +52,7 @@ public:
 	}
 
 	void setAll(TValue value) {
-		efiAssertVoid(CUSTOM_ERR_6573, m_values, "map not initialized");
+		efiAssertVoid(ObdCode::CUSTOM_ERR_6573, m_values, "map not initialized");
 
 		for (size_t r = 0; r < TRowNum; r++) {
 			for (size_t c = 0; c < TColNum; c++) {
@@ -124,11 +124,12 @@ typedef Map3D<BARO_CORR_SIZE, BARO_CORR_SIZE, float, float, float> baroCorr_Map3
 typedef Map3D<PEDAL_TO_TPS_SIZE, PEDAL_TO_TPS_SIZE, uint8_t, uint8_t, uint8_t> pedal2tps_t;
 typedef Map3D<BOOST_RPM_COUNT, BOOST_LOAD_COUNT, uint8_t, uint8_t, uint8_t> boostOpenLoop_Map3D_t;
 typedef Map3D<BOOST_RPM_COUNT, BOOST_LOAD_COUNT, uint8_t, uint8_t, uint8_t> boostClosedLoop_Map3D_t;
-typedef Map3D<GPPWM_RPM_COUNT, GPPWM_LOAD_COUNT, uint8_t, uint8_t, uint8_t> gppwm_Map3D_t;
+typedef Map3D<GPPWM_RPM_COUNT, GPPWM_LOAD_COUNT, uint8_t, int16_t, int16_t> gppwm_Map3D_t;
 typedef Map3D<FUEL_RPM_COUNT, FUEL_LOAD_COUNT, uint16_t, uint16_t, uint16_t> mapEstimate_Map3D_t;
 
 /**
  * @param precision for example '0.1' for one digit fractional part. Default to 0.01, two digits.
+ * see also: ensureArrayIsAscending
  */
 template<typename TValue, int TSize>
 void setLinearCurve(TValue (&array)[TSize], float from, float to, float precision = 0.01f) {

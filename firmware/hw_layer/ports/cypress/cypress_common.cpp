@@ -95,7 +95,7 @@ brain_pin_e getAdcChannelBrainPin(const char *msg, adc_channel_e hwChannel) {
 	case EFI_ADC_31:
 		return Gpio::C2;
 	default:
-		firmwareError(CUSTOM_ERR_ADC_UNKNOWN_CHANNEL, "Unknown hw channel %d [%s]", hwChannel, msg);
+		firmwareError(ObdCode::CUSTOM_ERR_ADC_UNKNOWN_CHANNEL, "Unknown hw channel %d [%s]", hwChannel, msg);
 		return Gpio::Invalid;
 	}
 }
@@ -159,10 +159,7 @@ int getAdcChannelPin(adc_channel_e hwChannel) {
 
 #endif /* HAL_USE_ADC */
 
-#if EFI_PROD_CODE
-void jump_to_bootloader() {
-	// todo:
-	// Will not return from here
-	NVIC_SystemReset();
+EXTERNC int getRemainingStack(thread_t *otp) {
+    // todo: would stm32 code actually work here since similar Cortex?
+    return 888888;
 }
-#endif /* EFI_PROD_CODE */

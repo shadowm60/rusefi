@@ -8,15 +8,14 @@
 
 #pragma once
 
-#include "engine_configuration_generated_structures.h"
-
-void initSettings(void);
-void printSpiState(const engine_configuration_s *engineConfiguration);
-void printConfiguration(const engine_configuration_s *engineConfiguration);
-void scheduleStopEngine(void);
+void initSettings();
+void printSpiState();
+void printConfiguration();
+void scheduleStopEngine();
 
 void printTPSInfo(void);
-void setEngineType(int value);
+void setEngineTypeAndSave(int value);
+void setEngineType(int value, bool isWriteToFlash = true);
 void readPin(const char *pinName);
 
 void printDateTime();

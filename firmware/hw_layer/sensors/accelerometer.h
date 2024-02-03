@@ -7,16 +7,4 @@
 
 #pragma once
 
-void configureAccelerometerPins();
-
 void initAccelerometer();
-
-/**
- * Acceleration/braking
- */
-float getLongitudinalAcceleration();
-/**
- * Turns
- */
-float getTransverseAcceleration();
-

@@ -44,6 +44,10 @@
  * de-initialize application specific parts, for example to stop blinking an LED, etc.
  */
 
+/** \brief Frequency of the external crystal oscillator. */
+#define BOOT_CPU_XTAL_SPEED_KHZ          (1000)
+/** \brief Desired system speed. */
+#define BOOT_CPU_SYSTEM_SPEED_KHZ        (1000)
 /** \brief Motorola or Intel style byte ordering. */
 #define BOOT_CPU_BYTE_ORDER_MOTOROLA     (0)
 /** \brief Enable/disable hook function call right before user program start. */
@@ -53,6 +57,19 @@
 /****************************************************************************************
 *   C O M M U N I C A T I O N   I N T E R F A C E   C O N F I G U R A T I O N
 ****************************************************************************************/
+/* The USB communication interface is selected by setting the BOOT_COM_USB_ENABLE
+ * configurable to 1. The maximum amount of data bytes in a message for data transmission
+ * and reception is set through BOOT_COM_USB_TX_MAX_DATA and BOOT_COM_USB_RX_MAX_DATA,
+ * respectively.
+ *
+ */
+/** \brief Enable/disable USB transport layer. */
+#define BOOT_COM_USB_ENABLE             (0)
+/** \brief Configure number of bytes in the target->host data packet. */
+#define BOOT_COM_USB_TX_MAX_DATA        (63)
+/** \brief Configure number of bytes in the host->target data packet. */
+#define BOOT_COM_USB_RX_MAX_DATA        (63)
+
 /* The CAN communication interface is selected by setting the BOOT_COM_CAN_ENABLE
  * configurable to 1. Configurable BOOT_COM_CAN_BAUDRATE selects the communication speed
  * in bits/second. Two CAN messages are reserved for communication with the host. The
@@ -67,7 +84,7 @@
  *
  */
 /** \brief Enable/disable CAN transport layer. */
-#define BOOT_COM_CAN_ENABLE             (1)
+#define BOOT_COM_CAN_ENABLE             (0)
 /** \brief Configure the desired CAN baudrate. */
 #define BOOT_COM_CAN_BAUDRATE           (500000)
 /** \brief Configure CAN message ID target->host. */
@@ -92,9 +109,12 @@
 /** \brief Configure the desired communication speed. */
 #define BOOT_COM_RS232_BAUDRATE          (115200)
 /** \brief Configure number of bytes in the target->host data packet. */
-#define BOOT_COM_RS232_TX_MAX_DATA       (64)
+#define BOOT_COM_RS232_TX_MAX_DATA       (200)
 /** \brief Configure number of bytes in the host->target data packet. */
-#define BOOT_COM_RS232_RX_MAX_DATA       (64)
+#define BOOT_COM_RS232_RX_MAX_DATA       (200)
+
+/** only USB supported, this is ignored but required */
+#define BOOT_COM_RS232_CHANNEL_INDEX 0
 
 
 /****************************************************************************************
@@ -130,22 +150,6 @@
 /** \brief Enable/disable hooks functions to override the user program checksum handling. */
 #define BOOT_NVM_CHECKSUM_HOOKS_ENABLE  (0)
 
-
-/****************************************************************************************
-*   F L A S H   M E M O R Y   D R I V E R   C O N F I G U R A T I O N
-****************************************************************************************/
-/** \brief Enable support for a custom flash layout table. It is located in
- *         flash_layout.c. This was done because the default flashLayout[] table
- *         in the bootloader's core defines flash map for single bank mode.
- *         RusEFI uses dual bank mode.
- */
-#define BOOT_FLASH_CUSTOM_LAYOUT_ENABLE (1)
-
-/** \brief Use one of 'reserved' IRQ vectors at the beginig on vector table.
- */
-#define BOOT_FLASH_VECTOR_TABLE_CS_OFFSET (0x1C)
-
-
 /****************************************************************************************
 *   W A T C H D O G   D R I V E R   C O N F I G U R A T I O N
 ****************************************************************************************/
@@ -178,6 +182,8 @@
  * are called by the bootloader to obtain the seed and to verify the key, respectively.
  */
 #define BOOT_XCP_SEED_KEY_ENABLE        (0)
+
+#define BOOT_XCP_UPLOAD_ENABLE          (0)
 
 
 #endif /* BLT_CONF_H */

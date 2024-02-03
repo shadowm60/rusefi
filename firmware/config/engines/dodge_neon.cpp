@@ -19,7 +19,7 @@
 #include "custom_engine.h"
 
 void setDodgeNeon1995EngineConfiguration() {
-	engineConfiguration->trigger.type = TT_DODGE_NEON_1995;
+	engineConfiguration->trigger.type = trigger_type_e::TT_DODGE_NEON_1995;
 
 	engineConfiguration->fuelAlgorithm = LM_ALPHA_N;
 
@@ -30,8 +30,6 @@ void setDodgeNeon1995EngineConfiguration() {
 	//	engineConfiguration->spi2mosiPin = Gpio::B15;
 	//	engineConfiguration->spi2misoPin = Gpio::B14;
 	//	engineConfiguration->spi2sckPin = Gpio::B13;
-	engineConfiguration->cj125CsPin = Gpio::B0; // rev 0.4
-	engineConfiguration->isCJ125Enabled = true;
 	engineConfiguration->is_enabled_spi_2 = true;
 
 
@@ -44,19 +42,13 @@ void setDodgeNeon1995EngineConfiguration() {
 
 	setWholeTimingTable_d(12);
 
-	// set cranking_injection_mode 0
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	// set injection_mode 1
 	engineConfiguration->injectionMode = IM_SEQUENTIAL;
 
-	// this is needed for injector lag auto-tune research if switching to batch
-	// enable two_wire_batch_injection
-	engineConfiguration->twoWireBatchInjection = true;
-
 	// set ignition_mode 2
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK;
-	// set_firing_order 2
-	engineConfiguration->specs.firingOrder = FO_1_3_4_2;
+	engineConfiguration->firingOrder = FO_1_3_4_2;
 
 	// set global_trigger_offset_angle 497
 	engineConfiguration->globalTriggerAngleOffset = 497;
@@ -87,12 +79,8 @@ void setDodgeNeon1995EngineConfiguration() {
 	engineConfiguration->injectionPins[3] = Gpio::E5; // Frankenstein: low side - out #6
 
 	engineConfiguration->fuelPumpPin = Gpio::C13; // Frankenstein: low side - out #4
-	engineConfiguration->fuelPumpPinMode = OM_DEFAULT;
 
 	engineConfiguration->mapErrorDetectionTooHigh = 120;
-
-	// set injection_pin_mode 0
-	engineConfiguration->injectionPinMode = OM_DEFAULT;
 
 	// Frankenstein: high side #1: PE8
 	// Frankenstein: high side #2: PE10
@@ -101,16 +89,11 @@ void setDodgeNeon1995EngineConfiguration() {
 	engineConfiguration->ignitionPins[1] = Gpio::Unassigned;
 	engineConfiguration->ignitionPins[2] = Gpio::E10; // // Frankenstein: high side #2
 
-	// set ignition_pin_mode 0
-	engineConfiguration->ignitionPinMode = OM_DEFAULT;
-
 	engineConfiguration->clt.config = {0, 30, 100, 32500, 7550, 700, 2700};
 }
 
 void setDodgeNeonNGCEngineConfiguration() {
-	engineConfiguration->trigger.type = TT_DODGE_NEON_2003_CAM;
-	setFrankenso_01_LCD(engineConfiguration);
-	setFrankenso0_1_joystick(engineConfiguration);
+	engineConfiguration->trigger.type = trigger_type_e::TT_DODGE_NEON_2003_CAM;
 
 	// set global_trigger_offset_angle 38
 	engineConfiguration->globalTriggerAngleOffset = 38;
@@ -118,8 +101,8 @@ void setDodgeNeonNGCEngineConfiguration() {
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	engineConfiguration->injectionMode = IM_SEQUENTIAL;
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK;
-	engineConfiguration->specs.displacement = 1.996;
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->displacement = 1.996;
+	engineConfiguration->cylindersCount = 4;
 
 	/**
 	 * 77C
@@ -157,7 +140,7 @@ void setDodgeNeonNGCEngineConfiguration() {
 	 */
 	engineConfiguration->afr.hwChannel = EFI_ADC_4;
 
-	commonFrankensoAnalogInputs(engineConfiguration);
+	commonFrankensoAnalogInputs();
 	engineConfiguration->vbattDividerCoeff = 9.75;// ((float) (8.2 + 33)) / 8.2 * 2;
 
 	/**
@@ -191,11 +174,9 @@ void setDodgeNeonNGCEngineConfiguration() {
 	engineConfiguration->mainRelayPin = Gpio::E6;
 
 	engineConfiguration->idle.solenoidPin = Gpio::C13;
-	engineConfiguration->idle.solenoidFrequency = 300;
 	engineConfiguration->manIdlePosition = 36;
 
 	engineConfiguration->fuelPumpPin = Gpio::E3;
-	engineConfiguration->fuelPumpPinMode = OM_DEFAULT;
 
 	engineConfiguration->triggerInputPins[0] = Gpio::A5;
 	engineConfiguration->triggerInputPins[1] = Gpio::C6;
@@ -276,11 +257,6 @@ void setDodgeNeonNGCEngineConfiguration() {
 	engineConfiguration->alternatorControl.dFactor = 0.1;
 	engineConfiguration->alternatorControl.periodMs = 10;
 
-//	enableFrankensoCan();
-	engineConfiguration->canWriteEnabled = true;
-	engineConfiguration->canNbcType = CAN_BUS_NBC_BMW;
-//	engineConfiguration->canNbcType = CAN_BUS_MAZDA_RX8;
-
 	engineConfiguration->tpsAccelEnrichmentThreshold = 10;
 
 	engineConfiguration->wwaeTau = 1.0f;
@@ -291,8 +267,6 @@ void setDodgeNeonNGCEngineConfiguration() {
 
 	engineConfiguration->isSdCardEnabled = false;
 	engineConfiguration->manIdlePosition = 36; // set_idle_pwm 40
-
-	engineConfiguration->slowAdcAlpha = 0.33333;
 
 	// end of setDodgeNeonNGCEngineConfiguration
 }

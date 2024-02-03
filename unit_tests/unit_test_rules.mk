@@ -14,6 +14,8 @@ PCHSUB = unit_tests
 
 include $(PROJECT_DIR)/rusefi_rules.mk
 
+BOARDS_DIR = $(PROJECT_DIR)/config/boards
+
 # User may want to pass in a forced value for SANITIZE
 ifeq ($(SANITIZE),)
 	ifneq ($(OS),Windows_NT)
@@ -52,14 +54,10 @@ endif
 USE_OPT += -DEFI_UNIT_TEST=1 -DEFI_PROD_CODE=0 -DEFI_SIMULATOR=0
 
 # Pretend we are all different hardware so that all canned engine configs are included
-USE_OPT += -DHW_MICRO_RUSEFI=1 -DHW_PROTEUS=1 -DHW_FRANKENSO=1 -DHW_HELLEN=1
+USE_OPT += -DHW_MICRO_RUSEFI=1 -DHW_PROTEUS=1 -DHW_FRANKENSO=1 -DHW_HELLEN=1 -DHW_HELLEN_NISSAN=1
+USE_OPT += -DHW_HELLEN_NB1=1 -DHW_HELLEN_NB2=1
 
-ifeq ($(CCACHE_DIR),)
- $(info No CCACHE_DIR)
-else
- $(info CCACHE_DIR is ${CCACHE_DIR})
- CCPREFIX=ccache
-endif
+DDEFS += -DSHORT_BOARD_NAME=f407-discovery
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
@@ -70,6 +68,8 @@ endif
 ifeq ($(USE_CPPOPT),)
   USE_CPPOPT = -std=gnu++2a -fno-rtti -fno-use-cxa-atexit
 endif
+
+USE_CPPOPT += $(RUSEFI_CPPOPT)
 
 # Enable address sanitizer for C++ files, but not on Windows since x86_64-w64-mingw32-g++ doesn't support it.
 # only c++ because lua does some things asan doesn't like, but don't actually cause overruns.
@@ -119,11 +119,11 @@ else
   TRGT = i686-w64-mingw32-
 endif
 else
-  TRGT = 
+  TRGT =
 endif
 
-CC   = $(CCPREFIX) $(TRGT)gcc
-CPPC = $(CCPREFIX) $(TRGT)g++
+CC   = $(TRGT)gcc
+CPPC = $(TRGT)g++
 # Enable loading with g++ only if you need C++ runtime support.
 # NOTE: You can use C++ even without C++ support if you are careful. C++
 #       runtime support makes code size explode.
@@ -147,6 +147,7 @@ AOPT = -fPIC -I$(JAVA_HOME)/include
 
 ifeq ($(OS),Windows_NT)
 # TODO: add validation to assert that we do not have Windows slash in JAVA_HOME variable
+# for instance "C:/Progra~1/Zulu/zulu-11" would be good "C:\Progra~1\Zulu\zulu-11" would be bad
  AOPT += -I$(JAVA_HOME)/include/win32
 else
  ifeq ($(IS_MAC),yes)
@@ -161,6 +162,15 @@ CWARN = -Wall -Wextra -Wstrict-prototypes -pedantic -Wmissing-prototypes -Wold-s
 
 # Define C++ warning options here
 CPPWARN = -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-format -Wno-unused-parameter -Wno-unused-private-field
+
+# TODO: improve on this code duplication drama!
+# current problem with older gcc in unit_tests is
+# cc1plus: error: unrecognized command line option \u2018-Wno-unused-private-field\u2019 [-Werror]
+#RULESFILE = ../firmware/rusefi_rules.mk
+#include $(RULESFILE)
+#USE_OPT += $(RUSEFI_OPT) -Wno-error=pedantic
+
+USE_OPT += -Werror=switch
 
 #
 # Compiler settings

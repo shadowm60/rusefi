@@ -84,23 +84,23 @@ private:
 	void PeriodicTask(efitick_t nowNt) override	{
 		UNUSED(nowNt);
 
-		validateStack("MIL", STACK_USAGE_MIL, 128);
+		assertStackVoid("MIL", ObdCode::STACK_USAGE_MIL, EXPECTED_REMAINING_STACK);
 #if EFI_SHAFT_POSITION_INPUT
 		if (nowNt - engine->triggerCentral.triggerState.mostRecentSyncTime < MS2NT(500)) {
 			enginePins.checkEnginePin.setValue(1);
 			chThdSleepMilliseconds(500);
 			enginePins.checkEnginePin.setValue(0);
 		}
+#endif // EFI_SHAFT_POSITION_INPUT
 
 		static error_codes_set_s localErrorCopy;
 		// todo: why do I not see this on a real vehicle? is this whole blinking logic not used?
 		getErrorCodes(&localErrorCopy);
 		for (int p = 0; p < localErrorCopy.count; p++) {
 			// Calculate how many digits in this integer and display error code from start to end
-			int code = localErrorCopy.error_codes[p];
+			int code = (int)localErrorCopy.error_codes[p];
 			DisplayErrorCode(DigitLength(code), code);
 		}
-#endif // EFI_SHAFT_POSITION_INPUT
 	}
 };
 
@@ -108,8 +108,8 @@ static MILController instance;
 
 #if TEST_MIL_CODE
 static void testMil() {
-	addError(OBD_Engine_Coolant_Temperature_Circuit_Malfunction);
-	addError(OBD_Intake_Air_Temperature_Circuit_Malfunction);
+	addError(ObdCode::OBD_Engine_Coolant_Temperature_Circuit_Malfunction);
+	addError(ObdCode::OBD_Intake_Air_Temperature_Circuit_Malfunction);
 }
 #endif /* TEST_MIL_CODE */
 

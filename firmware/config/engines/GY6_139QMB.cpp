@@ -18,25 +18,23 @@
 
 void setGy6139qmbDefaultEngineConfiguration() {
 //        engineConfiguration->map.sensor.type = MT_3V_SENSOR;
-	setEgoSensor(ES_NarrowBand);
-
 	engineConfiguration->rpmHardLimit = 9000;
 	engineConfiguration->cranking.rpm = 1100;
 	setTargetRpmCurve(2000);
 	engineConfiguration->analogInputDividerCoefficient = 1;
 	engineConfiguration->globalTriggerAngleOffset = 45;
-	engineConfiguration->specs.displacement = 0.072; // 72cc
-	engineConfiguration->specs.cylindersCount = 1;
+	engineConfiguration->displacement = 0.072; // 72cc
+	engineConfiguration->cylindersCount = 1;
 	setCrankOperationMode();
 	// this is related to 'setDefaultBaseEngine' having 'skippedWheelOnCam = true' which is a weird fact by itself
 	engineConfiguration->skippedWheelOnCam = false;
 
-	engineConfiguration->specs.firingOrder = FO_1;
+	engineConfiguration->firingOrder = FO_1;
 
 	/**
 	 * We treat the trigger as 8-1 toothed wheel
 	 */
-	engineConfiguration->trigger.type = TT_TOOTHED_WHEEL;
+	engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL;
 	engineConfiguration->trigger.customTotalToothCount = 8;
 	engineConfiguration->trigger.customSkippedToothCount = 1;
 

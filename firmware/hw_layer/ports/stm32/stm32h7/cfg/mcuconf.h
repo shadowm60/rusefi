@@ -40,6 +40,10 @@
 #define STM32H747_MCUCONF
 #define STM32H757_MCUCONF
 
+// Allows LSE init to timeout and configure fallback RTC clock source in case
+#define RUSEFI_STM32_LSE_WAIT_MAX           1000000
+#define RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL    STM32_RTCSEL_LSI_CK
+
 /*
  * General settings.
  */
@@ -50,8 +54,12 @@
  * Memory attributes settings.
  */
 #define STM32_NOCACHE_MPU_REGION            MPU_REGION_6
+#ifndef STM32_NOCACHE_SRAM1_SRAM2
 #define STM32_NOCACHE_SRAM1_SRAM2           FALSE
+#endif // STM32_NOCACHE_SRAM1_SRAM2
+#ifndef STM32_NOCACHE_SRAM3
 #define STM32_NOCACHE_SRAM3                 TRUE
+#endif // STM32_NOCACHE_SRAM3
 
 /*
  * PWR system settings.
@@ -74,7 +82,8 @@
 #define STM32_CSI_ENABLED                   TRUE
 #define STM32_HSI48_ENABLED                 TRUE
 #define STM32_HSE_ENABLED                   TRUE
-#define STM32_LSE_ENABLED                   FALSE
+// see RUSEFI_STM32_LSE_WAIT_MAX
+#define STM32_LSE_ENABLED                   TRUE
 #define STM32_HSIDIV                        STM32_HSIDIV_DIV1
 
 /*
@@ -123,7 +132,8 @@
  * Reading STM32 Reference Manual is required.
  */
 #define STM32_SW                            STM32_SW_PLL1_P_CK
-#define STM32_RTCSEL                        STM32_RTCSEL_LSI_CK
+// see RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL
+#define STM32_RTCSEL                        STM32_RTCSEL_LSE_CK
 #define STM32_D1CPRE                        STM32_D1CPRE_DIV1
 #define STM32_D1HPRE                        STM32_D1HPRE_DIV2
 #define STM32_D1PPRE3                       STM32_D1PPRE3_DIV2
@@ -350,10 +360,23 @@
 #define STM32_PWM_USE_ADVANCED              FALSE
 #define STM32_PWM_USE_TIM1                  FALSE
 #define STM32_PWM_USE_TIM2                  FALSE
+
+#ifndef STM32_PWM_USE_TIM3
 #define STM32_PWM_USE_TIM3                  FALSE
+#endif
+
+#ifndef STM32_PWM_USE_TIM4
 #define STM32_PWM_USE_TIM4                  TRUE
+#endif
+
+#ifndef STM32_PWM_USE_TIM5
 #define STM32_PWM_USE_TIM5                  TRUE
+#endif
+
+#ifndef STM32_PWM_USE_TIM8
 #define STM32_PWM_USE_TIM8                  TRUE
+#endif
+
 #define STM32_PWM_USE_TIM12                 FALSE
 #define STM32_PWM_USE_TIM13                 FALSE
 #define STM32_PWM_USE_TIM14                 FALSE
@@ -490,7 +513,7 @@
 /*
  * WDG driver system settings.
  */
-#define STM32_WDG_USE_IWDG                  FALSE
+#define STM32_WDG_USE_IWDG                  TRUE
 
 /*
  * WSPI driver system settings.
@@ -503,6 +526,6 @@
 
 #define STM32_SYSCLK STM32_SYS_CK
 
-#define ENABLE_AUTO_DETECT_HSE
+#define ENABLE_AUTO_DETECT_HSE              TRUE
 
 #endif /* MCUCONF_H */

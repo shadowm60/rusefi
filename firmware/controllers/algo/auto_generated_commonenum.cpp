@@ -1,10 +1,21 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum2string.jar tool on Fri Oct 21 02:29:53 UTC 2022
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Wed Jan 17 15:32:19 UTC 2024
 // see also gen_config_and_enums.bat
 
 
 
+const char *getCanGpioType(CanGpioType value){
+switch(value) {
+case CanGpioType::DRT:
+  return "DRT";
+case CanGpioType::MS:
+  return "MS";
+case CanGpioType::NONE:
+  return "NONE";
+  }
+ return NULL;
+}
 const char *getGearControllerMode(GearControllerMode value){
 switch(value) {
 case GearControllerMode::ButtonShift:
@@ -38,36 +49,6 @@ case INJ_PolynomialAdder:
   }
  return NULL;
 }
-const char *getPidAutoTune_AutoTunerState(PidAutoTune_AutoTunerState value){
-switch(value) {
-case AUTOTUNER_OFF:
-  return "AUTOTUNER_OFF";
-case CONVERGED:
-  return "CONVERGED";
-case FAILED:
-  return "FAILED";
-case RELAY_STEP_DOWN:
-  return "RELAY_STEP_DOWN";
-case RELAY_STEP_UP:
-  return "RELAY_STEP_UP";
-case STEADY_STATE_AFTER_STEP_UP:
-  return "STEADY_STATE_AFTER_STEP_UP";
-case STEADY_STATE_AT_BASELINE:
-  return "STEADY_STATE_AT_BASELINE";
-  }
- return NULL;
-}
-const char *getPidAutoTune_Peak(PidAutoTune_Peak value){
-switch(value) {
-case MAXIMUM:
-  return "MAXIMUM";
-case MINIMUM:
-  return "MINIMUM";
-case NOT_A_PEAK:
-  return "NOT_A_PEAK";
-  }
- return NULL;
-}
 const char *getSelectedGear(SelectedGear value){
 switch(value) {
 case SelectedGear::Drive:
@@ -94,6 +75,19 @@ case SelectedGear::Park:
   return "Park";
 case SelectedGear::Reverse:
   return "Reverse";
+  }
+ return NULL;
+}
+const char *getSentEtbType(SentEtbType value){
+switch(value) {
+case SentEtbType::CUSTOM:
+  return "CUSTOM";
+case SentEtbType::FORD_TYPE_1:
+  return "FORD_TYPE_1";
+case SentEtbType::GM_TYPE_1:
+  return "GM_TYPE_1";
+case SentEtbType::NONE:
+  return "NONE";
   }
  return NULL;
 }
@@ -150,6 +144,17 @@ case TsCalMode::Tps2SecondaryMin:
   }
  return NULL;
 }
+const char *getUiMode(UiMode value){
+switch(value) {
+case UiMode::FULL:
+  return "FULL";
+case UiMode::INSTALLATION:
+  return "INSTALLATION";
+case UiMode::TUNING:
+  return "TUNING";
+  }
+ return NULL;
+}
 const char *getAir_pressure_sensor_type_e(air_pressure_sensor_type_e value){
 switch(value) {
 case MT_BOSCH_2_5:
@@ -176,6 +181,8 @@ case MT_MPX4250:
   return "MT_MPX4250";
 case MT_MPX4250A:
   return "MT_MPX4250A";
+case MT_MPXH6300:
+  return "MT_MPXH6300";
 case MT_MPXH6400:
   return "MT_MPXH6400";
 case MT_SUBY_DENSO:
@@ -228,12 +235,18 @@ const char *getCan_baudrate_e(can_baudrate_e value){
 switch(value) {
 case B100KBPS:
   return "B100KBPS";
+case B125KBPS:
+  return "B125KBPS";
 case B1MBPS:
   return "B1MBPS";
 case B250KBPS:
   return "B250KBPS";
 case B500KBPS:
   return "B500KBPS";
+case B50KBPS:
+  return "B50KBPS";
+case B83KBPS:
+  return "B83KBPS";
   }
  return NULL;
 }
@@ -241,6 +254,8 @@ const char *getCan_nbc_e(can_nbc_e value){
 switch(value) {
 case CAN_AIM_DASH:
   return "CAN_AIM_DASH";
+case CAN_BUS_BMW_E46:
+  return "CAN_BUS_BMW_E46";
 case CAN_BUS_BMW_E90:
   return "CAN_BUS_BMW_E90";
 case CAN_BUS_GENESIS_COUPE:
@@ -253,8 +268,8 @@ case CAN_BUS_MAZDA_RX8:
   return "CAN_BUS_MAZDA_RX8";
 case CAN_BUS_MQB:
   return "CAN_BUS_MQB";
-case CAN_BUS_NBC_BMW:
-  return "CAN_BUS_NBC_BMW";
+case CAN_BUS_MS_SIMPLE_BROADCAST:
+  return "CAN_BUS_MS_SIMPLE_BROADCAST";
 case CAN_BUS_NBC_FIAT:
   return "CAN_BUS_NBC_FIAT";
 case CAN_BUS_NBC_NONE:
@@ -272,8 +287,31 @@ const char *getCan_vss_nbc_e(can_vss_nbc_e value){
 switch(value) {
 case BMW_e46:
   return "BMW_e46";
+case BMW_e90:
+  return "BMW_e90";
+case HONDA_CIVIC9:
+  return "HONDA_CIVIC9";
+case HYUNDAI_PB:
+  return "HYUNDAI_PB";
+case NISSAN_350:
+  return "NISSAN_350";
 case W202:
   return "W202";
+  }
+ return NULL;
+}
+const char *getDc_function_e(dc_function_e value){
+switch(value) {
+case DC_IdleValve:
+  return "DC_IdleValve";
+case DC_None:
+  return "DC_None";
+case DC_Throttle1:
+  return "DC_Throttle1";
+case DC_Throttle2:
+  return "DC_Throttle2";
+case DC_Wastegate:
+  return "DC_Wastegate";
   }
  return NULL;
 }
@@ -300,8 +338,6 @@ case ES_Custom:
   return "ES_Custom";
 case ES_Innovate_MTX_L:
   return "ES_Innovate_MTX_L";
-case ES_NarrowBand:
-  return "ES_NarrowBand";
 case ES_PLX:
   return "ES_PLX";
   }
@@ -322,18 +358,14 @@ case LM_SPEED_DENSITY:
   }
  return NULL;
 }
-const char *getEtb_function_e(etb_function_e value){
+const char *getFuel_pressure_sensor_mode_e(fuel_pressure_sensor_mode_e value){
 switch(value) {
-case ETB_IdleValve:
-  return "ETB_IdleValve";
-case ETB_None:
-  return "ETB_None";
-case ETB_Throttle1:
-  return "ETB_Throttle1";
-case ETB_Throttle2:
-  return "ETB_Throttle2";
-case ETB_Wastegate:
-  return "ETB_Wastegate";
+case FPM_Absolute:
+  return "FPM_Absolute";
+case FPM_Differential:
+  return "FPM_Differential";
+case FPM_Gauge:
+  return "FPM_Gauge";
   }
  return NULL;
 }
@@ -366,8 +398,12 @@ case GPPWM_AuxTemp1:
   return "GPPWM_AuxTemp1";
 case GPPWM_AuxTemp2:
   return "GPPWM_AuxTemp2";
+case GPPWM_BaroPressure:
+  return "GPPWM_BaroPressure";
 case GPPWM_Clt:
   return "GPPWM_Clt";
+case GPPWM_DetectedGear:
+  return "GPPWM_DetectedGear";
 case GPPWM_EthanolPercent:
   return "GPPWM_EthanolPercent";
 case GPPWM_FuelLoad:
@@ -390,6 +426,8 @@ case GPPWM_LuaGauge2:
   return "GPPWM_LuaGauge2";
 case GPPWM_Map:
   return "GPPWM_Map";
+case GPPWM_Rpm:
+  return "GPPWM_Rpm";
 case GPPWM_Tps:
   return "GPPWM_Tps";
 case GPPWM_VVT_1E:
@@ -559,12 +597,31 @@ case DensoTODO:
   }
  return NULL;
 }
+const char *getMc33810maxDwellTimer_e(mc33810maxDwellTimer_e value){
+switch(value) {
+case DWELL_16MS:
+  return "DWELL_16MS";
+case DWELL_2MS:
+  return "DWELL_2MS";
+case DWELL_32MS:
+  return "DWELL_32MS";
+case DWELL_4MS:
+  return "DWELL_4MS";
+case DWELL_64MS:
+  return "DWELL_64MS";
+case DWELL_8MS:
+  return "DWELL_8MS";
+  }
+ return NULL;
+}
 const char *getOperation_mode_e(operation_mode_e value){
 switch(value) {
 case FOUR_STROKE_CAM_SENSOR:
   return "FOUR_STROKE_CAM_SENSOR";
 case FOUR_STROKE_CRANK_SENSOR:
   return "FOUR_STROKE_CRANK_SENSOR";
+case FOUR_STROKE_SIX_TIMES_CRANK_SENSOR:
+  return "FOUR_STROKE_SIX_TIMES_CRANK_SENSOR";
 case FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR:
   return "FOUR_STROKE_SYMMETRICAL_CRANK_SENSOR";
 case FOUR_STROKE_THREE_TIMES_CRANK_SENSOR:
@@ -719,14 +776,12 @@ case VE_TPS:
 }
 const char *getVvt_mode_e(vvt_mode_e value){
 switch(value) {
-case VVT_2JZ:
-  return "VVT_2JZ";
 case VVT_BARRA_3_PLUS_1:
   return "VVT_BARRA_3_PLUS_1";
 case VVT_BOSCH_QUICK_START:
   return "VVT_BOSCH_QUICK_START";
-case VVT_FIRST_HALF:
-  return "VVT_FIRST_HALF";
+case VVT_FORD_COYOTE:
+  return "VVT_FORD_COYOTE";
 case VVT_FORD_ST170:
   return "VVT_FORD_ST170";
 case VVT_HONDA_K_EXHAUST:
@@ -743,14 +798,24 @@ case VVT_MIATA_NB:
   return "VVT_MIATA_NB";
 case VVT_MITSUBISHI_3A92:
   return "VVT_MITSUBISHI_3A92";
+case VVT_MITSUBISHI_4G63:
+  return "VVT_MITSUBISHI_4G63";
+case VVT_MITSUBISHI_4G69:
+  return "VVT_MITSUBISHI_4G69";
+case VVT_MITSUBISHI_4G9x:
+  return "VVT_MITSUBISHI_4G9x";
+case VVT_MITSUBISHI_6G72:
+  return "VVT_MITSUBISHI_6G72";
 case VVT_MITSUBISHI_6G75:
   return "VVT_MITSUBISHI_6G75";
 case VVT_NISSAN_MR:
   return "VVT_NISSAN_MR";
 case VVT_NISSAN_VQ:
   return "VVT_NISSAN_VQ";
-case VVT_SECOND_HALF:
-  return "VVT_SECOND_HALF";
+case VVT_SINGLE_TOOTH:
+  return "VVT_SINGLE_TOOTH";
+case VVT_TOYOTA_3_TOOTH:
+  return "VVT_TOYOTA_3_TOOTH";
 case VVT_TOYOTA_4_1:
   return "VVT_TOYOTA_4_1";
   }

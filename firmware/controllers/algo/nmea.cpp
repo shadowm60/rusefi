@@ -64,7 +64,7 @@ static int str_till_comma(const char * const a, char * const dStr) {
 	if (sLen > GPS_MAX_STRING)
 		sLen = GPS_MAX_STRING;
 
-	while (a[i] != 44 && i < sLen) {	// while not comma or end
+	while (i < sLen && a[i] != 44) {	// while not comma or end
 		dStr[i] = a[i];
 		i++;
 	}
@@ -90,7 +90,7 @@ Unit				M=Meters
 Age of DGPS Corr	s			Age of Differential Corrections
 DGPS Ref Station				ID of DGPS Reference Station
 */
-void nmea_parse_gpgga(char const * const nmea, loc_t *loc) {
+static void nmea_parse_gpgga(char const * const nmea, loc_t *loc) {
 	char const * p = (char *)nmea;
 	char dStr[GPS_MAX_STRING];
 
@@ -167,7 +167,7 @@ Mode Indicator	N		A=Autonomous, D=Differential, E=Dead Reckoning, N=None
 Navigational Status			S=Safe C=Caution U=Unsafe V=Not valid
 */
 
-void nmea_parse_gprmc(char const * const nmea, loc_t *loc) {
+static void nmea_parse_gprmc(char const * const nmea, loc_t *loc) {
 	char const * p = (char *)nmea;
 	char dStr[GPS_MAX_STRING];
 	efidatetime_t dt;

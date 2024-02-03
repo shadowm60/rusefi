@@ -1,6 +1,6 @@
 /**
  * @file obd_error_codes.h
- * @brief Standart OBD-II error codes
+ * @brief Standard and custom OBD-II error codes
  *
  * More info at http://www.obd-codes.com/faq/obd2-codes-explained.php
  *
@@ -10,15 +10,10 @@
 
 #pragma once
 
-// this header should not depend on anything - actually chconf.h usually depends on this header
+#include <cstdint>
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif /* __cplusplus */
-
-typedef enum {
-	OBD_None = 0,
+enum class ObdCode : uint16_t {
+	None = 0,
 //P0001 Fuel Volume Regulator Control Circuit/Open
 //P0002 Fuel Volume Regulator Control Circuit Range/Performance
 //P0003 Fuel Volume Regulator Control Circuit Low
@@ -312,7 +307,9 @@ typedef enum {
 	//P0259 Injection Pump Fuel Metering Control "B" High (Cam/R
 	//P0260 Injection Pump Fuel Metering Control "B" Intermittent Injector)
 	//P0261 Cylinder I Injector Circuit Low
+	OBD_Injector_Circuit_1_Low = 261,
 	//P0262 Cylinder I Injector Circuit High
+	OBD_Injector_Circuit_1_High = 262,
 	//P0263 Cylinder I Contribution/Balance Fault
 	//P0264 Cylinder 2 Injector Circuit Low
 	//P0265 Cylinder 2 Injector Circuit High
@@ -391,7 +388,7 @@ typedef enum {
 	//P0338 Crankshaft Position Sensor A Circuit High Input
 	//P0339 Crankshaft Position Sensor A Circuit Intermittent
 	//P0340 Camshaft Position Sensor Circuit Malfunction
-	 OBD_Camshaft_Position_Sensor_Circuit_Range_Performance = 341,
+	OBD_Camshaft_Position_Sensor_Circuit_Range_Performance = 341,
 	//P0342 Camshaft Position Sensor Circuit Low Input
 	//P0343 Camshaft Position Sensor Circuit High Input
 	//P0344 Camshaft Position Sensor Circuit Intermittent
@@ -1098,7 +1095,7 @@ typedef enum {
 	//P2134 Throttle/Pedal Pos Sensor/Switch F Circ Interm
 	OBD_TPS1_Correlation = 2135,
 	OBD_TPS2_Correlation = 2136,
-	OBD_PPS_Correlation = 2136,
+	OBD_PPS_Correlation = 2137,
 	//P2135 Throttle/Pedal Pos Sensor/Switch A / B Voltage Correlation
 	//P2136 Throttle/Pedal Pos Sensor/Switch A / C Voltage Correlation
 	//P2137 Throttle/Pedal Pos Sensor/Switch B / C Voltage Correlation
@@ -1612,6 +1609,8 @@ typedef enum {
 	//P2793 Gear Shift Direction Circ
 	//P2794 Gear Shift Direction Circ Low
 	//P2795 Gear Shift Direction Circ High
+	Wideband_1_Fault = 2900,
+	Wideband_2_Fault = 2901,
 	//P2A00 O2 Sensor Circ Range/Perf Bank1 Sensor 1
 	//P2A01 O2 Sensor Circ Range/Perf Bank1 Sensor 2
 	//P2A02 O2 Sensor Circ Range/Perf Bank1 Sensor 3
@@ -1727,10 +1726,10 @@ typedef enum {
 
 	CUSTOM_6010 = 6010,
 	CUSTOM_6011 = 6011,
-	CUSTOM_INTEPOLATE_ERROR = 6012,
-	CUSTOM_INTEPOLATE_ERROR_2 = 6013,
-	CUSTOM_INTEPOLATE_ERROR_3 = 6014,
-	CUSTOM_INTEPOLATE_ERROR_4 = 6015,
+	CUSTOM_ERR_INTERPOLATE_1 = 6012,
+	CUSTOM_ERR_INTERPOLATE_2 = 6013,
+	CUSTOM_ERR_INTERPOLATE_3 = 6014,
+	CUSTOM_ERR_INTERPOLATE_4 = 6015,
 	CUSTOM_PARAM_RANGE = 6016,
 	CUSTOM_MAF_NEEDED = 6017,
 	CUSTOM_UNKNOWN_ALGORITHM = 6018,
@@ -2067,7 +2066,7 @@ typedef enum {
 	CUSTOM_VVT_SYNC_POSITION = 6675,
 	CUSTOM_STACK_ADC = 6676,
 	CUSTOM_IH_STACK = 6677,
-	CUSTOM_EC_NULL = 6678,
+	CUSTOM_ERR_6678 = 6678,
 	CUSTOM_ERR6679 = 6679,
 
 	CUSTOM_ERR_ANGLE_CR = 6680,
@@ -2118,25 +2117,26 @@ typedef enum {
 	CUSTOM_NO_ETB_FOR_IDLE = 6723,
 	CUSTOM_ERR_TLE8888_RESPONSE = 6724,
 	CUSTOM_ERR_CJ125_DIAG = 6725,
-	NO_LONGER_USED_CUSTOM_ERR_VVT_OUT_OF_RANGE = 6726,
+	CUSTOM_6726 = 6726,
 	CUSTOM_VVT_MODE_NOT_SELECTED = 6727,
 	CUSTOM_ERR_6728 = 6728,
 	CUSTOM_ARTIFICIAL_MISFIRE = 6729,
 
-    CUSTOM_INSTANT_MAP_DECODING = 6899,
+	CUSTOM_INSTANT_MAP_DECODING = 6899,
 	STACK_USAGE_COMMUNICATION = 6900,
 	STACK_USAGE_MIL = 6901,
-	STACK_USAGE_BENCH = 6902,
+	CUSTOM_6902 = 6902,
 	STACK_USAGE_STATUS = 6903,
-	STACK_USAGE_4 = 6904,
+	STACK_USAGE_MISC = 6904,
 
 	// 8000-8050 logging errors
 	CUSTOM_OBD_MMC_ERROR = 8000,
 
-    CUSTOM_ERR_CAN_COMMUNICATION = 8900,
+	CUSTOM_ERR_CAN_COMMUNICATION = 8900,
 
 	WATCH_DOG_SECONDS = 8901,
 
+	CUSTOM_ERR_CUSTOM_GAPS_BAD = 8999,
 	CUSTOM_ERR_TRIGGER_SYNC = 9000,
 	CUSTOM_OBD_TRIGGER_WAVEFORM = 9001,
 
@@ -2146,16 +2146,19 @@ typedef enum {
 	CUSTOM_CAM_TOO_MANY_TEETH = 9004,
 	CUSTOM_CAM_NOT_ENOUGH_TEETH = 9005,
 
+	// Where we expected one trigger edge, we got two in quick succession
+	CUSTOM_PRIMARY_DOUBLED_EDGE = 9006,
+
+	// A trigger tooth arrived at an unexpected time
+	CUSTOM_PRIMARY_BAD_TOOTH_TIMING = 9007,
+
 	/**
 	 * This is not engine miss detection - this is only internal scheduler state validation
 	 * Should not happen
 	 */
 	CUSTOM_OBD_SKIPPED_SPARK = 9009,
-	/**
-	 * This is not engine miss detection - this is only internal scheduler state validation
-	 * Should not happen
-	 */
-	CUSTOM_OBD_SKIPPED_FUEL = 9010,
+
+	// not used CUSTOM_9010 = 9010,
 	CUSTOM_RE_ADDING_INTO_EXECUTION_QUEUE = 9011,
 	/**
 	 * This indicates an issue with coil control - pin was not high when we were trying to set it low.
@@ -2165,17 +2168,4 @@ typedef enum {
 	 * Commanded fuel exceeds your fuel injector flow
 	 */
 	CUSTOM_TOO_LONG_FUEL_INJECTION = 9013,
-
-
-
-
-// Back in the day we wanted enums to be 32 bit integers.
-// as of 2020 preference is with ' __attribute__ ((__packed__))' allowing one-byte enums
-	// this is needed for proper enum size, this matters for malfunction_central
-	Internal_ForceMyEnumIntSize_cranking_obd_code = 2000000000,
-} obd_code_e;
-
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
-
+};

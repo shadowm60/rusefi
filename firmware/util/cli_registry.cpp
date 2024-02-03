@@ -14,26 +14,30 @@
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
 
-#include "pch.h"
+#include <cstring>
+#include <cstdint>
+#include <rusefi/isnan.h>
+#include <rusefi/math.h>
+#include "efiprintf.h"
+#include "rusefi/efistringutil.h"
 #include "cli_registry.h"
-
-#if ! EFI_UNIT_TEST
-#include "eficonsole.h"
-#endif /* ! EFI_UNIT_TEST */
 
 /* for isspace() */
 #include <ctype.h>
 
+#ifndef CONSOLE_MAX_ACTIONS
+#define CONSOLE_MAX_ACTIONS 256
+#endif
+
+#ifndef MAX_CMD_LINE_LENGTH
 #define MAX_CMD_LINE_LENGTH		100
+#endif
 
 // todo: support \t as well
 #define SPACE_CHAR ' '
 
 static int consoleActionCount = 0;
-static TokenCallback consoleActions[CONSOLE_MAX_ACTIONS] CCM_OPTIONAL;
-
-#define SECURE_LINE_PREFIX "sec!"
-#define SECURE_LINE_PREFIX_LENGTH 4
+static TokenCallback consoleActions[CONSOLE_MAX_ACTIONS];
 
 void resetConsoleActions(void) {
 	consoleActionCount = 0;
@@ -41,19 +45,25 @@ void resetConsoleActions(void) {
 
 static void doAddAction(const char *token, action_type_e type, Void callback, void *param) {
 #if !defined(EFI_DISABLE_CONSOLE_ACTIONS)
-	for (uint32_t i = 0; i < efiStrlen(token);i++) {
+	for (uint32_t i = 0; i < strlen(token);i++) {
 		char ch = token[i];
 		if (isupper(ch)) {
-			firmwareError(CUSTOM_ERR_COMMAND_LOWER_CASE_EXPECTED, "lowerCase expected [%s]", token);
+		    onCliCaseError(token);
+		    return;
 		}
 	}
 	for (int i = 0; i < consoleActionCount; i++) {
 		if (strcmp(token, consoleActions[i].token) == 0 /* zero result means strings are equal */) {
-			firmwareError(CUSTOM_SAME_TWICE, "Same action twice [%s]", token);
+			onCliDuplicateError(token);
+		    return;
 		}
 	}
 
-	efiAssertVoid(CUSTOM_CONSOLE_TOO_MANY, consoleActionCount < CONSOLE_MAX_ACTIONS, "Too many console actions");
+    if (consoleActionCount >= CONSOLE_MAX_ACTIONS) {
+		onCliOverflowError();
+		return;
+    }
+
 	TokenCallback *current = &consoleActions[consoleActionCount++];
 	current->token = token;
 	current->parameterType = type;
@@ -139,8 +149,8 @@ void addConsoleActionFFF(const char *token, VoidFloatFloatFloat callback) {
 	doAddAction(token, FLOAT_FLOAT_FLOAT_PARAMETER, (Void) callback, NULL);
 }
 
-void addConsoleActionFFFFF(const char *token, VoidFloatFloatFloatFloatFloat callback) {
-	doAddAction(token, FLOAT_FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER, (Void) callback, NULL);
+void addConsoleActionFFFF(const char *token, VoidFloatFloatFloatFloat callback) {
+	doAddAction(token, FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER, (Void) callback, NULL);
 }
 
 void addConsoleActionFFP(const char *token, VoidFloatFloatVoidPtr callback, void *param) {
@@ -168,8 +178,9 @@ static int getParameterCount(action_type_e parameterType) {
 	case STRING3_PARAMETER:
 	case FLOAT_FLOAT_FLOAT_PARAMETER:
 		return 3;
+	case FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER:
+		return 4;
 	case STRING5_PARAMETER:
-	case FLOAT_FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER:
 		return 5;
 	default:
 		return -1;
@@ -180,21 +191,12 @@ static int getParameterCount(action_type_e parameterType) {
  * @brief This function prints out a list of all available commands
  */
 void helpCommand(void) {
-#if EFI_PROD_CODE || EFI_SIMULATOR
 	efiPrintf("%d actions available", consoleActionCount);
 	for (int i = 0; i < consoleActionCount; i++) {
 		TokenCallback *current = &consoleActions[i];
 		efiPrintf("  %s: %d parameters", current->token, getParameterCount(current->parameterType));
 	}
-#endif
-	efiPrintf("For more visit http://rusefi.com/wiki/index.php?title=Manual:Software:dev_console_commands");
-}
-
-/**
- * @brief This is just a test function
- */
-static void echo(int value) {
-	efiPrintf("got value: %d", value);
+	efiPrintf("For more visit https://github.com/rusefi/rusefi/wiki/Dev-Console-Commands");
 }
 
 int findEndOfToken(const char *line) {
@@ -403,18 +405,18 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 		(*callbackS)(value[0], value[1], value[2]);
 		return 0;
 	}
-	case FLOAT_FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER:
+	case FLOAT_FLOAT_FLOAT_FLOAT_PARAMETER:
 	{
-		float value[5];
-		for (int i = 0; i < 5; i++) {
+		float value[4];
+		for (int i = 0; i < 4; i++) {
 			value[i] = atoff(argv[i]);
 			if (cisnan(value[i])) {
 				efiPrintf("invalid float [%s]", argv[i]);
 				return -1;
 			}
 		}
-		VoidFloatFloatFloatFloatFloat callbackS = (VoidFloatFloatFloatFloatFloat) current->callback;
-		(*callbackS)(value[0], value[1], value[2], value[3], value[4]);
+		VoidFloatFloatFloatFloat callbackS = (VoidFloatFloatFloatFloat) current->callback;
+		(*callbackS)(value[0], value[1], value[2], value[3]);
 		return 0;
 	}
 	case INT_FLOAT_PARAMETER:
@@ -463,52 +465,13 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 }
 
 void initConsoleLogic() {
-//	resetConsoleActions();
 	addConsoleAction("help", helpCommand);
-	addConsoleActionI("echo", echo);
-}
-
-/**
- * @return NULL if input line validation failed, reference to line payload if validation succeeded.
- * @see sendOutConfirmation() for command confirmation processing.
- */
-char *validateSecureLine(char *line) {
-	if (line == NULL)
-		return NULL;
-	if (strncmp(SECURE_LINE_PREFIX, line, SECURE_LINE_PREFIX_LENGTH) == 0) {
-		// COM protocol looses bytes, this is a super-naive error detection
-
-//		print("Got secure mode request header [%s]\r\n", line);
-		line += SECURE_LINE_PREFIX_LENGTH;
-//		print("Got secure mode request command [%s]\r\n", line);
-
-		char *divider = line;
-		while (*divider != '!') {
-			if (*divider == '\0') {
-				efiPrintf("Divider not found [%s]", line);
-				return NULL;
-			}
-			divider++;
-		}
-		*divider++ = 0; // replacing divider symbol with zero
-		int expectedLength = atoi(line);
-		line = divider;
-		int actualLength = strlen(line);
-		if (expectedLength != actualLength) {
-			efiPrintf("Error detected: expected %d but got %d in [%s]", expectedLength, actualLength, line);
-			return NULL;
-		}
-	}
-	return line;
 }
 
 static char handleBuffer[MAX_CMD_LINE_LENGTH + 1];
 
-static int handleConsoleLineInternal(const char *commandLine, int lineLength) {
-	int len = minI(lineLength, sizeof(handleBuffer) - 1);
-
-	strncpy(handleBuffer, commandLine, len);
-	handleBuffer[len] = 0; // we want this to be null-terminated for sure
+static int handleConsoleLineInternal(const char *commandLine) {
+	strncpy(handleBuffer, commandLine, sizeof(handleBuffer) - 1);
 
 	char *argv[10];
 	int argc = setargs(handleBuffer, argv, 10);
@@ -540,7 +503,6 @@ static int handleConsoleLineInternal(const char *commandLine, int lineLength) {
  * @brief This function takes care of one command line once we have it
  */
 void handleConsoleLine(char *line) {
-	line = validateSecureLine(line);
 	if (line == NULL)
 		return; // error detected
 
@@ -551,14 +513,12 @@ void handleConsoleLine(char *line) {
 		return;
 	}
 
-	int ret = handleConsoleLineInternal(line, lineLength);
+	int ret = handleConsoleLineInternal(line);
 
 	if (ret < 0) {
 		efiPrintf("failed to handle command [%s]", line);
 		return;
 	}
 
-#if EFI_PROD_CODE || EFI_SIMULATOR
 	efiPrintf("confirmation_%s:%d", line, lineLength);
-#endif
 }

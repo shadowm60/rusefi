@@ -1,18 +1,20 @@
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '6.1.0'
+    id 'com.github.johnrengelman.shadow' version "${shadowVersion}"
 }
 
 configurations {
-    // not sure what is this and why but it's huge
+    // icu4j is huge: https://en.wikipedia.org/wiki/International_Components_for_Unicode
     all*.exclude group: 'com.ibm.icu', module: 'icu4j'
 }
 
 dependencies {
     implementation project(':shared_ui')
+    implementation project(':trigger-ui')
     implementation project(':autotest')
     implementation project(':luaformatter')
-    implementation project(':config_definition')
+    implementation project(':config_definition_base')
+    // todo: should this be enough? implementation project(':trigger-image')
     implementation global_libs.antlr
     implementation 'com.miglayout:miglayout-swing:4.1'
     implementation files('../lib/dfu/dfu_java.jar')
@@ -25,8 +27,13 @@ dependencies {
 }
 
 shadowJar {
-    archivesBaseName = 'rusefi_console'
-    archiveClassifier = ''
+    dependsOn(':enum_to_string:shadowJar')
+    dependsOn(':config_definition_base:shadowJar')
+    dependsOn(':config_definition:shadowJar')
+    base {
+        archivesName = "${rootDir}/../java_console_binary/rusefi_console"
+        archiveClassifier = ''
+    }
 
     manifest {
         attributes(

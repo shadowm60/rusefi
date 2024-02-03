@@ -7,7 +7,7 @@ using ::testing::_;
 using ::testing::StrictMock;
 
 TEST(HPFP, Lobe) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engineConfiguration->hpfpCam = HPFP_CAM_NONE;
 	engineConfiguration->hpfpPeakPos = 123;
@@ -51,9 +51,9 @@ TEST(HPFP, Lobe) {
 }
 
 TEST(HPFP, InjectionReplacementFuel) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->hpfpCamLobes = 4;
 	engine->engineState.injectionMass[0] = 0.05 /* cc/cyl */ * fuelDensity;
 	engineConfiguration->hpfpPumpVolume = 0.2; // cc/lobe
@@ -71,11 +71,11 @@ TEST(HPFP, InjectionReplacementFuel) {
 	EXPECT_FLOAT_EQ(math.calcFuelPercent(1000), 50 * 1.333333333f);
 
 	// More cylinders!
-	engineConfiguration->specs.cylindersCount = 6;
+	engineConfiguration->cylindersCount = 6;
 	EXPECT_FLOAT_EQ(math.calcFuelPercent(1000), 50 * 2.); // Ooops we maxed out
 
 	// Compensation testing
-	engineConfiguration->specs.cylindersCount =
+	engineConfiguration->cylindersCount =
 		engineConfiguration->hpfpCamLobes; // Make math easier
 	for (int i = 0; i < HPFP_COMPENSATION_SIZE; i++) {
 		// one bin every 1000 RPM
@@ -104,9 +104,14 @@ TEST(HPFP, InjectionReplacementFuel) {
 }
 
 TEST(HPFP, PI) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->hpfpTargetDecay = 0;
+	engineConfiguration->hpfpPidP = 0;
+	engineConfiguration->hpfpPidI = 0;
+	engineConfiguration->hpfpPeakPos = 0;
+
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->hpfpCamLobes = 4;
 	engine->engineState.injectionMass[0] = 0.05 /* cc/cyl */ * fuelDensity;
 	engineConfiguration->hpfpPumpVolume = 0.2; // cc/lobe
@@ -161,9 +166,14 @@ TEST(HPFP, PI) {
 }
 
 TEST(HPFP, Angle) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->hpfpTargetDecay = 0;
+	engineConfiguration->hpfpPidP = 0;
+	engineConfiguration->hpfpPidI = 0;
+	engineConfiguration->hpfpPeakPos = 0;
+
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->hpfpCamLobes = 4;
 	engine->engineState.injectionMass[0] = 0.05 /* cc/cyl */ * fuelDensity;
 	engineConfiguration->hpfpPumpVolume = 0.2; // cc/lobe
@@ -207,9 +217,9 @@ TEST(HPFP, Angle) {
 }
 
 TEST(HPFP, Schedule) {
-	EngineTestHelper eth(TEST_ENGINE);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	engineConfiguration->specs.cylindersCount = 4;
+	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->hpfpCamLobes = 4;
 	engineConfiguration->hpfpPumpVolume = 0.2; // cc/lobe
 

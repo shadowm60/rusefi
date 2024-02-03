@@ -35,13 +35,13 @@ public class GaugesPanel {
             Sensor.TPS,
 
             Sensor.MAP,
-            Sensor.tCharge,
-            Sensor.baseFuel,
-            Sensor.runningFuel,
+//            Sensor.tCharge,
+//            Sensor.baseFuel,
+//            Sensor.runningFuel,
 
             Sensor.etbTarget,
             Sensor.lastErrorCode,
-            Sensor.Lambda,
+            Sensor.Lambda1,
             Sensor.VBATT,
             Sensor.vehicleSpeedKph,
 

@@ -8,13 +8,8 @@
 #pragma once
 
 #include "obd_error_codes.h"
-#include "rusefi_generated.h"
+#include "generated_lookup_meta.h"
 #include <cstdint>
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif /* __cplusplus */
 
 /**
  * Something is wrong, but we can live with it: some minor sensor is disconnected
@@ -22,9 +17,13 @@ extern "C"
  *
  * see also firmwareError()
  */
-bool warning(obd_code_e code, const char *fmt, ...);
+bool warning(ObdCode code, const char *fmt, ...);
 
-using critical_msg_t = char[ERROR_BUFFER_SIZE];
+using critical_msg_t = char[CRITICAL_BUFFER_SIZE];
+
+#define criticalShutdown() \
+    TURN_FATAL_LED(); \
+    turnAllPinsOff();
 
 /**
  * Something really bad had happened - firmware cannot function, we cannot run the engine
@@ -33,7 +32,9 @@ using critical_msg_t = char[ERROR_BUFFER_SIZE];
  *
  * see also warning()
  */
-void firmwareError(obd_code_e code, const char *fmt, ...);
+void firmwareError(ObdCode code, const char *fmt, ...);
+
+#define criticalError(...) firmwareError(ObdCode::OBD_PCM_Processor_Fault, __VA_ARGS__)
 
 extern bool hasFirmwareErrorFlag;
 
@@ -50,15 +51,20 @@ int getRusEfiVersion(void);
   #define efiAssertVoid(code, condition, message) { if (!(condition)) { firmwareError(code, message); return; } }
 #else /* EFI_ENABLE_ASSERTS */
   #define efiAssert(code, condition, message, result) { }
-  #define efiAssertVoid(code, condition, message) { }
+  #define efiAssertVoid(code, condition, message) { UNUSED(condition);}
 #endif /* EFI_ENABLE_ASSERTS */
 
+#define criticalAssertVoid(condition, message) efiAssertVoid(ObdCode::OBD_PCM_Processor_Fault, condition, message)
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif /* __cplusplus */
+
 #if EFI_PROD_CODE
-#include <hal.h>
 
 // If there was an error on the last boot, print out information about it now and reset state.
 void checkLastBootError();
-void logHardFault(uint32_t type, uintptr_t faultAddress, port_extctx* ctx, uint32_t csfr);
 #endif // EFI_PROD_CODE
 
 #ifdef __cplusplus
