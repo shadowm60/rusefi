@@ -12,41 +12,30 @@
 
 set -e
 
-cd ../java_tools
-./gradlew :config_definition:shadowJar
-cd ../firmware
-
 echo "This script reads rusefi_config.txt and produces firmware persistent configuration headers"
 echo "the storage section of rusefiXXX.ini is updated as well"
 
-BOARD_DIR=$1
-SHORT_BOARDNAME=$2
+BOARD_DIR=${1:-$BOARD_DIR}
+SHORT_BOARD_NAME=${2:-$SHORT_BOARD_NAME}
+INI=${3:-"rusefi_$SHORT_BOARD_NAME.ini"}
 
 if [ -z "$BOARD_DIR" ]; then
-	echo "Board name parameter expected"
+	echo "Board dir parameter expected"
 	exit 1
 fi
 
-if [ -z "$SHORT_BOARDNAME" ]; then
-	echo "ShortBoard name parameter expected"
+if [ -z "$SHORT_BOARD_NAME" ]; then
+	echo "Short board name parameter expected"
 	exit 1
 fi
 
-INI="rusefi_${SHORT_BOARDNAME}.ini"
+echo "BOARD_DIR=${BOARD_DIR} SHORT_BOARD_NAME=${SHORT_BOARD_NAME}"
 
-echo "BOARD_DIR=${BOARD_DIR} SHORT_BOARDNAME=${SHORT_BOARDNAME}"
+which realpath >/dev/null 2>&1 || (which grealpath >/dev/null 2>&1 && alias realpath='grealpath')
+FDIR=$(realpath $(dirname "$0"))
+BOARD_DIR=$(realpath --relative-to "$FDIR" "$BOARD_DIR")
 
-bash gen_signature.sh ${SHORT_BOARDNAME}
-
-PREPEND_FILE=${BOARD_DIR}/prepend.txt
-
-BOARD_SPECIFIC_URL=$(cat $PREPEND_FILE | grep MAIN_HELP_URL | cut -d " " -f 3 | sed -e 's/^"//' -e 's/"$//')
-
-echo "BOARD_SPECIFIC_URL=[$BOARD_SPECIFIC_URL] for [$SHORT_BOARDNAME] from [$BOARD_DIR]"
-if [ "" = "$BOARD_SPECIFIC_URL" ]; then
-  BOARD_SPECIFIC_URL=https://rusefi.com/s/wiki
-fi
-echo "BOARD_SPECIFIC_URL=[$BOARD_SPECIFIC_URL]"
+cd "$FDIR"
 
 source gen_config_common.sh
 echo "Using COMMON_GEN_CONFIG [$COMMON_GEN_CONFIG]"
@@ -58,8 +47,8 @@ java \
  $COMMON_GEN_CONFIG \
 	-enumInputFile controllers/algo/rusefi_hw_stm32_enums.h \
 	-enumInputFile controllers/algo/rusefi_hw_adc_enums.h \
-  -c_defines        controllers/generated/rusefi_generated_${SHORT_BOARDNAME}.h \
-  -c_destination    controllers/generated/engine_configuration_generated_structures_${SHORT_BOARDNAME}.h
+  -c_defines        controllers/generated/rusefi_generated_${SHORT_BOARD_NAME}.h \
+  -c_destination    controllers/generated/engine_configuration_generated_structures_${SHORT_BOARD_NAME}.h
 
 [ $? -eq 0 ] || { echo "ERROR generating TunerStudio config for ${BOARD_DIR}"; exit 1; }
 
@@ -67,14 +56,5 @@ if [ -z "META_OUTPUT_ROOT_FOLDER" ]; then
 	META_OUTPUT_ROOT_FOLDER=""
 fi
 
-# we generate both versions of the header but only one would be actually included due to conditional compilation see EFI_USE_COMPRESSED_INI_MSD
-# todo: make things consistent by
-# 0) having generated content not in the same folder with the tool generating content?
-# 1) using unique file name for each configuration?
-# 2) leverage consistent caching mechanism so that image is generated only in case of fresh .ini. Laziest approach would be to return exit code from java process above
-#
-hw_layer/mass_storage/create_ini_image.sh            ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image.h             128 ${SHORT_BOARDNAME} ${BOARD_SPECIFIC_URL}
-hw_layer/mass_storage/create_ini_image_compressed.sh ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated/${INI} ./hw_layer/mass_storage/ramdisk_image_compressed.h 1088 ${SHORT_BOARDNAME} ${BOARD_SPECIFIC_URL}
-
-echo "Happy ${SHORT_BOARDNAME}!"
+echo "Happy ${SHORT_BOARD_NAME}!"
 exit 0

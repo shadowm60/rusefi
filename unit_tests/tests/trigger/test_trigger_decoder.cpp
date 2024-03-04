@@ -183,7 +183,7 @@ TEST(misc, testRpmCalculator) {
 	engineConfiguration->stoichRatioPrimary = 14;
 
 	EXPECT_CALL(*eth.mockAirmass, getAirmass(_, _))
-		.WillRepeatedly(Return(AirmassResult{0.1008f, 50.0f}));
+		.WillRepeatedly(Return(AirmassResult{0.3024f, 50.0f}));
 
 	IgnitionEventList *ilist = &engine->ignitionEvents;
 	ASSERT_EQ( 0,  ilist->isReady) << "size #1";
@@ -193,10 +193,10 @@ TEST(misc, testRpmCalculator) {
 	efiAssertVoid(ObdCode::CUSTOM_ERR_6670, engineConfiguration!=NULL, "null config in engine");
 
 	engineConfiguration->minimumIgnitionTiming = -15;
-	setWholeTimingTable(-13);
+	float timingAdvance = -13;
+	setWholeTimingTable(timingAdvance);
 
 	engineConfiguration->trigger.customTotalToothCount = 8;
-	engineConfiguration->globalFuelCorrection = 3;
 	eth.applyTriggerWaveform();
 
 	setFlatInjectorLag(0);
@@ -211,7 +211,7 @@ TEST(misc, testRpmCalculator) {
 
 	eth.fireTriggerEvents(/* count */ 48);
 
-	ASSERT_EQ( 1500,  round(Sensor::getOrZero(SensorType::Rpm))) << "RPM";
+	eth.assertRpm(1500);
 	ASSERT_EQ( 14,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #1";
 
 
@@ -226,25 +226,25 @@ TEST(misc, testRpmCalculator) {
 	int start = eth.getTimeNowUs();
 	ASSERT_EQ( 485000,  start) << "start value";
 
-	eth.engine.periodicFastCallback();
+	engine->periodicFastCallback();
 
-	ASSERT_NEAR(engine->engineState.timingAdvance[0], 707, 0.1f);
+	ASSERT_NEAR(engine->engineState.timingAdvance[0], 720 + timingAdvance, 0.1f);
 
 	assertEqualsM("fuel #1", 4.5450, engine->engineState.injectionDuration);
 	InjectionEvent *ie0 = &engine->injectionEvents.elements[0];
 	assertEqualsM("injection angle", 499.095, ie0->injectionStartAngle);
 
 	eth.firePrimaryTriggerRise();
-	ASSERT_EQ(1500, Sensor::getOrZero(SensorType::Rpm));
+	eth.assertRpm(1500);
 
-	assertEqualsM("dwell", 4.5, engine->ignitionState.dwellAngle);
+	assertEqualsM("dwell", eth.timeToAngle(FORD_INLINE_DWELL), engine->ignitionState.dwellDurationAngle);
 	assertEqualsM("fuel #2", 4.5450, engine->engineState.injectionDuration);
 	assertEqualsM("one degree", 111.1111, engine->rpmCalculator.oneDegreeUs);
 	ASSERT_EQ( 1,  ilist->isReady) << "size #2";
 	EXPECT_NEAR(ilist->elements[0].dwellAngle, 8.5f, 1e-3);
 	EXPECT_NEAR(ilist->elements[0].sparkAngle, 13.0f, 1e-3);
 
-	ASSERT_EQ( 0,  eth.engine.triggerCentral.triggerState.getCurrentIndex()) << "index #2";
+	ASSERT_EQ( 0,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #2";
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size/2";
 	{
 	scheduling_s *ev0 = engine->executor.getForUnitTest(0);
@@ -255,7 +255,7 @@ TEST(misc, testRpmCalculator) {
 
 	scheduling_s *ev1 = engine->executor.getForUnitTest(1);
 	assertREqualsM("Call@1", (void*)ev1->action.getCallback(), (void*)fireSparkAndPrepareNextSchedule);
-	assertEqualsM("ev 1", start + 1444, ev1->momentX);
+	assertEqualsM("ev 1", start + 944 + 1000 * FORD_INLINE_DWELL , ev1->momentX);
 	assertEqualsLM("coil 1", (uintptr_t)&enginePins.coils[0], (uintptr_t)((IgnitionEvent*)ev1->action.getArgument())->outputs[0]);
 
 	}
@@ -265,7 +265,7 @@ TEST(misc, testRpmCalculator) {
 	eth.fireFall(5);
 	eth.fireRise(5);
 	eth.fireFall(5);
-	ASSERT_EQ( 2,  eth.engine.triggerCentral.triggerState.getCurrentIndex()) << "index #3";
+	ASSERT_EQ( 2,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #3";
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size 3";
 	assertEqualsM("ev 3", start + 13333 - 1515 + 2459, engine->executor.getForUnitTest(0)->momentX);
 	assertEqualsM2("ev 5", start + 14277 + 500, engine->executor.getForUnitTest(1)->momentX, 2);
@@ -287,12 +287,12 @@ TEST(misc, testRpmCalculator) {
 	eth.fireRise(5);
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size 4.3";
 
-	assertEqualsM("dwell", 4.5, eth.engine.ignitionState.dwellAngle);
-	assertEqualsM("fuel #3", 4.5450, eth.engine.engineState.injectionDuration);
-	ASSERT_EQ(1500, Sensor::getOrZero(SensorType::Rpm));
+	assertEqualsM("dwell", eth.timeToAngle(FORD_INLINE_DWELL), engine->ignitionState.dwellDurationAngle);
+	assertEqualsM("fuel #3", 4.5450, engine->engineState.injectionDuration);
+	eth.assertRpm(1500);
 
 
-	ASSERT_EQ( 6,  eth.engine.triggerCentral.triggerState.getCurrentIndex()) << "index #4";
+	ASSERT_EQ( 6,  engine->triggerCentral.triggerState.getCurrentIndex()) << "index #4";
 	ASSERT_EQ( 4,  engine->executor.size()) << "queue size 4";
 	engine->executor.clear();
 
@@ -1019,7 +1019,7 @@ TEST(big, testSparkReverseOrderBug319) {
 	engine->updateSlowSensors();
 
 	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
-	eth.engine.periodicFastCallback();
+	engine->periodicFastCallback();
 
 	setWholeTimingTable(0);
 
@@ -1119,22 +1119,22 @@ TEST(big, testMissedSpark299) {
 
 	eth.fireRise(20);
 	eth.executeActions();
-	ASSERT_EQ( 0,  eth.engine.triggerCentral.triggerState.currentCycle.current_index) << "ci#0";
+	ASSERT_EQ( 0,  engine->triggerCentral.triggerState.currentCycle.current_index) << "ci#0";
 
 
 	eth.fireFall(20);
 	eth.executeActions();
-	ASSERT_EQ( 1,  eth.engine.triggerCentral.triggerState.currentCycle.current_index) << "ci#1";
+	ASSERT_EQ( 1,  engine->triggerCentral.triggerState.currentCycle.current_index) << "ci#1";
 
 
 	eth.fireRise(20);
 	eth.executeActions();
-	ASSERT_EQ( 0,  eth.engine.triggerCentral.triggerState.currentCycle.current_index) << "ci#2";
+	ASSERT_EQ( 0,  engine->triggerCentral.triggerState.currentCycle.current_index) << "ci#2";
 
 
 	eth.fireFall(20);
 	eth.executeActions();
-	ASSERT_EQ( 1,  eth.engine.triggerCentral.triggerState.currentCycle.current_index) << "ci#3";
+	ASSERT_EQ( 1,  engine->triggerCentral.triggerState.currentCycle.current_index) << "ci#3";
 
 
 	eth.fireRise(20);

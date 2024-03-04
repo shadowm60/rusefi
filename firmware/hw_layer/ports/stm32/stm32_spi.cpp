@@ -9,7 +9,8 @@
 #include "pch.h"
 
 #if HAL_USE_SPI
-bool isSpiInitialized[5] = { false, false, false, false, false };
+/* zero index is SPI_NONE */
+bool isSpiInitialized[SPI_TOTAL_COUNT + 1] = { true, false, false, false, false, false, false };
 
 static int getSpiAf(SPIDriver *driver) {
 #if STM32_SPI_USE_SPI1
@@ -27,51 +28,23 @@ static int getSpiAf(SPIDriver *driver) {
 		return EFI_SPI3_AF;
 	}
 #endif
+#if STM32_SPI_USE_SPI4
+	if (driver == &SPID4) {
+		return EFI_SPI4_AF;
+	}
+#endif
+#if STM32_SPI_USE_SPI5
+	if (driver == &SPID5) {
+		return EFI_SPI5_AF;
+	}
+#endif
+#if STM32_SPI_USE_SPI6
+	if (driver == &SPID6) {
+		return EFI_SPI6_AF;
+	}
+#endif
 	criticalError("SPI AF not available");
 	return -1;
-}
-
-/* these are common adapters for engineConfiguration access, move to some common file? */
-brain_pin_e getMisoPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1misoPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2misoPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3misoPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
-}
-
-brain_pin_e getMosiPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1mosiPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2mosiPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3mosiPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
-}
-
-brain_pin_e getSckPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1sckPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2sckPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3sckPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
 }
 
 void turnOnSpi(spi_device_e device) {
@@ -120,20 +93,45 @@ void turnOnSpi(spi_device_e device) {
 	}
 	if (device == SPI_DEVICE_4) {
 #if STM32_SPI_USE_SPI4
-//		scheduleMsg(&logging, "Turning on SPI4 pins");
-		/* there are no configuration fields for SPI4 in engineConfiguration, rely on board init code
-		 * it should set proper functions for SPI4 pins */
+		initSpiModule(&SPID4, getSckPin(device),
+				getMisoPin(device),
+				getMosiPin(device),
+				engineConfiguration->spi4SckMode,
+				engineConfiguration->spi4MosiMode,
+				engineConfiguration->spi4MisoMode);
 #else
 		criticalError("SPI4 not available in this binary");
 #endif /* STM32_SPI_USE_SPI4 */
 	}
+	if (device == SPI_DEVICE_5) {
+#if STM32_SPI_USE_SPI5
+		initSpiModule(&SPID5, getSckPin(device),
+				getMisoPin(device),
+				getMosiPin(device),
+				engineConfiguration->spi5SckMode,
+				engineConfiguration->spi5MosiMode,
+				engineConfiguration->spi5MisoMode);
+#else
+		criticalError("SPI5 not available in this binary");
+#endif /* STM32_SPI_USE_SPI5 */
+	}
+	if (device == SPI_DEVICE_6) {
+#if STM32_SPI_USE_SPI6
+		initSpiModule(&SPID6, getSckPin(device),
+				getMisoPin(device),
+				getMosiPin(device),
+				engineConfiguration->spi6SckMode,
+				engineConfiguration->spi6MosiMode,
+				engineConfiguration->spi6MisoMode);
+#else
+		criticalError("SPI5 not available in this binary");
+#endif /* STM32_SPI_USE_SPI5 */
+	}
 }
 
-void initSpiModule(SPIDriver *driver, brain_pin_e sck, brain_pin_e miso,
-		brain_pin_e mosi,
-		int sckMode,
-		int mosiMode,
-		int misoMode) {
+void initSpiModule(SPIDriver *driver,
+		brain_pin_e sck, brain_pin_e miso, brain_pin_e mosi,
+		int sckMode, int mosiMode, int misoMode) {
 
 	/**
 	 * See https://github.com/rusefi/rusefi/pull/664/

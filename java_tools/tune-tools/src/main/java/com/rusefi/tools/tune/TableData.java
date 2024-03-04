@@ -4,6 +4,7 @@ import com.opensr5.ini.IniFileModel;
 import com.opensr5.ini.field.ArrayIniField;
 import com.opensr5.ini.field.IniField;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,7 +25,7 @@ public class TableData implements HoHo {
         this.tableName = tableName;
     }
 
-    @NotNull
+    @Nullable
     public static TableData readTable(String msqFileName, String tableName, IniFileModel model) throws IOException {
         IniField iniField = model.allIniFields.get(tableName);
         if (!(iniField instanceof ArrayIniField)) {
@@ -46,8 +47,12 @@ public class TableData implements HoHo {
             table[rowIndex] = new float[columns];
         }
 
-        BufferedReader reader = TS2C.readAndScroll(msqFileName, tableName, factory);
-        readTable(table, reader, rows, columns);
+        try (BufferedReader reader = TS2C.readAndScroll(msqFileName, tableName, factory)) {
+            readTable(table, reader, rows, columns);
+        } catch (IllegalStateException e) {
+            // we read potentially old tune using current IniFileModel, curve dimension might not match
+            System.err.println("[IllegalStateException] while " + tableName);
+        }
         return new TableData(rows, columns, table, tableName);
     }
 

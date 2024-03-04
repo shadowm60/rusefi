@@ -111,8 +111,8 @@ static void sayHello() {
 	efiPrintf("CH_CFG_ST_FREQUENCY=%d", CH_CFG_ST_FREQUENCY);
 #endif
 
-#ifdef CORTEX_MAX_KERNEL_PRIORITY
-	efiPrintf("CORTEX_MAX_KERNEL_PRIORITY=%d", CORTEX_MAX_KERNEL_PRIORITY);
+#ifdef ENABLE_PERF_TRACE
+	efiPrintf("ENABLE_PERF_TRACE=%d", ENABLE_PERF_TRACE);
 #endif
 
 #ifdef STM32_ADCCLK
@@ -141,14 +141,6 @@ static void sayHello() {
 	efiPrintf("EFI_TUNER_STUDIO=%d", EFI_TUNER_STUDIO);
 #else
 	efiPrintf("EFI_TUNER_STUDIO=%d", 0);
-#endif
-
-#ifdef EFI_SIGNAL_EXECUTOR_SLEEP
-	efiPrintf("EFI_SIGNAL_EXECUTOR_SLEEP=%d", EFI_SIGNAL_EXECUTOR_SLEEP);
-#endif
-
-#ifdef EFI_SIGNAL_EXECUTOR_HW_TIMER
-	efiPrintf("EFI_SIGNAL_EXECUTOR_HW_TIMER=%d", EFI_SIGNAL_EXECUTOR_HW_TIMER);
 #endif
 
 #if defined(EFI_SHAFT_POSITION_INPUT)

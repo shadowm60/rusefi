@@ -46,7 +46,7 @@ endif
 # C++ specific options here (added to USE_OPT).
 ifeq ($(USE_CPPOPT),)
   # constexpr float expf_taylor_impl probably needs just c++14 but why not go with 17?
-  USE_CPPOPT = -std=c++20 -Wno-register -fno-rtti -fno-exceptions -fno-use-cxa-atexit -Werror=write-strings -Werror=type-limits -Winvalid-pch
+  USE_CPPOPT = -std=c++20 -Wno-register -fno-rtti -fno-exceptions -fno-use-cxa-atexit -Werror=write-strings -Werror=type-limits
   # gcc-10 c++ 20 depricated uses of volatile errors
   USE_CPPOPT += -Wno-deprecated
 endif
@@ -115,6 +115,14 @@ endif
 # Project, sources and paths
 #
 
+ifeq ($(PROJECT_BOARD),)
+ifneq ($(SHORT_BOARD_NAME),)
+  PROJECT_BOARD = $(SHORT_BOARD_NAME)
+else
+  PROJECT_BOARD = f407-discovery
+endif
+endif
+
 # Define project name here
 PROJECT = openblt_$(PROJECT_BOARD)
 PROJECT_DIR = ..
@@ -145,7 +153,7 @@ CONFIG = $(PROJECT_DIR)/config
 # Licensing files.
 include $(CHIBIOS)/os/license/license.mk
 # Startup files.
-include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/$(CPU_STARTUP)
+include $(CPU_STARTUP_DIR)
 # HAL-OSAL files (optional).
 include $(CHIBIOS_CONTRIB)/os/hal/hal.mk
 include $(CPU_PLATFORM)
@@ -160,8 +168,10 @@ include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 BOARDINC = $(BOARD_DIR)
 include $(BOARD_DIR)/board.mk
 
+ifeq (,$(filter clean,$(MAKECMDGOALS)))
 ifeq ($(SHORT_BOARD_NAME),)
-$(error SHORT_BOARD_NAME not set, something wrong with your board.mk file)
+$(error SHORT_BOARD_NAME not set, something wrong with your meta-info.env file)
+endif
 endif
 DDEFS += -DSHORT_BOARD_NAME=$(SHORT_BOARD_NAME)
 
@@ -346,4 +356,18 @@ ULIBS = -lm --specs=nano.specs
 ##############################################################################
 
 include $(RULESFILE)
+
+include $(PROJECT_DIR)/target_sentinel.mk
+
+ifneq (yes,$(SUBMAKE))
+  include $(PROJECT_DIR)/rusefi_config.mk
+endif
+
 include $(PROJECT_DIR)/rusefi_pch.mk
+
+.PHONY: CLEAN_RULE_HOOK CLEAN_PCH_HOOK
+
+CLEAN_RULE_HOOK: CLEAN_PCH_HOOK
+	@echo Cleaning-BLT
+	-rm -fR $(BUILDDIR)/*
+	rm -f .*-sentinel

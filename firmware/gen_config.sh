@@ -55,8 +55,8 @@ for BOARD in \
    "config/boards/s105 s105" \
    "config/boards/test-build-guards t-b-g" \
    "config/boards/frankenso_na6 frankenso_na6" \
-   "config/boards/prometheus prometheus_469" \
-   "config/boards/prometheus prometheus_405" \
+   "config/boards/prometheus/f469 prometheus_469" \
+   "config/boards/prometheus/f405 prometheus_405" \
    "config/boards/proteus proteus_f7" \
    "config/boards/proteus proteus_f4" \
    "config/boards/proteus proteus_h7" \
@@ -72,9 +72,11 @@ for BOARD in \
    "config/boards/at_start_f435 at_start_f435" \
    ; do
  BOARD_DIR=$(echo "$BOARD" | cut -d " " -f 1)
- BOARD_SHORT_NAME=$(echo "$BOARD" | cut -d " " -f 2)
- ./gen_config_board.sh $BOARD_DIR $BOARD_SHORT_NAME
- [ $? -eq 0 ] || { echo "ERROR generating board dir=[$BOARD_DIR] short=[$BOARD_SHORT_NAME]"; exit 1; }
+ SHORT_BOARD_NAME=$(echo "$BOARD" | cut -d " " -f 2)
+ bash gen_signature.sh ${SHORT_BOARD_NAME}
+ bash gen_config_board.sh $BOARD_DIR $SHORT_BOARD_NAME
+ bash bin/gen_image_board.sh $BOARD_DIR $SHORT_BOARD_NAME
+ [ $? -eq 0 ] || { echo "ERROR generating board dir=[$BOARD_DIR] short=[$SHORT_BOARD_NAME]"; exit 1; }
 done
 
 exit 0

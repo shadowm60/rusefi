@@ -12,10 +12,5 @@ dependencies {
     api project(':inifile')
     api project(':enum_to_string')
     api global_libs.snakeyaml
-    testFixturesApi global_libs.junit
-}
-
-shadowJar {
-    dependsOn(':enum_to_string:shadowJar')
-    archiveClassifier = ''
+    testFixturesApi global_libs.junit5
 }

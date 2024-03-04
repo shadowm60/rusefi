@@ -1,5 +1,2 @@
-#!/bin/bash
-
-# export USE_OPENBLT=yes
-
-bash ../common_make.sh proteus ARCH_STM32H7
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/proteus/meta-info-proteus_h7.env

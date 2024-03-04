@@ -3,8 +3,10 @@ package com.rusefi;
 import com.devexperts.logging.Logging;
 import com.opensr5.ini.RawIniFile;
 import com.opensr5.ini.field.EnumIniField;
+import com.rusefi.core.Pair;
 import com.rusefi.enum_reader.Value;
 import com.rusefi.output.*;
+import com.rusefi.parse.TokenUtil;
 import com.rusefi.parse.TypesHelper;
 import com.rusefi.util.LazyFile;
 import com.rusefi.util.SystemOut;
@@ -65,6 +67,7 @@ public class ReaderStateImpl implements ReaderState {
         this.withC_Defines = withC_Defines;
     }
 
+    @Override
     public EnumsReader getEnumsReader() {
         return enumsReader;
     }
@@ -114,8 +117,12 @@ public class ReaderStateImpl implements ReaderState {
          * the destinations/writers
          */
         SystemOut.println("Reading definition from " + Objects.requireNonNull(definitionInputFile));
-        BufferedReader definitionReader = new BufferedReader(readerProvider.read(RootHolder.ROOT + definitionInputFile));
-        readBufferedReader(definitionReader, destinations);
+        String fileNameWithRoot = RootHolder.ROOT + definitionInputFile;
+        try (BufferedReader definitionReader = new BufferedReader(readerProvider.read(fileNameWithRoot))) {
+            readBufferedReader(definitionReader, destinations);
+        } catch (Throwable e) {
+            throw new IllegalStateException("While processing " + fileNameWithRoot);
+        }
 
         if (destCDefinesFileName != null) {
             CHeaderConsumer.writeDefinesToFile(getVariableRegistry(), ConfigDefinitionRootOutputFolder.getValue() + destCDefinesFileName, definitionInputFile);
@@ -145,34 +152,42 @@ public class ReaderStateImpl implements ReaderState {
         enumsReader.enums.putAll(newEnums);
     }
 
-    private void handleCustomLine(String line) {
-        line = line.substring(CUSTOM.length() + 1).trim();
-        int index = line.indexOf(' ');
-        String name = line.substring(0, index);
+    private void handleCustomLine(String customLineWithPrefix) {
+        String withoutPrefix = customLineWithPrefix.substring(CUSTOM.length() + 1).trim();
+        Pair<String, String> nameAndRest = TokenUtil.grabFirstTokenAndTheRest(withoutPrefix);
+        String name = nameAndRest.first;
 
         String autoEnumOptions = variableRegistry.getEnumOptionsForTunerStudio(enumsReader, name);
         if (autoEnumOptions != null) {
             variableRegistry.register(name + VariableRegistry.AUTO_ENUM_SUFFIX, autoEnumOptions);
         }
 
-        line = line.substring(index).trim();
-        index = line.indexOf(' ');
-        String customSize = line.substring(0, index);
+        String line = nameAndRest.second;
+        Pair<String, String> sizeAndRest = TokenUtil.grabFirstTokenAndTheRest(line);
+        String customSize = sizeAndRest.first;
 
-        String tunerStudioLine = line.substring(index).trim();
+        String tunerStudioLine = sizeAndRest.second;
         tunerStudioLine = variableRegistry.applyVariables(tunerStudioLine);
         int size = parseSize(customSize, line);
         tsCustomSize.put(name, size);
 
         RawIniFile.Line rawLine = new RawIniFile.Line(tunerStudioLine);
-        //boolean isKeyValueForm = tunerStudioLine.contains("=\"");
         if (rawLine.getTokens()[0].equals("bits")) {
             EnumIniField.ParseBitRange bitRange = new EnumIniField.ParseBitRange().invoke(rawLine.getTokens()[3]);
             int totalCount = 1 << (bitRange.getBitSize0() + 1);
             List<String> enums = Arrays.asList(rawLine.getTokens()).subList(4, rawLine.getTokens().length);
-            // at the moment we read 0=NONE as two tokens, thus enums.size() is divided by two
-            if (enums.size() / 2 > totalCount)
+            boolean isKeyValueSyntax = EnumIniField.EnumKeyValueMap.isKeyValueSyntax(EnumIniField.getEnumValuesSection(tunerStudioLine));
+            int enumCount = isKeyValueSyntax ? enums.size() / 2 : enums.size();
+            if (enumCount > totalCount)
                 throw new IllegalStateException(name + ": Too many options in " + tunerStudioLine + " capacity=" + totalCount + "/size=" + enums.size());
+            boolean looksLikeListVariableSyntax = enumCount == 1;
+            if (!isKeyValueSyntax && !looksLikeListVariableSyntax) {
+                StringBuilder sb = new StringBuilder(tunerStudioLine);
+                for (int i = enumCount; i < totalCount; i++) {
+                    sb.append(", ").append(InvalidConstant.QUOTED_INVALID);
+                }
+                tunerStudioLine = sb.toString();
+            }
 /*
     this does not work right now since smt32 and kinetis enum sizes could be different but same .txt file
     todo: identify relevant bitsizes and use variables for bitsizes?

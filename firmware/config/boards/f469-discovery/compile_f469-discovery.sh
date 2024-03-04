@@ -1,3 +1,2 @@
-#!/bin/bash
-
-bash ../common_make.sh f469-discovery ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/f469-discovery/meta-info.env

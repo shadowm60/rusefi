@@ -10,12 +10,6 @@ dependencies {
 }
 
 shadowJar {
-    /*
-     to exclude suffix '-all'
-     in resulting archive file name
-    */
-    archiveClassifier = ''
-
     manifest {
         attributes(
                 'Main-Class': 'com.rusefi.EnumToString'
@@ -24,7 +18,6 @@ shadowJar {
 
     dependencies {
         exclude(dependency(global_libs.jsr305))
-        exclude(dependency(global_libs.junit))
         exclude(dependency(global_libs.annotations))
     }
 }

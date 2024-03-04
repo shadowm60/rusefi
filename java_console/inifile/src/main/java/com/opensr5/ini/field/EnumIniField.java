@@ -159,7 +159,7 @@ public class EnumIniField extends IniField {
 
     public static class EnumKeyValueMap {
         private static final String STARTS_WITH_NUMBERS_OPTIONAL_SPACES_AND_EQUALS = "^\\d+\\s*=.*";
-        private static Pattern IS_KEY_VALUE_SYNTAX = Pattern.compile(STARTS_WITH_NUMBERS_OPTIONAL_SPACES_AND_EQUALS);
+        private static final Pattern IS_KEY_VALUE_SYNTAX = Pattern.compile(STARTS_WITH_NUMBERS_OPTIONAL_SPACES_AND_EQUALS);
 
         private final Map<Integer, String> keyValues;
 
@@ -170,10 +170,7 @@ public class EnumIniField extends IniField {
         public static EnumKeyValueMap valueOf(String rawText, IniFileModel iniFileModel) {
             Map<Integer, String> keyValues = new TreeMap<>();
 
-            int interestingIndex = EnumIniField.ordinalIndexOf(rawText, ",", 4);
-            // yes that could have been done with a regex as well
-            String interestingPart = rawText.substring(interestingIndex + /*skipping comma*/1).trim();
-            boolean isKeyValueSyntax = IS_KEY_VALUE_SYNTAX.matcher(interestingPart).matches();
+            boolean isKeyValueSyntax = isKeyValueSyntax(rawText);
             int offset = 5;
             String[] tokens = IniFileReader.splitTokens(rawText);
 
@@ -201,6 +198,11 @@ public class EnumIniField extends IniField {
             return new EnumKeyValueMap(keyValues);
         }
 
+        public static boolean isKeyValueSyntax(String rawText) {
+            String interestingPart = getEnumValuesSection(rawText);
+            return IS_KEY_VALUE_SYNTAX.matcher(interestingPart).matches();
+        }
+
         public int size() {
             return keyValues.size();
         }
@@ -216,5 +218,12 @@ public class EnumIniField extends IniField {
             }
             throw new IllegalArgumentException("Nothing for " + value);
         }
+    }
+
+    @NotNull
+    public static String getEnumValuesSection(String rawText) {
+        int interestingIndex = EnumIniField.ordinalIndexOf(rawText, ",", 4);
+        // yes that could have been done with a regex as well
+        return rawText.substring(interestingIndex + /*skipping comma*/1).trim();
     }
 }

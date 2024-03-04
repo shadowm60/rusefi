@@ -9,6 +9,9 @@ endif
 
 DDEFS += -DEFI_MAIN_RELAY_CONTROL=TRUE
 
+# pretty temporary just to try https://github.com/rusefi/rusefi/issues/6079 on discovery
+DDEFS += -DDISABLE_PIN_STATE_VALIDATION=TRUE
+
 #no mux on mm100
 
 # Add them all together
@@ -17,10 +20,11 @@ DDEFS += -DEFI_SOFTWARE_KNOCK=TRUE -DSTM32_ADC_USE_ADC3=TRUE
 # EGT chip
 DDEFS += -DEFI_MAX_31855=TRUE
 
-SHORT_BOARD_NAME=uaefi
-
 DDEFS += -DHELLEN_BOARD_ID_DEBUG
 
 DDEFS += -DHW_HELLEN_UAEFI=1
+DDEFS += -DDIAG_5VP_PIN=Gpio::MM100_SPI3_MOSI
+
+ONBOARD_MEMS_TYPE=LIS2DH12
 
 include $(BOARDS_DIR)/hellen/hellen-common100.mk

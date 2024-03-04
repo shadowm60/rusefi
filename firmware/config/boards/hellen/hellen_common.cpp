@@ -11,6 +11,16 @@ void setHellenCan() {
 	engineConfiguration->canRxPin = H176_CAN_RX;
 }
 
+static void init5vpDiag() {
+#ifdef DIAG_5VP_PIN
+static bool is5vpInit = false;
+  if (!is5vpInit) {
+    efiSetPadMode("5VP_STATE", DIAG_5VP_PIN, PAL_MODE_INPUT);
+    is5vpInit = true;
+  }
+#endif // DIAG_5VP_PIN
+}
+
 void setHellenVbatt() {
 	// 4.7k high side/4.7k low side = 2.0 ratio divider
 	engineConfiguration->analogInputDividerCoefficient = 2.0f;
@@ -22,6 +32,8 @@ void setHellenVbatt() {
 	engineConfiguration->vbattAdcChannel = H144_IN_VBATT;
 
 	engineConfiguration->adcVcc = 3.29f;
+
+  init5vpDiag(); // piggy back on popular 'setHellenVbatt' method
 }
 
 void setHellen64Can() {
@@ -57,16 +69,22 @@ void hellenBoardStandBy() {
 }
 
 /**
- * dirty hack
+ * We need to make sure that accelerometer device which physically exists does not conflict with SD card
+ * in case of shared SPI.
+ * We reply on specific order of execution here:
+ * 1) accelerometer pre-initialization into safe CS pin state
+ * 2) SD card initialization
+ * 3) accelerometer main initialization if accelerometer feature is desired
  */
-void configureHellenMegaAccCS2Pin() {
-    static bool initialized = false;
-    static OutputPin cs2pin;
-    if (!initialized) {
-        initialized = true;
-	    cs2pin.initPin("mm-CS2", Gpio::H_SPI1_CS2);
-	    cs2pin.setValue(1);
+extern OutputPin accelerometerChipSelect;
+
+void hellenMegaAccelerometerPreInitCS2Pin() {
+#if EFI_ONBOARD_MEMS
+    if (!accelerometerChipSelect.isInitialized()) {
+	    accelerometerChipSelect.initPin("mm-CS2", Gpio::H_SPI1_CS2);
+	    accelerometerChipSelect.setValue(1);
 	}
+#endif // EFI_ONBOARD_MEMS
 }
 
 void configureHellenCanTerminator() {

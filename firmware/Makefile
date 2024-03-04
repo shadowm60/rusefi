@@ -8,7 +8,7 @@ RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk
 RULESFILE = $(RULESPATH)/rules.mk
 
 ifneq ("$(wildcard $(../.git))","")
-$(error ../.git not found. We expect source code to be cloned not downloaded as zip file.")
+$(error "../.git not found. We expect source code to be cloned not downloaded as zip file.")
 endif
 
 include rusefi_rules.mk
@@ -159,11 +159,14 @@ MAKEFLAGS += ${NUMJOBS}
 # Project, sources and paths
 #
 
+BOARD_DIR := ./$(BOARD_DIR)
 BOARDINC = $(BOARD_DIR)
 include $(BOARD_DIR)/board.mk
 BOARDCPPSRC += $(BOARDS_DIR)/board_id.cpp
+ifeq (,$(filter clean,$(MAKECMDGOALS)))
 ifeq ($(SHORT_BOARD_NAME),)
-$(error SHORT_BOARD_NAME not set, something wrong with your board.mk file)
+$(error SHORT_BOARD_NAME not set, something wrong with your meta-info.env file)
+endif
 endif
 DDEFS += -DSHORT_BOARD_NAME=$(SHORT_BOARD_NAME)
 
@@ -188,6 +191,14 @@ ifeq ($(EFI_ONBOARD_MEMS_LIS2DH12),yes)
   DDEFS += -DEFI_ONBOARD_MEMS_LIS2DH12=TRUE
   include $(CHIBIOS)/os/ex/devices/ST/lsm303agr.mk
 endif
+ifeq ($(EFI_ONBOARD_MEMS_LIS302DL),yes)
+  DDEFS += -DEFI_ONBOARD_MEMS_LIS302DL=TRUE
+  include $(CHIBIOS)/os/ex/devices/ST/lis302dl.mk
+endif
+ifeq ($(EFI_ONBOARD_MEMS_LIS3DSH),yes)
+  DDEFS += -DEFI_ONBOARD_MEMS_LIS3DSH=TRUE
+  include $(CHIBIOS)/os/ex/devices/ST/lis3dsh.mk
+endif
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/cpp_wrappers/chcpp.mk
 
@@ -205,6 +216,11 @@ endif
 include console/binary/tunerstudio.mk
 ifeq ($(USE_FATFS),yes)
   include $(PROJECT_DIR)/ext/FatFS/fatfs.mk
+endif
+
+ifeq ($(USE_WIFI),yes)
+  include $(PROJECT_DIR)/ext/atwinc1500/atwinc1500.mk
+  DDEFS += -DEFI_WIFI=1
 endif
 
 include $(PROJECT_DIR)/hw_layer/mass_storage/mass_storage.mk
@@ -371,8 +387,22 @@ ULIBS = -lm --specs=nano.specs -Wl,--sort-section=alignment
 
 include $(RULESFILE)
 
+include target_sentinel.mk
+
+include rusefi_config.mk
+
 # Enable precompiled header
 include rusefi_pch.mk
+
+include bundle.mk
+
+.PHONY: CLEAN_RULE_HOOK CLEAN_PCH_HOOK CLEAN_BUNDLE_HOOK
+
+CLEAN_RULE_HOOK: CLEAN_PCH_HOOK CLEAN_BUNDLE_HOOK
+
+CLEAN_PCH_HOOK:
+
+CLEAN_BUNDLE_HOOK:
 
 POST_MAKE_ALL_RULE_HOOK: $(BUILDDIR)/$(PROJECT).elf
 	@java -jar ../java_tools/gcc_map_reader.jar $(BUILDDIR)/$(PROJECT).map | grep Total || echo Unable to run gcc_map_reader

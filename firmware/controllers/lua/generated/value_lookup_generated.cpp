@@ -286,6 +286,9 @@ float getConfigValueByName(const char *name) {
 // camDecoder2jzPrecision
 		case 306303086:
 			return engineConfiguration->camDecoder2jzPrecision;
+// justATempTest
+		case -48120222:
+			return engineConfiguration->justATempTest;
 // byFirmwareVersion
 		case 171869155:
 			return engineConfiguration->byFirmwareVersion;
@@ -310,9 +313,6 @@ float getConfigValueByName(const char *name) {
 // acrRevolutions
 		case -1373423899:
 			return engineConfiguration->acrRevolutions;
-// globalFuelCorrection
-		case 1371979578:
-			return engineConfiguration->globalFuelCorrection;
 // adcVcc
 		case -244496183:
 			return engineConfiguration->adcVcc;
@@ -682,9 +682,9 @@ float getConfigValueByName(const char *name) {
 // launchTimingRpmRange
 		case 906908772:
 			return engineConfiguration->launchTimingRpmRange;
-// launchFuelAdded
-		case 975838686:
-			return engineConfiguration->launchFuelAdded;
+// launchSparkSkipPercent
+		case -146687863:
+			return engineConfiguration->launchSparkSkipPercent;
 // launchBoostDuty
 		case -232786835:
 			return engineConfiguration->launchBoostDuty;
@@ -1084,12 +1084,24 @@ float getConfigValueByName(const char *name) {
 // enableExtendedCanBroadcast
 		case 923152418:
 			return engineConfiguration->enableExtendedCanBroadcast;
+// luaCanRxWorkaround
+		case 1068374799:
+			return engineConfiguration->luaCanRxWorkaround;
+// flexSensorInverted
+		case 512911183:
+			return engineConfiguration->flexSensorInverted;
 // useAuxSpeedForSlipRatio
 		case -723870257:
 			return engineConfiguration->useAuxSpeedForSlipRatio;
 // useVssAsSecondWheelSpeed
 		case -195378748:
 			return engineConfiguration->useVssAsSecondWheelSpeed;
+// is_enabled_spi_5
+		case -722238358:
+			return engineConfiguration->is_enabled_spi_5;
+// is_enabled_spi_6
+		case -722238357:
+			return engineConfiguration->is_enabled_spi_6;
 // afterCrankingIACtaperDuration
 		case 671504531:
 			return engineConfiguration->afterCrankingIACtaperDuration;
@@ -1768,6 +1780,9 @@ float getConfigValueByName(const char *name) {
 // auxSpeed1Multiplier
 		case -1644887108:
 			return engineConfiguration->auxSpeed1Multiplier;
+// brakeMeanEffectivePressureDifferential
+		case -4616606:
+			return engineConfiguration->brakeMeanEffectivePressureDifferential;
 	}
 	return EFI_ERROR_CODE;
 }
@@ -2244,6 +2259,11 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->camDecoder2jzPrecision = (int)value;
 		return 1;
 	}
+		case -48120222:
+	{
+		engineConfiguration->justATempTest = (int)value;
+		return 1;
+	}
 		case 171869155:
 	{
 		engineConfiguration->byFirmwareVersion = (int)value;
@@ -2282,11 +2302,6 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1373423899:
 	{
 		engineConfiguration->acrRevolutions = (int)value;
-		return 1;
-	}
-		case 1371979578:
-	{
-		engineConfiguration->globalFuelCorrection = value;
 		return 1;
 	}
 		case -244496183:
@@ -2904,9 +2919,9 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->launchTimingRpmRange = (int)value;
 		return 1;
 	}
-		case 975838686:
+		case -146687863:
 	{
-		engineConfiguration->launchFuelAdded = (int)value;
+		engineConfiguration->launchSparkSkipPercent = (int)value;
 		return 1;
 	}
 		case -232786835:
@@ -3574,6 +3589,16 @@ bool setConfigValueByName(const char *name, float value) {
 		engineConfiguration->enableExtendedCanBroadcast = (int)value;
 		return 1;
 	}
+		case 1068374799:
+	{
+		engineConfiguration->luaCanRxWorkaround = (int)value;
+		return 1;
+	}
+		case 512911183:
+	{
+		engineConfiguration->flexSensorInverted = (int)value;
+		return 1;
+	}
 		case -723870257:
 	{
 		engineConfiguration->useAuxSpeedForSlipRatio = (int)value;
@@ -3582,6 +3607,16 @@ bool setConfigValueByName(const char *name, float value) {
 		case -195378748:
 	{
 		engineConfiguration->useVssAsSecondWheelSpeed = (int)value;
+		return 1;
+	}
+		case -722238358:
+	{
+		engineConfiguration->is_enabled_spi_5 = (int)value;
+		return 1;
+	}
+		case -722238357:
+	{
+		engineConfiguration->is_enabled_spi_6 = (int)value;
 		return 1;
 	}
 		case 671504531:
@@ -4712,6 +4747,11 @@ bool setConfigValueByName(const char *name, float value) {
 		case -1644887108:
 	{
 		engineConfiguration->auxSpeed1Multiplier = value;
+		return 1;
+	}
+		case -4616606:
+	{
+		engineConfiguration->brakeMeanEffectivePressureDifferential = value;
 		return 1;
 	}
 	}

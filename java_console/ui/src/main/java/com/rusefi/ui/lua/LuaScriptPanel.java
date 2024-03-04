@@ -1,5 +1,6 @@
 package com.rusefi.ui.lua;
 
+import com.devexperts.logging.Logging;
 import com.opensr5.ConfigurationImage;
 import com.rusefi.ConnectionTab;
 import com.rusefi.binaryprotocol.BinaryProtocol;
@@ -25,9 +26,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
+import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.ui.util.UiUtils.trueLayout;
 
 public class LuaScriptPanel {
+    private static final Logging log = getLogging(LuaScriptPanel.class);
+
     private static final String SCRIPT_FOLDER_CONFIG_KEY = "SCRIPT_FOLDER";
     private final UIContext context;
     private final Node config;
@@ -158,20 +162,31 @@ public class LuaScriptPanel {
         System.out.println("Reading " + fullFileName);
 
         try {
-            String discContent = Files.readString(new File(fullFileName).toPath());
+            File file = new File(fullFileName);
+            log.info("Reloading " + file.getAbsolutePath());
+            String discContent = Files.readString(file.toPath());
 
             String newLua = LuaIncludeSyntax.reloadScript(discContent, name -> {
                 String includeFullName = getWorkingFolder() + File.separator + name;
+                File includeFile = new File(includeFullName);
+                log.info("Reading " + includeFile.getAbsolutePath());
                 try {
-                    return Files.readString(new File(includeFullName).toPath());
+                    String string = Files.readString(includeFile.toPath());
+                    log.info("Got " + string.length() + " bytes");
+                    return string;
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    log.error("ERROR ", e);
+                    return "ERROR reading " + name + ": " + e.getMessage();
                 }
             });
 
-            setText(newLua);
-            // and send to ECU (without burn!)
-            writeScriptToEcu();
+            if (newLua.length() >= Fields.LUA_SCRIPT_SIZE) {
+                setText(newLua.length() + " bytes would not fit sorry current limit " + Fields.LUA_SCRIPT_SIZE);
+            } else {
+                setText(newLua);
+                // and send to ECU (without burn!)
+                writeScriptToEcu();
+            }
         } catch (IOException e) {
             System.err.println("Error " + e);
         }

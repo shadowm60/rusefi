@@ -114,7 +114,7 @@ void pinDiag2string(char *buffer, size_t size, brain_pin_diag_e pin_diag) {
 	/* use autogeneraged helpers here? */
 	if (pin_diag == PIN_OK) {
 		chsnprintf(buffer, size, "Ok");
-	} else if (pin_diag != PIN_INVALID) {
+	} else if (pin_diag != PIN_UNKNOWN) {
 		chsnprintf(buffer, size, "%s%s%s%s%s%s",
 			pin_diag & PIN_DRIVER_OFF ? "driver_off " : "",
 			pin_diag & PIN_OPEN ? "open_load " : "",
@@ -184,14 +184,6 @@ static void reportPins() {
 	#endif
 
 	efiPrintf("Total pins used: %d", totalPinsUsed);
-}
-
-void printSpiConfig(const char *msg, spi_device_e device) {
-#if HAL_USE_SPI
-	efiPrintf("%s %s mosi=%s", msg, getSpi_device_e(device), hwPortname(getMosiPin(device)));
-	efiPrintf("%s %s miso=%s", msg, getSpi_device_e(device), hwPortname(getMisoPin(device)));
-	efiPrintf("%s %s sck=%s",  msg, getSpi_device_e(device), hwPortname(getSckPin(device)));
-#endif // HAL_USE_SPI
 }
 
 __attribute__((weak)) const char * getBoardSpecificPinName(brain_pin_e /*brainPin*/) {

@@ -2,10 +2,15 @@
 
 #include "can_filter.h"
 
-
 #if EFI_CAN_SUPPORT
 
 #include "rusefi_lua.h"
+
+extern "C" {
+	#include "lapi.h"
+	#include "ltable.h"
+	#include "lgc.h"
+}
 
 // Stores information about one received CAN frame: which bus, plus the actual frame
 struct CanFrameData {
@@ -14,12 +19,12 @@ struct CanFrameData {
 	CANRxFrame Frame;
 };
 
-constexpr size_t canFrameCount = 32;
+static constexpr size_t canFrameCount = 32;
 static CanFrameData canFrames[canFrameCount];
 // CAN frame buffers that are not in use
-chibios_rt::Mailbox<CanFrameData*, canFrameCount> freeBuffers;
+static chibios_rt::Mailbox<CanFrameData*, canFrameCount> freeBuffers;
 // CAN frame buffers that are waiting to be processed by the lua thread
-chibios_rt::Mailbox<CanFrameData*, canFrameCount> filledBuffers;
+static chibios_rt::Mailbox<CanFrameData*, canFrameCount> filledBuffers;
 
 void processLuaCan(const size_t busIndex, const CANRxFrame& frame) {
 	auto filter = getFilterForId(busIndex, CAN_ID(frame));
@@ -56,7 +61,24 @@ void processLuaCan(const size_t busIndex, const CANRxFrame& frame) {
 	}
 }
 
+// From lapi.c:756, modified slightly
+static void lua_createtable_noGC(lua_State *L, int narray) {
+	Table *t;
+	lua_lock(L);
+	t = luaH_new(L);
+	sethvalue2s(L, L->top, t);
+	api_incr_top(L);
+	luaH_resize(L, t, narray, 0);
+
+	// This line is commented out - no need to do a GC every time in
+	// this hot path when we'll do it shortly and have plenty of memory available.
+	// luaC_checkGC(L);
+
+	lua_unlock(L);
+}
+
 static void handleCanFrame(LuaHandle& ls, CanFrameData* data) {
+	ScopePerf perf(PE::LuaOneCanRxCallback);
 	if (data->Callback == NO_CALLBACK) {
 		// No callback, use catch-all function
 		lua_getglobal(ls, "onCanRx");
@@ -75,12 +97,17 @@ static void handleCanFrame(LuaHandle& ls, CanFrameData* data) {
 	auto dlc = data->Frame.DLC;
 
 	// Push bus, ID and DLC
-	lua_pushinteger(ls, data->BusIndex);	// TODO: support multiple busses!
+	lua_pushinteger(ls, data->BusIndex);
 	lua_pushinteger(ls, CAN_ID(data->Frame));
 	lua_pushinteger(ls, dlc);
 
-	// Build table for data
-	lua_newtable(ls);
+  if (engineConfiguration->luaCanRxWorkaround) {
+    // todo: https://github.com/rusefi/rusefi/issues/6041
+    lua_getglobal(ls, "global_can_data");
+  } else {
+  	// Build table for data, custom implementation without explicit GC but still garbage
+	  lua_createtable_noGC(ls, dlc);
+	}
 	for (size_t i = 0; i < dlc; i++) {
 		lua_pushinteger(ls, data->Frame.data8[i]);
 
@@ -101,7 +128,8 @@ static void handleCanFrame(LuaHandle& ls, CanFrameData* data) {
 	lua_settop(ls, 0);
 }
 
-bool doOneLuaCanRx(LuaHandle& ls) {
+static bool doOneLuaCanRx(LuaHandle& ls) {
+	ScopePerf perf(PE::LuaOneCanRxFunction);
 	CanFrameData* data;
 
 	msg_t msg = filledBuffers.fetch(&data, TIME_IMMEDIATE);
@@ -128,9 +156,14 @@ bool doOneLuaCanRx(LuaHandle& ls) {
 	return true;
 }
 
-void doLuaCanRx(LuaHandle& ls) {
+int doLuaCanRx(LuaHandle& ls) {
+	ScopePerf perf(PE::LuaAllCanRxFunction);
+  int counter = 0;
 	// While it processed a frame, continue checking
-	while (doOneLuaCanRx(ls)) ;
+	while (doOneLuaCanRx(ls)) {
+	  counter++;
+	}
+	return counter;
 }
 
 void initLuaCanRx() {

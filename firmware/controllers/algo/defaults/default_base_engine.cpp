@@ -18,6 +18,7 @@ static void setDefaultAlternatorParameters() {
 #endif // EFI_ALTERNATOR_CONTROL
 
 void setGDIFueling() {
+  setGdiWallWetting();
 	// Use high pressure sensor
 	engineConfiguration->injectorPressureType = IPT_High;
 	// Automatic compensation of injector flow based on rail pressure
@@ -46,7 +47,7 @@ static void setDefaultHPFP() {
 #endif
 
 // todo: would be nice for unit tests to be happy about these defaults
-#if EFI_PROD_CODE
+#if EFI_PROD_CODE || EFI_SIMULATOR
 	engineConfiguration->hpfpPumpVolume = 0.290;
 #endif
 	engineConfiguration->hpfpMinAngle = 10;
@@ -118,6 +119,9 @@ void setDefaultBaseEngine() {
 	engineConfiguration->alsMinTimeBetween = 5;
 	engineConfiguration->alsEtbPosition = 30;
 	engineConfiguration->ALSMaxTPS = 5;
+
+    engineConfiguration->knockRetardAggression = 20;
+    engineConfiguration->knockRetardReapplyRate = 3;
 
 	// Trigger
 	engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL_60_2;

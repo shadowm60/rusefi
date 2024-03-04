@@ -1,4 +1,2 @@
-#!/bin/bash
-
-cd ..
-bash ../common_make.sh hellen/hellen154hyundai ARCH_STM32F7
+#!/usr/bin/env bash
+cd ../../../.. && bash bin/compile.sh config/boards/hellen/hellen154hyundai/meta-info-hellen154hyundai_f7.env

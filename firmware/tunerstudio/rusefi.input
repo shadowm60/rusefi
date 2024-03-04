@@ -31,6 +31,9 @@ enable2ndByteCanID = false
 	; setting group defined in the settingGroups.xml of the TunerStudio config
 	; folder. If is is an undefined referenceName, it will be added.
 	; keyword	=  referenceName,  DisplayName
+  settingGroup = connectivityProfile, "Protocol Profile"
+    settingOption = CONN_SLOW, "Slower / Wireless"
+    settingOption = CONN_FAST, "High Speed / USB"
 
 [MegaTune]
  ; https://rusefi.com/forum/viewtopic.php?p=36201#p36201
@@ -48,10 +51,13 @@ enable2ndByteCanID = false
 	; Optimize comms for fast rusEFI ECUs
 	noCommReadDelay = true;
 	defaultRuntimeRecordPerSec = 100;
+#if CONN_SLOW
+#else
 	maxUnusedRuntimeRange = 1000;
+#endif
 
 	; Set default IP/port to our IP/port
-	defaultIpAddress = 192.168.10.1;
+	defaultIpAddress = localhost
 	defaultIpPort = 29000;
 
 [Constants]
@@ -185,9 +191,13 @@ enable2ndByteCanID = false
 	ochBlockSize	= @@TS_TOTAL_OUTPUT_SIZE@@
 
 ; 11.2.3 Full Optimized – High Speed
-    scatteredOchGetCommand = @@TS_GET_SCATTERED_GET_COMMAND_char@@
+	scatteredOchGetCommand = @@TS_GET_SCATTERED_GET_COMMAND_char@@
 	scatteredOffsetArray = highSpeedOffsets
+#if CONN_SLOW
+	scatteredGetEnabled = { 1 }
+#else
 	scatteredGetEnabled = { 0 }
+#endif
 
 ;
 ; see TunerStudioOutputChannels struct
@@ -242,7 +252,7 @@ enable2ndByteCanID = false
 ; TpsState
 	etbCutCodeList = bits, U08, [0:7], "None", "engine stopped", "TPS error", "PPS error", "TPS noise", "PID noise", "Lua", "Manual", "N/A", "Redundancy", "PPS noise"
 
-	outputDiagErrorList = bits, U08, [0:3], "Not used", "No error", "Open Load", "Short to Gnd", "Short to Battery", "Overload", "Driver Overtemp", "Driver disabled", "Invalid"
+	outputDiagErrorList = bits, U08, [0:3], "Not used", "No error", "Open Load", "Short to Gnd", "Short to Battery", "Overload", "Driver Overtemp", "Driver disabled", "Unknown"
 
 [ConstantsExtensions]
 	; defaultValue is used to provide TunerStudio with a value to use in the case of
@@ -1480,6 +1490,7 @@ gaugeCategory = Sensors - Extra 2
 	rpmAccelerationGa = rpmAcceleration,	"rpm delta",		"RPM/s",		-2000,		2000,		-2000,		2000,		-2000,	2000,	0,	0
 	wastegatePosGauge = wastegatePositionSensor, @@GAUGE_NAME_WG_POSITION@@,  "%",		0,	100,		0,		0,	100,	100,	1,	1
 	auxSpeed1Gauge = auxSpeed1, "Aux Freq Input1", "hz", 0, 30000, 0, 0, 30000, 30000, 0, 0
+	auxSpeed2Gauge = auxSpeed2, "Aux Freq Input2", "hz", 0, 30000, 0, 0, 30000, 30000, 0, 0
 
 gaugeCategory = VVT
 	vvtPositionB1IGauge = vvtPositionB1I, @@GAUGE_NAME_VVT_B1I@@, "deg", -60, 60, -60, -60, 60, 60, 1, 1
@@ -1585,6 +1596,7 @@ gaugeCategory = Transmission
 	ISSGauge = ISSValue, @@GAUGE_NAME_ISS@@, "RPM", 0, {rpmHardLimit + 2000}, 200, {cranking_rpm}, {rpmHardLimit - 500}, {rpmHardLimit}, 0, 0
 	tcRatioGauge = tcRatio, @@GAUGE_NAME_TC_RATIO@@, "",	0,	100,	0,	0,	100,  100,	4,	4
 	shiftTimeGauge = lastShiftTime, "Last Shift Time", "S", 0, 2, 0, 0, 2, 2, 4, 4
+	idealEngineTorqueGauge = idealEngineTorque, "idealEngineTorque", "",	0,	100,	0,	0,	100,  100,	4,	4
 
 gaugeCategory = Knock
 	knock1Gauge = m_knockCyl1, "Knock Cyl 1", "dBv", -60, 10, -60, -60, 10, 10, 0, 0
@@ -1723,7 +1735,7 @@ gaugeCategory = GPPWM Outputs
 ; looks like TS would append four system indicators below: Data Logging, ???, Not Connected, Protocol Error
 
 [KeyActions]
-	showPanel = spi,  spiFunction
+	showPanel = spi,  spiBuses
 	showPanel = con,  connection
 
 ;
@@ -1786,6 +1798,7 @@ menuDialog = main
 
 		# Air mass model
 		subMenu = veTableDialog,			"VE", 0, {isInjectionEnabled == 1}
+    subMenu = veTableMap,    "VE Table", 0, {isInjectionEnabled}
 
 		groupMenu = "VE blend tables"
 		groupChildMenu = veBlend1Cfg,		"VE blend 1 bias", 0, {isInjectionEnabled}
@@ -1832,6 +1845,7 @@ menuDialog = main
 		subMenu = std_separator
 
 		subMenu = ignitionTableTbl,			"Ignition advance", 0, {isIgnitionEnabled}
+		subMenu = ignitionTableMap,			"Ignition advance", 0, {isIgnitionEnabled}
 		subMenu = cltTimingCorrCurve,			"Ign CLT correction", 0, {isIgnitionEnabled == 1}
 		subMenu = ignitionIatCorrTableTbl,	"Ign IAT correction", 0, {isIgnitionEnabled == 1}
 		subMenu = std_separator
@@ -1931,10 +1945,10 @@ menuDialog = main
 		subMenu = pedalToTpsTbl,			"ETB pedal target" @@if_ts_show_etb
 		subMenu = throttle2TrimTbl,			"ETB #2 Trim", { tps2_1AdcChannel != @@ADC_CHANNEL_NONE@@ } @@if_ts_show_etb
 
-		subMenu = std_separator
-		subMenu = vvtPidDialog,				"VVT outputs and PID", { vvtMode1 != @@vvt_mode_e_VVT_INACTIVE@@ }
-		subMenu = vvtTable1Tbl,				"VVT intake target",  { vvtMode1 != @@vvt_mode_e_VVT_INACTIVE@@ && vvtPins1 != 0 }
-		subMenu = vvtTable2Tbl,				"VVT exhaust target", { vvtMode2 != @@vvt_mode_e_VVT_INACTIVE@@ && vvtPins2 != 0 }
+		subMenu = std_separator@@if_ts_show_vvt_output
+		subMenu = vvtPidDialog,				"VVT outputs and PID", { vvtMode1 != @@vvt_mode_e_VVT_INACTIVE@@ }@@if_ts_show_vvt_output
+		subMenu = vvtTable1Tbl,				"VVT intake target",  { vvtMode1 != @@vvt_mode_e_VVT_INACTIVE@@ && vvtPins1 != 0 }@@if_ts_show_vvt_output
+		subMenu = vvtTable2Tbl,				"VVT exhaust target", { vvtMode2 != @@vvt_mode_e_VVT_INACTIVE@@ && vvtPins2 != 0 }@@if_ts_show_vvt_output
 
 		subMenu = std_separator
 		subMenu = auxInputsDialog,			"Lua Analog Inputs"
@@ -2024,7 +2038,8 @@ menuDialog = main
 		subMenu = engineTypeDialog,			"Popular vehicles"
 		subMenu = std_separator
 
-		subMenu = spiFunction,				"SPI"@@if_ts_show_spi
+		subMenu = spiBuses,						"SPI Buses"@@if_ts_show_spi
+		subMenu = spiDevices,					"SPI Devices"@@if_ts_show_spi
 		subMenu = monitoringSettings,		"rusEFI console"
 		subMenu = std_separator
 
@@ -2243,14 +2258,18 @@ cmd_set_engine_type_Proteus_Miata_TCU				= "@@TS_IO_TEST_COMMAND_char@@@@ts_comm
 cmd_set_engine_type_PROTEUS_LUA_DEMO				= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_PROTEUS_LUA_DEMO_16_hex@@"@@if_show_Proteus_presets
 cmd_set_engine_type_HARLEY					        = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_HARLEY_16_hex@@"@@if_show_Proteus_presets
 cmd_set_engine_type_PROTEUS_NISSAN_VQ35				= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_PROTEUS_NISSAN_VQ35_16_hex@@"@@if_show_Proteus_presets
-cmd_set_engine_type_PROTEUS_SBC	        			= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_PROTEUS_SBC_16_hex@@"@@if_show_Proteus_presets
 cmd_set_engine_type_PROTEUS_M111    				= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_PROTEUS_M111_16_hex@@"@@if_show_Proteus_presets
+
+cmd_set_engine_type_GM_SBC	        			= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_GM_SBC_16_hex@@"@@if_show_Proteus_presets
+cmd_set_engine_type_GM_SBC       			    = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_GM_SBC_16_hex@@"@@if_show_8chan_presets
+cmd_set_engine_type_GM_SBC       			    = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_GM_SBC_16_hex@@"@@if_show_uaefi_presets
+cmd_set_engine_type_TOYOTA_2JZ_GTE_VVTi   = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_TOYOTA_2JZ_GTE_VVTi_16_hex@@"@@if_show_uaefi_presets
+
 
 cmd_set_engine_type_HYUNDAI_PB				        = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_HYUNDAI_PB_16_hex@@"@@if_show_Proteus_presets
 cmd_set_engine_type_HYUNDAI_PB				        = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_HYUNDAI_PB_16_hex@@"@@if_show_4chan_presets
 cmd_set_engine_type_HYUNDAI_PB				        = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_HYUNDAI_PB_16_hex@@"@@if_show_8chan_presets
 
-cmd_set_engine_type_ALPHAX_8CHAN_SBC       			= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_ALPHAX_8CHAN_SBC_16_hex@@"@@if_show_8chan_presets
 cmd_set_engine_type_SMALL_CB_HONDA_BCM              = "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_SET_ENGINE_TYPE_16_hex@@@@engine_type_e_HELLEN_HONDA_BCM_16_hex@@"@@if_show_small_can_board_presets
 
 
@@ -2363,7 +2382,6 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		panel = ignitionOutputs, { uiMode == @@UiMode_FULL@@ || uiMode == @@UiMode_INSTALLATION@@ }
 
 	dialog = baseEngineConfig, "Engine Configuration"
-;		field = "Engine preset",						engineType
 		field = "Number of cylinders",					cylindersCount
 		field = "Displacement",						displacement
 		field = "Firing order",							firingOrder
@@ -2549,18 +2567,18 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		commandButton = "Abort test", cmd_test_cancel
 
 	dialog = testInjectors, "Injector Test"
-		commandButton = "Injector #1", cmd_test_inj1
-		commandButton = "Injector #2", cmd_test_inj2, { cylindersCount >= 2 }
-		commandButton = "Injector #3", cmd_test_inj3, { cylindersCount >= 3 }
-		commandButton = "Injector #4", cmd_test_inj4, { cylindersCount >= 4 }
-		commandButton = "Injector #5", cmd_test_inj5, { cylindersCount >= 5 }
-		commandButton = "Injector #6", cmd_test_inj6, { cylindersCount >= 6 }
-		commandButton = "Injector #7", cmd_test_inj7, { cylindersCount >= 7 }
-		commandButton = "Injector #8", cmd_test_inj8, { cylindersCount >= 8 }
-		commandButton = "Injector #9", cmd_test_inj9, { cylindersCount >= 9 }
-		commandButton = "Injector #10", cmd_test_inj10, { cylindersCount >= 10 }
-		commandButton = "Injector #11", cmd_test_inj11, { cylindersCount >= 11 }
-		commandButton = "Injector #12", cmd_test_inj12, { cylindersCount >= 12 }
+		commandButton = @@INJECTOR_1_NAME@@, cmd_test_inj1
+		commandButton = @@INJECTOR_2_NAME@@, cmd_test_inj2, { cylindersCount >= 2 }
+		commandButton = "Injector #3", cmd_test_inj3, { cylindersCount >= 3 }@@if_ts_show_cylinder_3
+		commandButton = "Injector #4", cmd_test_inj4, { cylindersCount >= 4 }@@if_ts_show_cylinder_4
+		commandButton = "Injector #5", cmd_test_inj5, { cylindersCount >= 5 }@@if_ts_show_cylinder_5
+		commandButton = "Injector #6", cmd_test_inj6, { cylindersCount >= 6 }@@if_ts_show_cylinder_6
+		commandButton = "Injector #7", cmd_test_inj7, { cylindersCount >= 7 }@@if_ts_show_cylinder_7
+		commandButton = "Injector #8", cmd_test_inj8, { cylindersCount >= 8 }@@if_ts_show_cylinder_8
+		commandButton = "Injector #9", cmd_test_inj9, { cylindersCount >= 9 }@@if_ts_show_cylinder_9
+		commandButton = "Injector #10", cmd_test_inj10, { cylindersCount >= 10 }@@if_ts_show_cylinder_10
+		commandButton = "Injector #11", cmd_test_inj11, { cylindersCount >= 11 }@@if_ts_show_cylinder_11
+		commandButton = "Injector #12", cmd_test_inj12, { cylindersCount >= 12 }@@if_ts_show_cylinder_12
 		commandButton = "Abort test", cmd_test_cancel
 
 	dialog = testSolenoids, "TCU Solenoid Test"
@@ -2918,7 +2936,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		panel = tpsLimits
 		panel = tpsNum1
 		panel = tpsSent1@@if_ts_show_tps_sent
-		panel = tpsNum2
+		panel = tpsNum2@@if_ts_show_tps2
 
 	dialog = pedalSensorLeft, "Accelerator pedal"
 		field = "Accelerator position sensor",			throttlePedalPositionAdcChannel
@@ -2939,8 +2957,8 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 	dialog = tpsGauges
 		gauge = rawTps1PrimaryGauge
 		gauge = rawTps1SecondaryGauge
-		gauge = rawTps2PrimaryGauge
-		gauge = rawTps2SecondaryGauge
+		gauge = rawTps2PrimaryGauge@@if_ts_show_tps2
+		gauge = rawTps2SecondaryGauge@@if_ts_show_tps2
 
 	dialog = pedalSensor, "Accelerator pedal", border
 		panel = pedalSensorLeft, West
@@ -3008,6 +3026,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "Brake Pedal",					    brakePedalPin
 		field = "Brake Pedal Mode",					brakePedalPinMode
 		field = "Flex fuel sensor",					flexSensorPin
+		field = flexSensorInverted,         flexSensorInverted
 		field = "Turbo Speed Sensor",						turboSpeedSensorInputPin
 		field = "Turbo Speed Multiplier",					turboSpeedSensorMultiplier
 		field = "Throttle inlet pressure sensor",			throttleInletPressureChannel
@@ -3153,8 +3172,17 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "SPI3 MOSI",							spi3mosiPin, {is_enabled_spi_3 == 1} @@if_ts_show_spi
 		field = "SPI3 MISO",							spi3misoPin, {is_enabled_spi_3 == 1} @@if_ts_show_spi
 		field = "SPI3 SCK",								spi3sckPin, {is_enabled_spi_3 == 1} @@if_ts_show_spi
+		field = "SPI4 MOSI",							spi4mosiPin, {is_enabled_spi_4 == 1} @@if_ts_show_spi
+		field = "SPI4 MISO",							spi4misoPin, {is_enabled_spi_4 == 1} @@if_ts_show_spi
+		field = "SPI4 SCK",								spi4sckPin, {is_enabled_spi_4 == 1} @@if_ts_show_spi
+		field = "SPI5 MOSI",							spi5mosiPin, {is_enabled_spi_5 == 1} @@if_ts_show_spi
+		field = "SPI5 MISO",							spi5misoPin, {is_enabled_spi_5 == 1} @@if_ts_show_spi
+		field = "SPI5 SCK",								spi5sckPin, {is_enabled_spi_5 == 1} @@if_ts_show_spi
+		field = "SPI6 MOSI",							spi6mosiPin, {is_enabled_spi_6 == 1} @@if_ts_show_spi
+		field = "SPI6 MISO",							spi6misoPin, {is_enabled_spi_6 == 1} @@if_ts_show_spi
+		field = "SPI6 SCK",								spi6sckPin, {is_enabled_spi_6 == 1} @@if_ts_show_spi
 		field = "hip9011CsPin",							hip9011CsPin
-		field = "Accelerometer CS pin",					accelerometerCsPin
+		field = "Accelerometer CS pin",					accelerometerCsPin@@if_ts_show_onboard_accelerometer
 		field = "Saab CDM knock",						cdmInputPin
 		field = "DRV8860 CS",							drv8860_cs
 		field = "DRV8860 CS Mode",						drv8860_csPinMode
@@ -3425,17 +3453,19 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 
 	dialog = etbHbridgeHardware, "ETB H-Bridge Hardware"
 		field = "Two-wire mode",						etb_use_two_wires
-		panel = etbHbridgeHardwareNo1, { etbFunctions1 != @@dc_function_e_DC_None@@ }
-		panel = etbHbridgeHardwareNo2, { etbFunctions2 != @@dc_function_e_DC_None@@ }
+		panel = etbHbridgeHardwareNo1
+		panel = etbHbridgeHardwareNo2
 
 	dialog = stepperHbridgeHardwareNo1, "H-Bridge Hardware No1"
 		field = "No1 Direction #1",						stepperDcIo1_directionPin1
 		field = "No1 Direction #2",						stepperDcIo1_directionPin2
+		field = "No1 Control",						  stepperDcIo1_controlPin
 		field = "No1 Disable",							stepperDcIo1_disablePin
 
 	dialog = stepperHbridgeHardwareNo2, "H-Bridge Hardware No2"
 		field = "No2 Direction #1",						stepperDcIo2_directionPin1
 		field = "No2 Direction #2",						stepperDcIo2_directionPin2
+		field = "No2 Control",						  stepperDcIo2_controlPin
 		field = "No2 Disable",							stepperDcIo2_disablePin
 
 	dialog = stepperHbridgeHardware, "Stepper H-Bridge Hardware"
@@ -3727,7 +3757,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "SPI device",							hip9011SpiDevice, {isHip9011Enabled == 1}
 		panel = knockThresholdCurve
 
-	dialog = spiFunction, "SPI settings"
+	dialog = spiBuses, "SPI buses settings"
 		field = "!ECU reboot needed to apply these settings"
 		field = "SPI1 enable",							is_enabled_spi_1
 		field = "SPI1 MOSI",							spi1mosiPin, {is_enabled_spi_1 == 1}
@@ -3754,9 +3784,24 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 		field = "SPI3sck mode",							spi3SckMode, {is_enabled_spi_3 == 1}@@if_ts_show_spi3_pins
 
 		field = "SPI4 enable",							is_enabled_spi_4
+		field = "SPI4 MOSI",							spi4mosiPin, {is_enabled_spi_4 == 1}@@if_ts_show_spi4_pins
+		field = "SPI4 MISO",							spi4misoPin, {is_enabled_spi_4 == 1}@@if_ts_show_spi4_pins
+		field = "SPI4 SCK",								spi4sckPin, {is_enabled_spi_4 == 1}@@if_ts_show_spi4_pins
 
-		field = "Accelerometer CS pin",					accelerometerCsPin
-		field = "Accelerometer SPI",          accelerometerSpiDevice
+		field = "SPI5 enable",							is_enabled_spi_5
+		field = "SPI5 MOSI",							spi5mosiPin, {is_enabled_spi_5 == 1}@@if_ts_show_spi5_pins
+		field = "SPI5 MISO",							spi5misoPin, {is_enabled_spi_5 == 1}@@if_ts_show_spi5_pins
+		field = "SPI5 SCK",								spi5sckPin, {is_enabled_spi_5 == 1}@@if_ts_show_spi5_pins
+
+		field = "SPI6 enable",							is_enabled_spi_6
+		field = "SPI6 MOSI",							spi6mosiPin, {is_enabled_spi_6 == 1}@@if_ts_show_spi6_pins
+		field = "SPI6 MISO",							spi6misoPin, {is_enabled_spi_6 == 1}@@if_ts_show_spi6_pins
+		field = "SPI6 SCK",								spi6sckPin, {is_enabled_spi_6 == 1}@@if_ts_show_spi6_pins
+
+	dialog = spiDevices, "SPI devices settings"
+		field = "Use SPI accelerometer",		useSpiImu
+		field = "Accelerometer SPI",				accelerometerSpiDevice, {useSpiImu == 1}@@if_ts_show_onboard_accelerometer
+		field = "Accelerometer CS pin",			accelerometerCsPin, {useSpiImu == 1}@@if_ts_show_onboard_accelerometer
 
 	dialog = stftPartitioning, "Region Configuration"
 		field = "Idle region RPM",						stft_maxIdleRegionRpm
@@ -3987,7 +4032,7 @@ cmd_set_engine_type_default					= "@@TS_IO_TEST_COMMAND_char@@@@ts_command_e_TS_
 	dialog = tle8888Dialog, "TLE8888", yAxis
 		field = "TLE8888 SPI",							tle8888spiDevice @@if_ts_show_spi
 		field = "TLE8888 Chip Select",					tle8888_cs @@if_ts_show_spi
-		field = "Mode",									tle8888mode
+		field = "Trigger Input Mode",									tle8888mode
 		field = "useTLE8888 cranking reset hack",		useTLE8888_cranking_hack
 		field = "useTLE8888 stepper",					useTLE8888_stepper
 		commandButton = "Reinitialize",					cmd_tle8888_init
@@ -4446,18 +4491,18 @@ dialog = tcuControls, "Transmission Settings"
 		panel = etbDialogRight, East
 
 	dialog = testSpark, "Spark"
-		commandButton = "Spark #1",  cmd_test_spk1
-		commandButton = "Spark #2",  cmd_test_spk2,  { cylindersCount >= 2 }
-		commandButton = "Spark #3",  cmd_test_spk3,  { cylindersCount >= 3 }
-		commandButton = "Spark #4",  cmd_test_spk4,  { cylindersCount >= 4 }
-		commandButton = "Spark #5",  cmd_test_spk5,  { cylindersCount >= 5 }
-		commandButton = "Spark #6",  cmd_test_spk6,  { cylindersCount >= 6 }
-		commandButton = "Spark #7",  cmd_test_spk7,  { cylindersCount >= 7 }
-		commandButton = "Spark #8",  cmd_test_spk8,  { cylindersCount >= 8 }
-		commandButton = "Spark #9",  cmd_test_spk9,  { cylindersCount >= 9 }
-		commandButton = "Spark #10", cmd_test_spk10, { cylindersCount >= 10 }
-		commandButton = "Spark #11", cmd_test_spk11, { cylindersCount >= 11 }
-		commandButton = "Spark #12", cmd_test_spk12, { cylindersCount >= 12 }
+		commandButton = @@COIL_1_NAME@@,  cmd_test_spk1
+		commandButton = @@COIL_2_NAME@@,  cmd_test_spk2,  { cylindersCount >= 2 }
+		commandButton = "Spark #3",  cmd_test_spk3,  { cylindersCount >= 3 }@@if_ts_show_cylinder_3
+		commandButton = "Spark #4",  cmd_test_spk4,  { cylindersCount >= 4 }@@if_ts_show_cylinder_4
+		commandButton = "Spark #5",  cmd_test_spk5,  { cylindersCount >= 5 }@@if_ts_show_cylinder_5
+		commandButton = "Spark #6",  cmd_test_spk6,  { cylindersCount >= 6 }@@if_ts_show_cylinder_6
+		commandButton = "Spark #7",  cmd_test_spk7,  { cylindersCount >= 7 }@@if_ts_show_cylinder_7
+		commandButton = "Spark #8",  cmd_test_spk8,  { cylindersCount >= 8 }@@if_ts_show_cylinder_8
+		commandButton = "Spark #9",  cmd_test_spk9,  { cylindersCount >= 9 }@@if_ts_show_cylinder_9
+		commandButton = "Spark #10", cmd_test_spk10, { cylindersCount >= 10 }@@if_ts_show_cylinder_10
+		commandButton = "Spark #11", cmd_test_spk11, { cylindersCount >= 11 }@@if_ts_show_cylinder_11
+		commandButton = "Spark #12", cmd_test_spk12, { cylindersCount >= 12 }@@if_ts_show_cylinder_12
 		commandButton = "Abort test", cmd_test_cancel
 
 	dialog = testMisc, "Misc"
@@ -4529,7 +4574,7 @@ dialog = tcuControls, "Transmission Settings"
 		commandButton = "Proteus M73 v12",			cmd_set_engine_type_Proteus_M73@@if_show_Proteus_presets
 		commandButton = "Proteus GDI VAG B6 test",  cmd_set_engine_type_PROTEUS_VW_B6@@if_show_Proteus_presets
 		commandButton = "Proteus GM Gen4",			cmd_set_engine_type_PROTEUS_GM_LS_4@@if_show_Proteus_presets
-		commandButton = "Proteus SBC",		        cmd_set_engine_type_PROTEUS_SBC@@if_show_Proteus_presets
+		commandButton = "Proteus SBC",		        cmd_set_engine_type_GM_SBC@@if_show_Proteus_presets
 ;		commandButton = "Proteus Miata TCU",		cmd_set_engine_type_Proteus_Miata_TCU@@if_show_Proteus_presets
 		commandButton = "Proteus Lua Demo",			cmd_set_engine_type_PROTEUS_LUA_DEMO@@if_show_Proteus_presets
 		commandButton = "Proteus Miata NB2",		cmd_set_engine_type_PROTEUS_MIATA_NB2@@if_show_Proteus_presets
@@ -4538,7 +4583,10 @@ dialog = tcuControls, "Transmission Settings"
 		commandButton = "Proteus Harley",			cmd_set_engine_type_HARLEY@@if_show_Proteus_presets
 		commandButton = "Fuel Bench",               cmd_set_engine_type_FUEL_BENCH
 
-		commandButton = "SBC",			            cmd_set_engine_type_ALPHAX_8CHAN_SBC@@if_show_8chan_presets
+		commandButton = "Small Block Chevy",		        cmd_set_engine_type_GM_SBC@@if_show_uaefi_presets
+		commandButton = "2JZ",		                      cmd_set_engine_type_TOYOTA_2JZ_GTE_VVTi@@if_show_uaefi_presets
+
+		commandButton = "SBC",			            cmd_set_engine_type_GM_SBC@@if_show_8chan_presets
 		commandButton = "Honda BCM",	            cmd_set_engine_type_SMALL_CB_HONDA_BCM@@if_show_small_can_board_presets
 
 		commandButton = "Hellen NA6",				cmd_set_engine_type_hellen_NA6@@if_show_HellenNA6_presets
@@ -4613,8 +4661,6 @@ dialog = tcuControls, "Transmission Settings"
 		field = "Launch RPM",								launchRpm,  {launchControlEnabled == 1}
 		field = "Ignition Retard Adder",				    launchTimingRpmRange,  {launchControlEnabled == 1 && enableLaunchRetard == 1}
 		field = "Hard Cut RPM Adder",						hardCutRpmRange,  {launchControlEnabled == 1}
-		;field = "Extra Fuel",							launchFuelAdded,  {launchControlEnabled == 1}
-		;field = "Boost Solenoid Duty",						launchBoostDuty,  {launchControlEnabled == 1}
 		field = "TPS Threshold",								launchTpsThreshold,  {launchControlEnabled == 1}
 		field = "Ignition Retard enable",					enableLaunchRetard,  {launchControlEnabled == 1}
 		field = "Ignition Retard",						launchTimingRetard,  {launchControlEnabled == 1 && enableLaunchRetard == 1}
@@ -4698,11 +4744,12 @@ dialog = tcuControls, "Transmission Settings"
     dialog = parkingLot2, "Experimental 2"
         field = dacOutputPins1,         dacOutputPins1
         field = dacOutputPins2,         dacOutputPins2
+        field = luaCanRxWorkaround,     luaCanRxWorkaround
         field = "Read RPM matching VSS profile",    canInputBCM
-        field = useSpiImu,              useSpiImu
         field = auxSpeed1Multiplier,    auxSpeed1Multiplier
         field = useAuxSpeedForSlipRatio, useAuxSpeedForSlipRatio
         field = useVssAsSecondWheelSpeed, useVssAsSecondWheelSpeed
+        field = brakeMeanEffectivePressureDifferential, brakeMeanEffectivePressureDifferential
 
 	dialog = mc33810Dialog, "MC33810 IGN/INJ driver"
 		field = "SPI settings"
@@ -4711,6 +4758,7 @@ dialog = tcuControls, "Transmission Settings"
 		field = "Chip configuration"
 		field = "Maximum dwell (IGN pins mode only)",		mc33810maxDwellTimer
 		field = "Disable auto recovery from OV/UV",			mc33810DisableRecoveryMode
+		field = "Disable ING mode if you have no IGBT/MOSFETs on board and no feedback routed to IC"
 		field = "GD0 output disable IGN mode",				mc33810Gpgd0Mode
 		field = "GD1 output disable IGN mode",				mc33810Gpgd1Mode
 		field = "GD2 output disable IGN mode",				mc33810Gpgd2Mode
@@ -4754,7 +4802,6 @@ dialog = tcuControls, "Transmission Settings"
 		field = "#System hacks"
 		field = "vvtBooleanForVerySpecialCases",		vvtBooleanForVerySpecialCases
 		field = watchOutForLinearTime,			        watchOutForLinearTime
-		field = "Global fuel correction",				globalFuelCorrection
 		field = "TS over CAN debug",					verboseIsoTp
 		field = "MAP Averaging Logic @",				mapAveragingSchedulingAtIndex
 		field = "showHumanReadableWarning (affects Burn)",	showHumanReadableWarning

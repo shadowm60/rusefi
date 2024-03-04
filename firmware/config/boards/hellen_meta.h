@@ -17,7 +17,7 @@ void setHellenMegaEnPin();
 void setHellenEnPin(Gpio pin);
 void setHellen64MegaEnPin();
 void hellenBoardStandBy();
-void configureHellenMegaAccCS2Pin();
+void hellenMegaAccelerometerPreInitCS2Pin();
 void configureHellenCanTerminator();
 
 void setHellenCan();
@@ -43,7 +43,8 @@ void detectHellenBoardType();
 
 #define H144_USB1ID Gpio::A10
 
-#define H176_LED1_RED Gpio::H8
+#define H176_MCU_NOT_MEGA_LED1_RED Gpio::H8
+#define H176_MCU_MEGA_LED1_RED Gpio::G0
 
 #define H144_LS_1 G7
 #define H144_LS_2 G8
@@ -80,12 +81,12 @@ void detectHellenBoardType();
 
 
 // also IO1/IO5 on rev 0.6
-#define H144_GP1 Gpio::D4
+#define H144_GP_IO1 D4
 // also IO2/IO5 on rev 0.6
-#define H144_GP2 Gpio::D7
-#define H144_GP3 G10
-#define H144_GP4 Gpio::G9
-#define H144_GP5 Gpio::G15
+#define H144_GP_IO2 D7
+#define H144_GP_IO3 G10
+#define H144_GP_IO4 G9
+#define H144_GP_IO5 G15
 #define H144_GP6 Gpio::D8
 #define H144_GP7 Gpio::F15
 #define H144_GP8 Gpio::E10

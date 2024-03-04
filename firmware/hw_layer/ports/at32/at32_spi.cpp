@@ -9,7 +9,8 @@
 #include "pch.h"
 
 #if HAL_USE_SPI
-bool isSpiInitialized[5] = { false, false, false, false, false };
+/* zero index is SPI_NONE */
+bool isSpiInitialized[SPI_TOTAL_COUNT + 1] = { true, false, false, false, false, false, false };
 
 struct af_pairs {
 	brain_pin_e pin;
@@ -145,49 +146,6 @@ static int getSpiMosiAf(SPIDriver *driver, brain_pin_e pin)
 		return -1;
 
 	return findAfForPin(af->mosi, pin);
-}
-
-/* these are common adapters for engineConfiguration access, move to some common file? */
-brain_pin_e getMisoPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1misoPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2misoPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3misoPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
-}
-
-brain_pin_e getMosiPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1mosiPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2mosiPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3mosiPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
-}
-
-brain_pin_e getSckPin(spi_device_e device) {
-	switch(device) {
-	case SPI_DEVICE_1:
-		return engineConfiguration->spi1sckPin;
-	case SPI_DEVICE_2:
-		return engineConfiguration->spi2sckPin;
-	case SPI_DEVICE_3:
-		return engineConfiguration->spi3sckPin;
-	default:
-		break;
-	}
-	return Gpio::Unassigned;
 }
 
 void turnOnSpi(spi_device_e device) {

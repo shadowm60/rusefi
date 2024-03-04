@@ -35,22 +35,20 @@ jobs:
     - name: Install required software (macos)
       if: ${{ matrix.os == 'macos-latest' }}
       run: |
-        brew install mtools zip dosfstools
+        brew install mtools zip dosfstools flock coreutils
 
     - name: Print bash version
-      working-directory: .
       run: bash --version
 
     - name: Test Java Compiler
       run: javac -version
 
-    - name: Generate Configs, Enums & Live Documentation
+    - name: Generate Enums & Live Documentation
       working-directory: ./firmware/
-      run: bash gen_default_everything.sh
+      run: bash gen_live_documentation.sh
 
     - name: Print Compiler version
       # NOTE: on mac, this is actually symlink'd to clang, not gcc, but that's ok - we want to build on both
-      working-directory: .
       run: gcc -v
 
     - name: Build Tests

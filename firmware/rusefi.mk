@@ -18,7 +18,11 @@ $(error Please run 'make' again. Please make sure you have 'git' command in PATH
 endif
 
 ifeq ($(PROJECT_BOARD),)
+ifneq ($(SHORT_BOARD_NAME),)
+  PROJECT_BOARD = $(SHORT_BOARD_NAME)
+else
   PROJECT_BOARD = f407-discovery
+endif
 endif
 
 BOARDS_DIR = $(PROJECT_DIR)/config/boards
@@ -26,6 +30,7 @@ BOARDS_DIR = $(PROJECT_DIR)/config/boards
 # allow passing a custom board dir, otherwise generate it based on the board name
 ifeq ($(BOARD_DIR),)
 	BOARD_DIR = $(BOARDS_DIR)/$(PROJECT_BOARD)
+	-include $(BOARD_DIR)/meta-info.env
 endif
 
 ifeq ($(PROJECT_CPU),)

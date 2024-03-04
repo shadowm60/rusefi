@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <msq xmlns="http://www.msefi.com/:msq">
     <page/>
-    <page number="0" size="22232">
+    <page number="0" size="22236">
         <constant name="engineType">"HYUNDAI_PB"</constant>
         <constant digits="0" name="startButtonSuppressOnStartUpMs" units="">0.0</constant>
         <constant digits="0" name="sensorSnifferRpmThreshold" units="RPM">2500.0</constant>
@@ -222,7 +222,7 @@
         <constant digits="0" name="boostControlSafeDutyCycle" units="%">0.0</constant>
         <constant name="mafAdcChannel">"Disabled"</constant>
         <constant digits="0" name="acrRevolutions" units="">5.0</constant>
-        <constant digits="2" name="globalFuelCorrection" units="coef">1.0</constant>
+        <constant digits="0" name="unused4bytesHere" units="">0.0</constant>
         <constant digits="3" name="adcVcc" units="volts">3.0</constant>
         <constant digits="0" name="mapCamDetectionAnglePosition" units="Deg">0.0</constant>
         <constant name="camInputs1">"PC6"</constant>
@@ -251,8 +251,8 @@
         <constant name="idle_stepperStepPin">"NONE"</constant>
         <constant name="idle_solenoidPinMode">"default"</constant>
         <constant digits="0" name="manIdlePosition" units="%">50.0</constant>
-        <constant digits="1" name="knockRetardAggression" units="%">0.0</constant>
-        <constant digits="1" name="knockRetardReapplyRate" units="deg/s">0.0</constant>
+        <constant digits="1" name="knockRetardAggression" units="%">20.0</constant>
+        <constant digits="1" name="knockRetardReapplyRate" units="deg/s">3.0</constant>
         <constant name="engineSyncCam">"Intake First Bank"</constant>
         <constant digits="0" name="vssFilterReciprocal" units="">3.0</constant>
         <constant digits="3" name="vssGearRatio" units="ratio">3.73</constant>
@@ -497,7 +497,7 @@
         <constant name="showHumanReadableWarning">"false"</constant>
         <constant name="stftIgnoreErrorMagnitude">"false"</constant>
         <constant name="vvtBooleanForVerySpecialCases">"false"</constant>
-        <constant name="enableSoftwareKnock">"false"</constant>
+        <constant name="enableSoftwareKnock">"true"</constant>
         <constant name="verboseVVTDecoding">"false"</constant>
         <constant name="invertCamVVTSignal">"Rising"</constant>
         <constant name="alphaNUseIat">"false"</constant>
@@ -544,7 +544,7 @@
         <constant name="antiLagActivationMode">"Switch Input"</constant>
         <constant digits="0" name="launchSpeedThreshold" units="Kph">30.0</constant>
         <constant digits="0" name="launchTimingRpmRange" units="RPM">500.0</constant>
-        <constant digits="0" name="launchFuelAdded" units="%">0.0</constant>
+        <constant digits="0" name="launchSparkSkipPercent" units="%">0.0</constant>
         <constant digits="0" name="launchBoostDuty" units="%">0.0</constant>
         <constant digits="0" name="hardCutRpmRange" units="RPM">500.0</constant>
         <constant digits="0" name="turbochargerFilter" units="">0.01</constant>
@@ -738,7 +738,7 @@
         <constant digits="0" name="noAccelAfterHardLimitPeriodSecs" units="sec">3.0</constant>
         <constant digits="0" name="mapAveragingSchedulingAtIndex" units="index">0.0</constant>
         <constant digits="2" name="tachPulseDuractionMs" units="">0.5</constant>
-        <constant digits="2" name="wwaeTau" units="Seconds">0.3</constant>
+        <constant digits="2" name="wwaeTau" units="Seconds">0.0</constant>
         <constant digits="4" name="alternatorControl_pFactor" units="">30.0</constant>
         <constant digits="4" name="alternatorControl_iFactor" units="">0.0</constant>
         <constant digits="4" name="alternatorControl_dFactor" units="">0.0</constant>
@@ -774,7 +774,7 @@
         <constant digits="0" name="idleRpmPid_periodMs" units="ms">0.0</constant>
         <constant digits="0" name="idleRpmPid_minValue" units="">-20.0</constant>
         <constant digits="0" name="idleRpmPid_maxValue" units="">20.0</constant>
-        <constant digits="2" name="wwaeBeta" units="Fraction">0.3</constant>
+        <constant digits="2" name="wwaeBeta" units="Fraction">0.0</constant>
         <constant name="binarySerialTxPin">"PC10"</constant>
         <constant name="binarySerialRxPin">"PC11"</constant>
         <constant name="auxValves1">"NONE"</constant>
@@ -792,8 +792,11 @@
         <constant name="mc33810Gpgd2Mode">"false"</constant>
         <constant name="mc33810Gpgd3Mode">"false"</constant>
         <constant name="enableExtendedCanBroadcast">"true"</constant>
+        <constant name="luaCanRxWorkaround">"false"</constant>
         <constant name="useAuxSpeedForSlipRatio">"false"</constant>
         <constant name="useVssAsSecondWheelSpeed">"false"</constant>
+        <constant name="is_enabled_spi_5">"false"</constant>
+        <constant name="is_enabled_spi_6">"false"</constant>
         <constant digits="0" name="afterCrankingIACtaperDuration" units="cycles">200.0</constant>
         <constant digits="0" name="iacByTpsTaper" units="percent">2.0</constant>
         <constant name="auxSerialTxPin">"NONE"</constant>
@@ -1397,7 +1400,7 @@
         <constant name="hpfpCam">"NONE"</constant>
         <constant digits="0" name="auxiliarySetting1" units="">0.0</constant>
         <constant digits="0" name="hpfpMinAngle" units="deg">10.0</constant>
-        <constant digits="3" name="hpfpPumpVolume" units="cc">0.0</constant>
+        <constant digits="3" name="hpfpPumpVolume" units="cc">0.29</constant>
         <constant digits="0" name="hpfpActivationAngle" units="deg">30.0</constant>
         <constant digits="0" name="issFilterReciprocal" units="">2.0</constant>
         <constant digits="3" name="hpfpPidP" units="%/kPa">0.01</constant>
@@ -1815,7 +1818,7 @@
         <constant digits="0" name="simulatorCamPosition3" units="">0.0</constant>
         <constant digits="0" name="simulatorCamPosition4" units="">0.0</constant>
         <constant name="ignKeyAdcChannel">"Disabled"</constant>
-        <constant digits="0" name="unusedExplicitFilling2" units="">0.0</constant>
+        <constant name="spi6MisoMode">"default"</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom1" units="ratio">0.0</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom2" units="ratio">0.0</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom3" units="ratio">0.0</constant>
@@ -1864,33 +1867,25 @@
          0.0 0.0 0.0 0.0 0.0 0.0
 </constant>
         <constant digits="0" name="auxSpeed1Multiplier" units="">1.0</constant>
-        <constant cols="1" digits="0" name="mainUnusedEnd" rows="146">
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
+        <constant digits="0" name="brakeMeanEffectivePressureDifferential" units="">0.0</constant>
+        <constant name="spi4mosiPin">"NONE"</constant>
+        <constant name="spi4misoPin">"NONE"</constant>
+        <constant name="spi4sckPin">"NONE"</constant>
+        <constant name="spi5mosiPin">"NONE"</constant>
+        <constant name="spi5misoPin">"NONE"</constant>
+        <constant name="spi5sckPin">"NONE"</constant>
+        <constant name="spi6mosiPin">"NONE"</constant>
+        <constant name="spi6misoPin">"NONE"</constant>
+        <constant name="spi6sckPin">"NONE"</constant>
+        <constant name="spi4SckMode">"default"</constant>
+        <constant name="spi4MosiMode">"default"</constant>
+        <constant name="spi4MisoMode">"default"</constant>
+        <constant name="spi5SckMode">"default"</constant>
+        <constant name="spi5MosiMode">"default"</constant>
+        <constant name="spi5MisoMode">"default"</constant>
+        <constant name="spi6SckMode">"default"</constant>
+        <constant name="spi6MosiMode">"default"</constant>
+        <constant cols="1" digits="0" name="unusedOftenChangesDuringFirmwareUpdate" rows="120">
          0.0
          0.0
          0.0
@@ -2545,12 +2540,12 @@
          0.0 0.0 0.0 0.0
 </constant>
         <constant name="luaScript">function getBitRange(data, bitIndex, bitWidth) 
-	byteIndex = bitIndex &gt;&gt; 3 
-	shift = bitIndex - byteIndex * 8 
-	value = data[1 + byteIndex] 
+	local byteIndex = bitIndex &gt;&gt; 3 
+	local shift = bitIndex - byteIndex * 8 
+	local value = data[1 + byteIndex] 
 	if (shift + bitWidth &gt; 8) then 
 		value = value + data[2 + byteIndex] * 256 	end 
-	mask = (1 &lt;&lt; bitWidth) - 1 
+	local mask = (1 &lt;&lt; bitWidth) - 1 
 	return (value &gt;&gt; shift) &amp; mask 
 end 
 function getTwoBytesLSB(data, offset, factor)		return (data[offset + 2] * 256 + data[offset + 1]) * factor 
@@ -2559,7 +2554,7 @@ hexstr = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "A", "B", "C", "D", "E", "F" } function
   local sum = seed 
   for i = 1, 7, 1 
   do 
-    b = data[i] 
+    local b = data[i] 
     sum =  sum +  (b % 16) + math.floor(b / 16)   end   return (16 - sum) % 16 end
 
 GDI4_BASE_ADDRESS = 0xBB20
@@ -3036,10 +3031,10 @@ end</constant>
          0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
          0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
          0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+         0.0 30.0 35.0 35.0 35.0 30.0 20.0 10.0
+         0.0 30.0 35.0 35.0 35.0 30.0 20.0 10.0
+         0.0 30.0 35.0 35.0 35.0 30.0 20.0 10.0
+         0.0 30.0 35.0 35.0 35.0 30.0 20.0 10.0
 </constant>
         <constant cols="1" digits="0" name="vvtTable1LoadBins" rows="8">
          20.0
@@ -3062,14 +3057,14 @@ end</constant>
          7000.0
 </constant>
         <constant cols="8" digits="0" name="vvtTable2" rows="8">
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
-         0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+         50.0 50.0 50.0 50.0 50.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 50.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 50.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 40.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 40.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 40.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 40.0 40.0 40.0 40.0
+         50.0 50.0 50.0 50.0 40.0 40.0 40.0 40.0
 </constant>
         <constant cols="1" digits="0" name="vvtTable2LoadBins" rows="8">
          20.0
@@ -3092,22 +3087,22 @@ end</constant>
          7000.0
 </constant>
         <constant cols="16" digits="1" name="ignitionTable" rows="16">
-         12.2 14.2 18.1 22.0 25.9 29.9 33.8 37.7 41.6 42.9 42.9 42.9 42.9 42.9 42.9 42.9
-         12.1 14.0 17.9 21.7 25.6 29.5 33.3 37.2 41.0 42.3 42.3 42.3 42.3 42.3 42.3 42.3
-         12.0 13.9 17.7 21.5 25.3 29.1 32.8 36.6 40.4 41.7 41.7 41.7 41.7 41.7 41.7 41.7
-         11.8 13.7 17.4 21.2 24.9 28.7 32.4 36.1 39.9 41.1 41.1 41.1 41.1 41.1 41.1 41.1
-         11.6 13.5 17.1 20.8 24.4 28.1 31.7 35.3 39.0 40.2 40.2 40.2 40.2 40.2 40.2 40.2
-         11.5 13.3 16.9 20.5 24.1 27.7 31.2 34.8 38.4 39.6 39.6 39.6 39.6 39.6 39.6 39.6
-         11.4 13.2 16.7 20.2 23.7 27.3 30.8 34.3 37.8 39.0 39.0 39.0 39.0 39.0 39.0 39.0
-         11.3 13.0 16.5 19.9 23.4 26.9 30.3 33.8 37.2 38.4 38.4 38.4 38.4 38.4 38.4 38.4
-         11.1 12.8 16.2 19.6 23.0 26.5 29.9 33.3 36.7 37.8 37.8 37.8 37.8 37.8 37.8 37.8
-         10.9 12.6 15.9 19.2 22.5 25.9 29.2 32.5 35.8 36.9 36.9 36.9 36.9 36.9 36.9 36.9
-         10.8 12.4 15.7 18.9 22.2 25.5 28.7 32.0 35.2 36.3 36.3 36.3 36.3 36.3 36.3 36.3
-         10.7 12.3 15.5 18.7 21.9 25.1 28.2 31.4 34.6 35.7 35.7 35.7 35.7 35.7 35.7 35.7
-         10.5 12.1 15.2 18.4 21.5 24.7 27.8 30.9 34.1 35.1 35.1 35.1 35.1 35.1 35.1 35.1
-         10.5 12.1 15.2 18.3 21.5 24.6 27.7 30.8 34.0 35.0 35.0 35.0 35.0 35.0 35.0 35.0
-         10.5 12.1 15.2 18.3 21.5 24.6 27.7 30.8 34.0 35.0 35.0 35.0 35.0 35.0 35.0 35.0
-         10.5 12.1 15.2 18.3 21.5 24.6 27.7 30.8 34.0 35.0 35.0 35.0 35.0 35.0 35.0 35.0
+         12.2 14.2 18.1 23.3 29.9 36.4 39.2 40.0 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0
+         12.1 14.0 17.8 22.9 29.3 35.6 39.0 39.8 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0 -10.0
+         11.8 13.7 10.0 14.9 28.6 34.8 38.7 39.5 39.5 39.5 39.5 39.5 41.0 41.0 41.0 41.0
+         11.6 13.4 12.3 17.1 28.0 33.9 38.5 39.3 39.3 39.3 39.3 39.3 40.0 40.0 40.0 40.0
+         4.4 6.2 9.7 14.4 20.3 26.1 31.2 32.0 32.0 32.0 32.0 32.0 32.0 32.0 32.0 32.0
+         0.2 1.9 5.3 9.8 11.6 15.6 19.1 20.1 20.6 20.7 20.9 21.0 21.1 21.2 21.4 21.6
+         -0.1 1.6 5.6 9.2 7.9 10.0 11.9 13.2 14.2 14.5 14.7 14.9 15.2 15.5 15.7 16.2
+         -3.9 -2.2 1.6 5.2 6.2 6.5 6.8 8.3 9.8 10.2 10.6 10.9 11.3 11.7 12.1 12.8
+         -5.9 -4.3 -0.7 2.6 3.1 3.5 3.8 5.3 6.8 7.2 7.6 7.9 8.3 8.7 9.1 9.8
+         -7.8 -6.5 -3.1 0.1 0.1 0.6 0.9 2.4 3.9 4.3 4.7 5.0 5.4 5.8 6.2 6.9
+         -9.8 -8.6 -5.5 -2.5 -3.0 -2.4 -2.1 -0.6 0.9 1.3 1.7 2.0 2.4 2.8 3.2 3.9
+         -11.8 -10.7 -7.9 -5.0 -6.1 -5.4 -5.1 -3.6 -2.1 -1.7 -1.3 -1.0 -0.6 -0.2 0.2 0.9
+         -13.8 -12.8 -10.3 -7.6 -9.1 -8.4 -8.1 -6.6 -5.1 -4.7 -4.3 -4.0 -3.6 -3.2 -2.8 -2.1
+         -15.0 -14.9 -12.7 -10.1 -12.2 -11.3 -11.0 -9.5 -8.0 -7.6 -7.2 -6.9 -6.5 -6.1 -5.7 -5.0
+         -15.0 -15.0 -15.0 -12.7 -15.0 -14.3 -14.0 -12.5 -11.0 -10.6 -10.2 -9.9 -9.5 -9.1 -8.7 -8.0
+         -15.0 -15.0 -15.0 -15.0 -15.0 -15.0 -15.0 -15.0 -14.0 -13.6 -13.2 -12.9 -12.5 -12.1 -11.7 -11.0
 </constant>
         <constant cols="1" digits="0" name="ignitionLoadBins" rows="16">
          21.0
@@ -3146,22 +3141,22 @@ end</constant>
          7000.0
 </constant>
         <constant cols="16" digits="1" name="veTable" rows="16">
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
-         80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0 80.0
+         70.3 70.3 70.4 70.5 70.6 70.6 70.3 29.9 29.8 29.9 30.4 31.4 33.0 35.1 37.7 40.9
+         70.8 71.5 72.1 72.9 73.3 72.8 72.0 31.3 31.2 31.5 32.2 33.5 35.3 37.7 40.5 43.9
+         71.7 72.9 74.0 74.9 74.9 74.0 73.0 82.3 82.1 82.4 83.2 84.5 86.3 88.7 91.6 95.0
+         75.1 77.4 78.5 78.6 77.7 76.2 75.0 84.1 84.0 84.2 85.1 86.4 88.3 90.7 93.6 97.1
+         80.4 82.1 82.3 81.5 79.9 78.2 76.9 86.4 86.2 86.5 87.4 88.7 90.6 93.0 96.0 99.5
+         85.0 85.5 85.0 83.7 82.0 80.1 78.7 88.6 88.5 88.7 89.6 91.0 92.9 95.3 98.4 101.9
+         88.5 88.2 87.3 85.8 83.9 82.0 80.6 90.9 90.7 91.0 91.9 93.2 95.2 97.7 100.7 104.3
+         86.2 85.4 84.3 82.7 80.8 78.9 77.6 93.1 93.0 93.2 94.1 95.5 97.5 100.0 103.1 106.7
+         105.6 104.6 103.4 101.7 99.8 97.8 96.4 95.4 95.2 95.5 96.4 97.8 99.8 102.3 105.5 109.1
+         113.4 112.1 110.8 109.0 106.9 104.8 103.3 102.3 102.1 102.4 103.3 104.8 106.9 109.6 112.9 116.8
+         121.4 120.0 118.6 116.6 114.4 112.2 110.6 109.5 109.3 109.6 110.6 112.2 114.4 117.3 120.8 124.9
+         127.6 126.5 125.1 123.0 120.7 118.3 116.6 115.5 115.3 115.6 116.6 118.3 120.7 123.7 127.4 127.6
+         127.6 127.6 127.6 127.6 125.7 123.3 121.5 120.4 120.1 120.5 121.5 123.3 125.7 127.6 127.6 127.6
+         127.6 127.6 127.6 127.6 127.6 127.0 125.2 124.0 123.8 124.2 125.2 127.0 127.6 127.6 127.6 127.6
+         127.6 127.6 127.6 127.6 127.6 127.6 127.6 126.5 126.3 126.7 127.6 127.6 127.6 127.6 127.6 127.6
+         127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6 127.6
 </constant>
         <constant cols="1" digits="0" name="veLoadBins" rows="16">
          10.0
@@ -3200,22 +3195,22 @@ end</constant>
          7000.0
 </constant>
         <constant cols="16" digits="2" name="lambdaTable" rows="16">
-         1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
-         1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
-         1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
-         1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
-         1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
-         0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381 0.952381
-         0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367 0.918367
-         0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959 0.897959
-         0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156 0.891156
-         0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551 0.877551
-         0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143 0.857143
-         0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735 0.836735
-         0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721 0.802721
          0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707
-         0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299 0.748299
-         0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891 0.727891
+         0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707
+         0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707
+         0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707
+         0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707 0.768707
+         0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272 0.0680272
+         1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925 1.312925
+         1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803 1.006803
+         0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565 0.911565
+         0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483 0.707483
+         0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163 0.408163
+         0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844 0.108844
+         1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741 1.353741
+         0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034 0.85034
+         0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102 0.55102
+         0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701 0.251701
 </constant>
         <constant cols="1" digits="0" name="lambdaLoadBins" rows="16">
          30.0
@@ -4648,8 +4643,8 @@ end</constant>
          7000.0
 </constant>
     </page>
-    <versionInfo firmwareInfo="20240130" nPages="1" signature="rusEFI master.2024.02.02.f407-discovery.1959391057" version="5.0"/>
-    <bibliography author="rusEFI 20240130" writeDate="date"/>
+    <versionInfo firmwareInfo="20240227" nPages="1" signature="rusEFI master.2024.03.03.f407-discovery.590483655" version="5.0"/>
+    <bibliography author="rusEFI 20240227" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>

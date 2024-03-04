@@ -40,6 +40,16 @@ Release template (copy/paste this for new release):
  - Disable radiator fans after certain vehicle speed #5875
  - LIS2DW12TR on-board Accelerometer support #4870
  - Wheel slip ratio using aux speed inputs #5897
+ - 4 cylinder daihatsu cam sensor decoder #5925
+
+### Fixed
+ - Honda CBR 600 cam decoder #5909
+ - boosted applications to log VE above 127
+ - removing confusing numeric options from enumerable drop downs #5942
+ - Subaru 6/7 improvement for cranking
+ - Improve performance with Lua CAN reception of a high volume of frames #5841
+ - odd fire timing_offset_cylinder not accounted by injection #6095
+ - odd fire first spark out of order coilIndex logic in prepareCylinderIgnitionSchedule #6094
 
 ### Removed
  - Narrow to Wideband approximation

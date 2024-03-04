@@ -1,5 +1,2 @@
-#!/bin/bash
-
-export EXTRA_PARAMS="-DDUMMY"
-
-bash ../common_make.sh s105 ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/s105/meta-info.env

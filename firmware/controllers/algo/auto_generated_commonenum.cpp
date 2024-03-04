@@ -1,6 +1,6 @@
 #include "global.h"
 #include "rusefi_enums.h"
-// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Wed Jan 17 15:32:19 UTC 2024
+// was generated automatically by rusEFI tool  from rusefi_enums.h // by enum_to_string.jar tool on Mon Feb 26 19:54:17 UTC 2024
 // see also gen_config_and_enums.bat
 
 
@@ -216,8 +216,6 @@ case PIN_DRIVER_OFF:
   return "PIN_DRIVER_OFF";
 case PIN_DRIVER_OVERTEMP:
   return "PIN_DRIVER_OVERTEMP";
-case PIN_INVALID:
-  return "PIN_INVALID";
 case PIN_OK:
   return "PIN_OK";
 case PIN_OPEN:
@@ -228,6 +226,8 @@ case PIN_SHORT_TO_BAT:
   return "PIN_SHORT_TO_BAT";
 case PIN_SHORT_TO_GND:
   return "PIN_SHORT_TO_GND";
+case PIN_UNKNOWN:
+  return "PIN_UNKNOWN";
   }
  return NULL;
 }
@@ -684,6 +684,10 @@ case SPI_DEVICE_3:
   return "SPI_DEVICE_3";
 case SPI_DEVICE_4:
   return "SPI_DEVICE_4";
+case SPI_DEVICE_5:
+  return "SPI_DEVICE_5";
+case SPI_DEVICE_6:
+  return "SPI_DEVICE_6";
 case SPI_NONE:
   return "SPI_NONE";
   }
@@ -784,6 +788,8 @@ case VVT_FORD_COYOTE:
   return "VVT_FORD_COYOTE";
 case VVT_FORD_ST170:
   return "VVT_FORD_ST170";
+case VVT_HONDA_CBR_600:
+  return "VVT_HONDA_CBR_600";
 case VVT_HONDA_K_EXHAUST:
   return "VVT_HONDA_K_EXHAUST";
 case VVT_HONDA_K_INTAKE:

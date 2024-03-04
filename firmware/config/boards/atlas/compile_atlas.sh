@@ -1,3 +1,2 @@
-#!/bin/bash
-
-bash ../common_make.sh atlas ARCH_STM32H7
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/atlas/meta-info.env

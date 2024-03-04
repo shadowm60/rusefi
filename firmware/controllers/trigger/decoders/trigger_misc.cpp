@@ -100,26 +100,30 @@ void configureFordST170(TriggerWaveform * s) {
 	s->addEventAngle(8 * total, TriggerValue::FALL);
 }
 
-void configureDaihatsu4(TriggerWaveform * s) {
+static void daihatsu(TriggerWaveform * s, int count) {
 	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::RiseOnly);
+	s->tdcPosition = 720 - 30;
 
 	int width = 10;
-
-	s->setTriggerSynchronizationGap(0.125);
 
 	s->addEventAngle(30 - width, TriggerValue::RISE);
 	s->addEventAngle(30, TriggerValue::FALL);
 
+	for (int i = 1;i<=count;i++) {
+		s->addEventAngle(s->getCycleDuration() / count * i - width, TriggerValue::RISE);
+		s->addEventAngle(s->getCycleDuration() / count * i, TriggerValue::FALL);
+	}
+}
 
-	s->addEventAngle(s->getCycleDuration() / 3 - width, TriggerValue::RISE);
-	s->addEventAngle(s->getCycleDuration() / 3, TriggerValue::FALL);
+void configureDaihatsu3cyl(TriggerWaveform * s) {
+	daihatsu(s, 3);
+	s->setTriggerSynchronizationGap(0.125);
+}
 
-	s->addEventAngle(s->getCycleDuration() / 3 * 2 - width, TriggerValue::RISE);
-	s->addEventAngle(s->getCycleDuration() / 3 * 2, TriggerValue::FALL);
 
-	s->addEventAngle(s->getCycleDuration() - width, TriggerValue::RISE);
-	s->addEventAngle(s->getCycleDuration(), TriggerValue::FALL);
-
+void configureDaihatsu4cyl(TriggerWaveform * s) {
+	daihatsu(s, 4);
+	s->setTriggerSynchronizationGap(0.17);
 }
 
 void configureBarra3plus1cam(TriggerWaveform *s) {
@@ -173,16 +177,16 @@ void configureBenelli(TriggerWaveform *s) {
 }
 
 void configure60degSingleTooth(TriggerWaveform *s) {
-	/** @todo 
+	/** @todo
 	 * My approach was to utilize ::Both especially for single
-	 * tooth and manual kikstarter, to be ready on both sides of blind. 
-	 * But unfortuneally, my experiments show me the Trigger can't 
-	 * become syncronized by 'last' and folowed 'first' events only. 
-	 * Also I observe phase-aligment mehanism is trying to consume a 
+	 * tooth and manual kikstarter, to be ready on both sides of blind.
+	 * But unfortuneally, my experiments show me the Trigger can't
+	 * become syncronized by 'last' and folowed 'first' events only.
+	 * Also I observe phase-aligment mehanism is trying to consume a
 	 * longer side of trigger as latest before TDC.
-	 * I wish to setup SyncEdge::Both for my TT_60DEG_TOOTH after 
-	 * this case of scenario become work well. For now, ::Rise work 
-	 * well for my 60 degree trigger and both edges phase sync work 
+	 * I wish to setup SyncEdge::Both for my TT_60DEG_TOOTH after
+	 * this case of scenario become work well. For now, ::Rise work
+	 * well for my 60 degree trigger and both edges phase sync work
 	 * as mush as expected for my engine startup. */
 
 	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::Rise);
@@ -191,7 +195,7 @@ void configure60degSingleTooth(TriggerWaveform *s) {
 	s->addEvent360(360, TriggerValue::FALL);
 
 	s->tdcPosition = 60;
-	
+
 	s->isSynchronizationNeeded = false;
 	s->useOnlyPrimaryForSync = true;
 }

@@ -8,7 +8,6 @@ import com.rusefi.io.CommandQueue;
 import com.rusefi.io.LinkManager;
 import com.rusefi.io.serial.BaudRateHolder;
 import com.rusefi.maintenance.StLinkFlasher;
-import com.rusefi.maintenance.VersionChecker;
 import com.rusefi.ui.*;
 import com.rusefi.ui.console.MainFrame;
 import com.rusefi.ui.console.TabbedPanel;
@@ -146,7 +145,10 @@ public class ConsoleUI {
 
         MessagesCentral.getInstance().postMessage(ConsoleUI.class, "COMPOSITE_OFF_RPM=" + BinaryProtocolLogger.COMPOSITE_OFF_RPM);
 
+        /*
+        https://github.com/rusefi/rusefi/issues/5956
         tabbedPane.addTab("rusEFI Online", new OnlineTab(uiContext).getContent());
+*/
         tabbedPane.addTab("Connection", new ConnectionTab(uiContext).getContent());
 
         if (false) {
@@ -192,7 +194,7 @@ public class ConsoleUI {
         getConfig().load();
         FileLog.suspendLogging = getConfig().getRoot().getBoolProperty(GaugesPanel.DISABLE_LOGS);
         Thread.setDefaultUncaughtExceptionHandler(new DefaultExceptionHandler());
-        VersionChecker.start();
+// not very useful?        VersionChecker.start();
         SwingUtilities.invokeAndWait(() -> awtCode(args));
     }
 
@@ -234,7 +236,7 @@ public class ConsoleUI {
             } else {
                 for (String p : LinkManager.getCommPorts())
                     MessagesCentral.getInstance().postMessage(Launcher.class, "Available port: " + p);
-                new StartupFrame().chooseSerialPort();
+                new StartupFrame().showUi();
             }
 
         } catch (Throwable e) {

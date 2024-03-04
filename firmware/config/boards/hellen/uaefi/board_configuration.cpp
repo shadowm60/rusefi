@@ -54,13 +54,18 @@ void setBoardConfigOverrides() {
 	setHellenVbatt();
 
 	setHellenSdCardSpi1();
-	configureHellenMegaAccCS2Pin();
+	hellenMegaAccelerometerPreInitCS2Pin();
 
   engineConfiguration->vrThreshold[0].pin = Gpio::MM100_OUT_PWM6;
 
 	setHellenCan();
 
 	setDefaultHellenAtPullUps();
+
+}
+
+static void setDefaultETBPins() {
+  // users would want to override those if using H-bridges for stepper idle control
 
     // PWM pin
     engineConfiguration->etbIo[0].controlPin = Gpio::MM100_OUT_PWM3;
@@ -85,6 +90,7 @@ void setBoardConfigOverrides() {
 void setBoardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
+	setDefaultETBPins();
 
   setHellenMMbaro();
 
@@ -118,7 +124,7 @@ void setBoardDefaultConfiguration() {
 	setCommonNTCSensor(&engineConfiguration->iat, HELLEN_DEFAULT_AT_PULLUP);
 
     setTPS1Calibration(100, 650);
-	//hellenWbo();
+	hellenWbo();
 }
 
 static Gpio OUTPUTS[] = {

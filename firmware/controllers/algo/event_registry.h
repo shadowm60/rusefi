@@ -21,7 +21,10 @@ struct AngleBasedEvent {
 	 */
 	AngleBasedEvent *nextToothEvent = nullptr;
 
-	angle_t enginePhase;
+  // angular position of this event
+  angle_t getAngle() const {
+    return enginePhase;
+  }
 
 	void setAngle(angle_t p_enginePhase) {
     	enginePhase = p_enginePhase;
@@ -29,6 +32,8 @@ struct AngleBasedEvent {
 
 	bool shouldSchedule(float currentPhase, float nextPhase) const;
 	float getAngleFromNow(float currentPhase) const;
+private:
+	angle_t enginePhase;
 };
 
 #define MAX_OUTPUTS_FOR_IGNITION 2
@@ -64,14 +69,14 @@ public:
 
 	/**
 	 * Sequential number of currently processed spark event
-	 * @see engineState.sparkCounter
+	 * @see engineState.globalSparkCounter
 	 */
-	int sparkId = 0;
+	int sparkCounter = 0;
 	/**
 	 * [0, cylindersCount)
 	 */
 	int cylinderIndex = 0;
-	int8_t cylinderNumber = 0;
+	int8_t coilIndex = 0;
 	char *name = nullptr;
 	IgnitionOutputPin *getOutputForLoggins();
 };

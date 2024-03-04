@@ -1,3 +1,2 @@
-#!/bin/bash
-
-bash ../common_make.sh tdg-pdm8 ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/tdg-pdm8/meta-info.env

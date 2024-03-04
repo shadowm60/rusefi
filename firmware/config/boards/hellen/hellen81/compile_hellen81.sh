@@ -1,4 +1,2 @@
-#!/bin/bash
-
-cd ..
-bash ../common_make.sh hellen/hellen81 ARCH_STM32H7
+#!/usr/bin/env bash
+cd ../../../.. && bash bin/compile.sh config/boards/hellen/hellen81/meta-info.env

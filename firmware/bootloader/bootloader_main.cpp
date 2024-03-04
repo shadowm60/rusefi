@@ -5,6 +5,7 @@
 
 extern "C" {
 	#include "boot.h"
+	#include "flash.h"
 	#include "shared_params.h"
 }
 
@@ -22,7 +23,8 @@ protected:
 
 		while (true) {
 			palTogglePad(yellowPort, yellowPin);
-			chThdSleepMilliseconds(250);
+			// blink 3 times faster if Dual Bank is not enabled
+			chThdSleepMilliseconds(isFlashDualBank() ? 250 : 80);
 		}
 	}
 };

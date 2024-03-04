@@ -1,5 +1,2 @@
-#!/bin/bash
-
-export DEBUG_LEVEL_OPT="-O0 -ggdb -g"
-export INCLUDE_ELF=yes
-bash ../common_make.sh proteus ARCH_STM32H7
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/proteus/meta-info-proteus_h7_debug.env

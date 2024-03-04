@@ -133,6 +133,11 @@ static void setupSdCard() {
 	engineConfiguration->spi3sckPin = Gpio::C10;
 	engineConfiguration->spi3misoPin = Gpio::C11;
 	engineConfiguration->spi3mosiPin = Gpio::C12;
+
+	engineConfiguration->is_enabled_spi_5 = true;
+	engineConfiguration->spi5sckPin = Gpio::F7;
+	engineConfiguration->spi5misoPin = Gpio::F8;
+	engineConfiguration->spi5mosiPin = Gpio::F9;
 }
 
 void setBoardConfigOverrides() {
@@ -238,7 +243,7 @@ int getBoardMetaLowSideOutputsCount() {
     if (engineConfiguration->engineType == engine_type_e::HARLEY) {
         return getBoardMetaOutputsCount();
     }
-    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return getBoardMetaOutputsCount();
     }
     return 16;
@@ -289,7 +294,7 @@ int getBoardMetaOutputsCount() {
     if (engineConfiguration->engineType == engine_type_e::HARLEY) {
         return efi::size(PROTEUS_HARLEY_OUTPUTS);
     }
-    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return efi::size(PROTEUS_SBC_OUTPUTS);
     }
     return efi::size(PROTEUS_OUTPUTS);
@@ -302,7 +307,8 @@ int getBoardMetaDcOutputsCount() {
         ) {
         return 1;
     }
-    return 2;
+    return 1;
+/*    return 2; proteus has two h-b ridges but stim board is short on channels to test :( */
 }
 
 Gpio* getBoardMetaOutputs() {
@@ -312,7 +318,7 @@ Gpio* getBoardMetaOutputs() {
     if (engineConfiguration->engineType == engine_type_e::HARLEY) {
         return PROTEUS_HARLEY_OUTPUTS;
     }
-    if (engineConfiguration->engineType == engine_type_e::PROTEUS_SBC) {
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
         return PROTEUS_SBC_OUTPUTS;
     }
     return PROTEUS_OUTPUTS;

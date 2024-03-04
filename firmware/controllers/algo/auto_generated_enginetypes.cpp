@@ -1,6 +1,6 @@
 #include "global.h"
 #include "engine_types.h"
-// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Wed Jan 17 04:18:06 UTC 2024
+// was generated automatically by rusEFI tool  from engine_types.h // by enum_to_string.jar tool on Sat Feb 17 20:25:32 UTC 2024
 // see also gen_config_and_enums.bat
 
 
@@ -175,8 +175,6 @@ case UNUSED23:
 }
 const char *getEngine_type_e(engine_type_e value){
 switch(value) {
-case engine_type_e::ALPHAX_8CHAN_SBC:
-  return "ALPHAX_8CHAN_SBC";
 case engine_type_e::BMW_M73_M:
   return "BMW_M73_M";
 case engine_type_e::BMW_M73_MRE:
@@ -225,6 +223,8 @@ case engine_type_e::FRANKENSO_TEST_33810:
   return "FRANKENSO_TEST_33810";
 case engine_type_e::FUEL_BENCH:
   return "FUEL_BENCH";
+case engine_type_e::GM_SBC:
+  return "GM_SBC";
 case engine_type_e::GY6_139QMB:
   return "GY6_139QMB";
 case engine_type_e::HARLEY:
@@ -295,6 +295,8 @@ case engine_type_e::MAZDA_NA8_96:
   return "MAZDA_NA8_96";
 case engine_type_e::ME17_9_MISC:
   return "ME17_9_MISC";
+case engine_type_e::MIATA_NC:
+  return "MIATA_NC";
 case engine_type_e::MIATA_PROTEUS_TCU:
   return "MIATA_PROTEUS_TCU";
 case engine_type_e::MINIMAL_PINS:
@@ -337,8 +339,6 @@ case engine_type_e::PROTEUS_NISSAN_VQ35:
   return "PROTEUS_NISSAN_VQ35";
 case engine_type_e::PROTEUS_QC_TEST_BOARD:
   return "PROTEUS_QC_TEST_BOARD";
-case engine_type_e::PROTEUS_SBC:
-  return "PROTEUS_SBC";
 case engine_type_e::PROTEUS_STIM_QC:
   return "PROTEUS_STIM_QC";
 case engine_type_e::PROTEUS_VW_B6:
@@ -375,14 +375,14 @@ case engine_type_e::TOYOTA_1NZ_FE:
   return "TOYOTA_1NZ_FE";
 case engine_type_e::TOYOTA_2JZ_GTE_VVTi:
   return "TOYOTA_2JZ_GTE_VVTi";
-case engine_type_e::UNUSED_20:
-  return "UNUSED_20";
 case engine_type_e::UNUSED_21:
   return "UNUSED_21";
 case engine_type_e::UNUSED_22:
   return "UNUSED_22";
 case engine_type_e::UNUSED_65:
   return "UNUSED_65";
+case engine_type_e::UNUSED_97:
+  return "UNUSED_97";
 case engine_type_e::VW_ABA:
   return "VW_ABA";
 case engine_type_e::WASTEGATE_PROTEUS_TEST:
@@ -420,8 +420,10 @@ case trigger_type_e::TT_BENELLI_TRE:
   return "TT_BENELLI_TRE";
 case trigger_type_e::TT_CHRYSLER_NGC_36_2_2:
   return "TT_CHRYSLER_NGC_36_2_2";
-case trigger_type_e::TT_DAIHATSU:
-  return "TT_DAIHATSU";
+case trigger_type_e::TT_DAIHATSU_3_CYL:
+  return "TT_DAIHATSU_3_CYL";
+case trigger_type_e::TT_DAIHATSU_4_CYL:
+  return "TT_DAIHATSU_4_CYL";
 case trigger_type_e::TT_DODGE_NEON_1995:
   return "TT_DODGE_NEON_1995";
 case trigger_type_e::TT_DODGE_NEON_1995_ONLY_CRANK:

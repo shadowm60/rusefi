@@ -1,3 +1,2 @@
-#!/bin/bash
-
-bash ../common_make.sh microrusefi ARCH_STM32F7
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/microrusefi/meta-info-mre_f7.env

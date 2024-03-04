@@ -11,12 +11,12 @@
 
 #include "error_handling.h"
 
-typedef enum {
+enum class backup_ram_e {
 	/**
 	 * IAC Stepper motor position, 16-bit (stored in BKP0R 0..15)
 	 * Used in stepper.cpp
 	 */
-	BACKUP_STEPPER_POS,
+	StepperPosition,
 	/**
 	 * Ignition switch counter, 8-bit (stored in BKP0R 16..23)
 	 * The counter stores the number of times the ignition switch is turned on. Used for prime injection pulse.
@@ -24,13 +24,13 @@ typedef enum {
 	 * So we check and update the ignition switch counter in non-volatile backup-RAM.
 	 * See startPrimeInjectionPulse() in controllers/trigger/main_trigger_callback.cpp
 	 */
-	BACKUP_IGNITION_SWITCH_COUNTER,
-
-	DFU_JUMP_REQUESTED,
+	IgnCounter,
 
 	/* The number of stored backup variables */
 	BACKUP_RAM_NUM,
-} backup_ram_e;
+};
+
+#define LAST_BACKUP_RAM_ENUM backup_ram_e::BACKUP_RAM_NUM
 
 
 // load data from backup-power RTC registers (non-volatile memory)
@@ -49,20 +49,25 @@ enum class ErrorCookie : uint32_t {
 
 #if EFI_PROD_CODE
 struct BackupSramData {
-	ErrorCookie Cookie;
 
-	critical_msg_t ErrorString;
-	critical_msg_t hardFile;
-	int hardLine;
-	int check;
-	critical_msg_t rawMsg;
-	port_extctx FaultCtx;
-	uint32_t FaultType;
-	uint32_t FaultAddress;
-	uint32_t Csfr;
+	// Error handling/recovery/reporting information
+	struct {
+		ErrorCookie Cookie;
 
-	uint32_t BootCount;
-	uint32_t BootCountCookie;
+		critical_msg_t ErrorString;
+		critical_msg_t hardFile;
+	  int hardLine;
+	  int check;
+	  critical_msg_t rawMsg;
+		port_extctx FaultCtx;
+		uint32_t FaultType;
+		uint32_t FaultAddress;
+		uint32_t Csfr;
+
+		uint32_t BootCount;
+		uint32_t BootCountCookie;
+	} Err;
+
 };
 
 BackupSramData* getBackupSram();

@@ -99,6 +99,21 @@ static void printErrorCounters() {
 			tsState.writeChunkCommandCounter, tsState.pageCommandCounter);
 }
 
+static void printScatterList() {
+	efiPrintf("Scatter list (global)");
+	for (int i = 0; i < HIGH_SPEED_COUNT; i++) {
+		uint16_t packed = engineConfiguration->highSpeedOffsets[i];
+		uint16_t type = packed >> 13;
+		uint16_t offset = packed & 0x1FFF;
+
+		if (type == 0)
+			continue;
+		size_t size = 1 << (type - 1);
+
+		efiPrintf("%02d offset 0x%04x size %d", i, offset, size);
+	}
+}
+
 /* 1S */
 #define TS_COMMUNICATION_TIMEOUT	TIME_MS2I(1000)
 /* 10mS when receiving byte by byte */
@@ -119,6 +134,8 @@ static void printTsStats(void) {
 #endif // EFI_USB_SERIAL
 
 	printErrorCounters();
+
+	printScatterList();
 }
 
 static void setTsSpeed(int value) {
@@ -195,19 +212,35 @@ void TunerStudio::handleCrc32Check(TsChannelBase *tsChannel, ts_response_format_
 		return;
 	}
 
+#if EFI_TS_SCATTER
+	/*
+	 * highSpeedOffsets is noMsqSave, but located on settings page,
+	 * zero highSpeedOffsets as TS expect all noMsqSave data to be zero during CRC matching
+	 * TODO:
+	 * Move highSpeedOffsets to separate page as it is done on MS devices
+	 * Zero highSpeedOffsets on start and reconnect
+	 * TODO:
+	 * Is Crc check commang good sing of new TS session?
+	 * TODO:
+	 * Support settings pages!
+	 */
+	memset(engineConfiguration->highSpeedOffsets, 0x00, sizeof(engineConfiguration->highSpeedOffsets));
+#endif // EFI_TS_SCATTER
+
 	const uint8_t* start = getWorkingPageAddr() + offset;
 
 	uint32_t crc = SWAP_UINT32(crc32(start, count));
 	tsChannel->sendResponse(mode, (const uint8_t *) &crc, 4);
 }
 
+#if EFI_TS_SCATTER
 void TunerStudio::handleScatteredReadCommand(TsChannelBase* tsChannel) {
 	int totalResponseSize = 0;
 	for (int i = 0; i < HIGH_SPEED_COUNT; i++) {
-		int packed = engineConfiguration->highSpeedOffsets[i];
-		int type = packed >> 13;
+		uint16_t packed = engineConfiguration->highSpeedOffsets[i];
+		uint16_t type = packed >> 13;
 
-		int size = type == 0 ? 0 : 1 << (type - 1);
+		size_t size = type == 0 ? 0 : 1 << (type - 1);
 #if EFI_SIMULATOR
 //		printf("handleScatteredReadCommand 0x%x %d %d\n", packed, size, offset);
 #endif /* EFI_SIMULATOR */
@@ -223,13 +256,13 @@ void TunerStudio::handleScatteredReadCommand(TsChannelBase* tsChannel) {
 
 	uint8_t dataBuffer[8];
 	for (int i = 0; i < HIGH_SPEED_COUNT; i++) {
-		int packed = engineConfiguration->highSpeedOffsets[i];
-		int type = packed >> 13;
-		int offset = packed & 0x1FFF;
+		uint16_t packed = engineConfiguration->highSpeedOffsets[i];
+		uint16_t type = packed >> 13;
+		uint16_t offset = packed & 0x1FFF;
 
 		if (type == 0)
 			continue;
-		int size = 1 << (type - 1);
+		size_t size = 1 << (type - 1);
 
 		// write each data point and CRC incrementally
 		copyRange(dataBuffer, getLiveDataFragments(), offset, size);
@@ -244,6 +277,7 @@ void TunerStudio::handleScatteredReadCommand(TsChannelBase* tsChannel) {
 	tsChannel->write(reinterpret_cast<uint8_t*>(dataBuffer), 4, true);
 	tsChannel->flush();
 }
+#endif // EFI_TS_SCATTER
 
 /**
  * 'Write' command receives a single value at a given offset
@@ -349,7 +383,9 @@ static bool isKnownCommand(char command) {
 #if EFI_SIMULATOR
 			|| command == TS_SIMULATE_CAN
 #endif // EFI_SIMULATOR
+#if EFI_TS_SCATTER
 			|| command == TS_GET_SCATTERED_GET_COMMAND
+#endif
 			|| command == TS_SET_LOGGER_SWITCH
 			|| command == TS_GET_COMPOSITE_BUFFER_DONE_DIFFERENTLY
 			|| command == TS_GET_TEXT
@@ -475,7 +511,7 @@ static int tsProcessOne(TsChannelBase* tsChannel) {
 	}
 
 	if (tsInstance.handlePlainCommand(tsChannel, firstByte)) {
-		return -1;
+		return 0;
 	}
 
 	uint8_t secondByte;
@@ -510,7 +546,7 @@ static int tsProcessOne(TsChannelBase* tsChannel) {
 
 		if (received != expectedSize) {
 			/* print and send error as we were in sync */
-			efiPrintf("Got only %d bytes while expecting %d for command %c", received,
+			efiPrintf("Got only %d bytes while expecting %d for command 0x%02x", received,
 					expectedSize, command);
 			tunerStudioError(tsChannel, "ERROR: not enough bytes in stream");
 			sendErrorCode(tsChannel, TS_RESPONSE_UNDERRUN);
@@ -686,9 +722,11 @@ int TunerStudio::handleCrcCommand(TsChannelBase* tsChannel, char *data, int inco
 			handleWriteValueCommand(tsChannel, TS_CRC, offset, value);
 		}
 		break;
+#if EFI_TS_SCATTER
 	case TS_GET_SCATTERED_GET_COMMAND:
 		handleScatteredReadCommand(tsChannel);
 		break;
+#endif // EFI_TS_SCATTER
 	case TS_CRC_CHECK_COMMAND:
 		handleCrc32Check(tsChannel, TS_CRC, offset, count);
 		break;
@@ -852,7 +890,7 @@ void startTunerStudioConnectivity(void) {
 	addConsoleAction("tsinfo", printTsStats);
 	addConsoleAction("reset_ts", resetTs);
 	addConsoleActionI("set_ts_speed", setTsSpeed);
-	
+
 #if EFI_BLUETOOTH_SETUP
 	// module initialization start (it waits for disconnect and then communicates to the module)
 	// Usage:   "bluetooth_hc06 <baud> <name> <pincode>"

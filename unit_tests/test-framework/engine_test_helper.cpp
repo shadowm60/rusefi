@@ -32,7 +32,7 @@ extern int minCrankingRpm;
 
 EngineTestHelperBase::EngineTestHelperBase(Engine * eng, engine_configuration_s * econfig, persistent_config_s * pers) {
 	// todo: make this not a global variable, we need currentTimeProvider interface on engine
-	timeNowUs = 0; 
+	timeNowUs = 0;
 	minCrankingRpm = 0;
 	EnableToothLogger();
 	if (engine || engineConfiguration || config) {
@@ -302,8 +302,12 @@ scheduling_s * EngineTestHelper::assertEvent5(const char *msg, int index, void *
 	scheduling_s *event = executor->getForUnitTest(index);
 	assertEqualsM4(msg, " callback up/down", (void*)event->action.getCallback() == (void*) callback, 1);
 	efitimeus_t start = getTimeNowUs();
-	assertEqualsM4(msg, " timestamp", expectedTimestamp, event->momentX - start);
+	assertEqualsM2(msg, expectedTimestamp, event->momentX - start, /*3us precision to address rounding etc*/3);
 	return event;
+}
+
+angle_t EngineTestHelper::timeToAngle(float timeMs) {
+  return MS2US(timeMs) / engine.rpmCalculator.oneDegreeUs;
 }
 
 const AngleBasedEvent * EngineTestHelper::assertTriggerEvent(const char *msg,
@@ -316,7 +320,7 @@ const AngleBasedEvent * EngineTestHelper::assertTriggerEvent(const char *msg,
 		assertEqualsM4(msg, " callback up/down", (void*)event->action.getCallback() == (void*) callback, 1);
 	}
 
-	assertEqualsM4(msg, " angle", enginePhase, event->enginePhase);
+	assertEqualsM4(msg, " angle", enginePhase, event->getAngle());
 	return event;
 }
 
@@ -343,7 +347,7 @@ void EngineTestHelper::applyTriggerWaveform() {
 
 // todo: open question if this is worth a helper method or should be inlined?
 void EngineTestHelper::assertRpm(int expectedRpm, const char *msg) {
-	EXPECT_EQ(expectedRpm, Sensor::getOrZero(SensorType::Rpm)) << msg;
+	EXPECT_NEAR(expectedRpm, Sensor::getOrZero(SensorType::Rpm), 0.01) << msg;
 }
 
 void setupSimpleTestEngineWithMaf(EngineTestHelper *eth, injection_mode_e injectionMode,

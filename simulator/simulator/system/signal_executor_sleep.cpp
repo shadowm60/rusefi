@@ -30,8 +30,6 @@
 bool printSchedulerDebug = true;
 #endif // EFI_PRINTF_FUEL_DETAILS
 
-#if EFI_SIGNAL_EXECUTOR_SLEEP
-
 struct CallbackContext
 {
 	scheduling_s* scheduling = nullptr;
@@ -103,14 +101,6 @@ static void doScheduleForLater(scheduling_s *scheduling, int delayUs, action_s a
 		chVTResetI(&scheduling->timer);
 	}
 
-#if EFI_SIMULATOR
-//	if (action.getCallback() == (schfunc_t)&turnInjectionPinLow) {
-		//printf("setTime cb=turnInjectionPinLow p=%d\r\n", (int)action.getArgument());
-//	} else {
-//		printf("setTime cb=%d p=%d\r\n", (int)callback, (int)param);
-//	}
-#endif /* EFI_SIMULATOR */
-
 	chVTSetI(&scheduling->timer, delaySt, (vtfunc_t)timerCallback, ctx);
 }
 
@@ -127,5 +117,3 @@ void SleepExecutor::cancel(scheduling_s* s) {
 
 	s->action = {};
 }
-
-#endif /* EFI_SIGNAL_EXECUTOR_SLEEP */

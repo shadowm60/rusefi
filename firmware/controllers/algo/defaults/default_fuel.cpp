@@ -190,6 +190,11 @@ static void setDefaultLambdaTable() {
 	}
 }
 
+void setGdiWallWetting() {
+	engineConfiguration->wwaeTau = 0;
+	engineConfiguration->wwaeBeta = 0;
+}
+
 void setDefaultWallWetting() {
 #if !EFI_UNIT_TEST
 	// todo: this is a reasonable default for what kinds of engines exactly?
@@ -282,10 +287,7 @@ void setDefaultFuel() {
 	setLinearCurve(config->mapEstimateTpsBins, 0, 100);
 	setTable(config->mapEstimateTable, 60);
 
-	// most of rusEFI installations are still port injected, for GDI see 'setGDIFueling'
-	// -400 will close the injector just before TDC at the end of the exhaust stroke,
-	// around the time the intake valve opens.
-	setTable(config->injectionPhase, -400.0f);
+	setTable(config->injectionPhase, PORT_INJECTION_OFFSET);
 
 	// Charge temperature estimation
 	engineConfiguration->tChargeMinRpmMinTps = 0.25;

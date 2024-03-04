@@ -55,19 +55,43 @@ static void printPacket(const size_t busIndex, const CANRxFrame &rx) {
 
 volatile float canMap = 0;
 
-CanListener *canListeners_head = nullptr;
+struct CanListenerTailSentinel : public CanListener {
+	CanListenerTailSentinel()
+		: CanListener(0)
+	{
+	}
+
+	bool acceptFrame(const CANRxFrame&) const override {
+		return false;
+	}
+
+	void decodeFrame(const CANRxFrame&, efitick_t) override {
+		// nothing to do
+	}
+};
+
+static CanListenerTailSentinel tailSentinel;
+CanListener *canListeners_head = &tailSentinel;
 
 void serviceCanSubscribers(const CANRxFrame &frame, efitick_t nowNt) {
 	CanListener *current = canListeners_head;
+	size_t iterationValidationCounter = 0;
 
 	while (current) {
 		current = current->processFrame(frame, nowNt);
+		if (iterationValidationCounter++ > 239) {
+		  criticalError("forever loop canListeners_head");
+		  return;
+		}
 	}
 }
 
 void registerCanListener(CanListener& listener) {
-	listener.setNext(canListeners_head);
-	canListeners_head = &listener;
+	// If the listener already has a next, it's already registered
+	if (!listener.hasNext()) {
+		listener.setNext(canListeners_head);
+		canListeners_head = &listener;
+	}
 }
 
 void registerCanSensor(CanSensorBase& sensor) {

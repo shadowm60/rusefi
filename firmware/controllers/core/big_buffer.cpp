@@ -8,6 +8,12 @@ static BigBufferUser s_currentUser;
 // we've only observed issue on F7 in -Os compiler configuration but technically all processors care
 static uint32_t s_bigBuffer[BIG_BUFFER_SIZE / sizeof(uint32_t)];
 
+#if EFI_UNIT_TEST
+BigBufferUser getBigBufferCurrentUser() {
+  return s_currentUser;
+}
+#endif // EFI_UNIT_TEST
+
 static void releaseBuffer(void* bufferPtr, BigBufferUser user) {
 	if (bufferPtr != &s_bigBuffer || user != s_currentUser) {
 		// todo: panic!
@@ -32,13 +38,17 @@ BigBufferHandle::BigBufferHandle(BigBufferHandle&& other) {
 }
 
 BigBufferHandle& BigBufferHandle::operator= (BigBufferHandle&& other) {
-	// swap contents of the two objects
-	m_bufferPtr = other.m_bufferPtr;
-	other.m_bufferPtr = nullptr;
+	if (this != &other) {
+		if (m_bufferPtr) {
+			releaseBuffer(m_bufferPtr, m_user);
+		}
+		// swap contents of the two objects
+		m_bufferPtr = other.m_bufferPtr;
+		other.m_bufferPtr = nullptr;
 
-	m_user = other.m_user;
-	other.m_user = BigBufferUser::None;
-
+		m_user = other.m_user;
+		other.m_user = BigBufferUser::None;
+	}
 	return *this;
 }
 

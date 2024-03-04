@@ -326,7 +326,7 @@ static const uint8_t* getFiringOrderTable() {
  * @param index from zero to cylindersCount - 1
  * @return cylinderId from one to cylindersCount
  */
-size_t getCylinderId(size_t index) {
+size_t getFiringOrderCylinderId(size_t index) {
 	const size_t firingOrderLength = getFiringOrderLength();
 
 	if (firingOrderLength < 1 || firingOrderLength > MAX_CYLINDER_COUNT) {
@@ -416,14 +416,18 @@ void prepareOutputSignals() {
 }
 
 angle_t getPerCylinderFiringOrderOffset(uint8_t cylinderIndex, uint8_t cylinderNumber) {
-	UNUSED(cylinderNumber); // TODO: technical debt
 	// base = position of this cylinder in the firing order.
 	// We get a cylinder every n-th of an engine cycle where N is the number of cylinders
 	auto firingOrderOffset = engine->engineState.engineCycle * cylinderIndex / engineConfiguration->cylindersCount;
 
-	assertAngleRange(firingOrderOffset, "getPerCylinderFiringOrderOffset", ObdCode::CUSTOM_ERR_6566);
+	// Plus or minus any adjustment if this is an odd-fire engine
+	auto adjustment = engineConfiguration->timing_offset_cylinder[cylinderNumber];
 
-	return firingOrderOffset;
+	auto result = firingOrderOffset + adjustment;
+
+	assertAngleRange(result, "getCylinderAngle", ObdCode::CUSTOM_ERR_CYL_ANGLE);
+
+	return result;
 }
 
 void setTimingRpmBin(float from, float to) {

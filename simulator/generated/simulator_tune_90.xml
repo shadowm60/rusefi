@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <msq xmlns="http://www.msefi.com/:msq">
     <page/>
-    <page number="0" size="22232">
+    <page number="0" size="22236">
         <constant name="engineType">"HONDA_K"</constant>
         <constant digits="0" name="startButtonSuppressOnStartUpMs" units="">0.0</constant>
         <constant digits="0" name="sensorSnifferRpmThreshold" units="RPM">2500.0</constant>
@@ -222,7 +222,7 @@
         <constant digits="0" name="boostControlSafeDutyCycle" units="%">0.0</constant>
         <constant name="mafAdcChannel">"Disabled"</constant>
         <constant digits="0" name="acrRevolutions" units="">5.0</constant>
-        <constant digits="2" name="globalFuelCorrection" units="coef">1.0</constant>
+        <constant digits="0" name="unused4bytesHere" units="">0.0</constant>
         <constant digits="3" name="adcVcc" units="volts">3.0</constant>
         <constant digits="0" name="mapCamDetectionAnglePosition" units="Deg">0.0</constant>
         <constant name="camInputs1">"NONE"</constant>
@@ -251,8 +251,8 @@
         <constant name="idle_stepperStepPin">"NONE"</constant>
         <constant name="idle_solenoidPinMode">"default"</constant>
         <constant digits="0" name="manIdlePosition" units="%">50.0</constant>
-        <constant digits="1" name="knockRetardAggression" units="%">0.0</constant>
-        <constant digits="1" name="knockRetardReapplyRate" units="deg/s">0.0</constant>
+        <constant digits="1" name="knockRetardAggression" units="%">20.0</constant>
+        <constant digits="1" name="knockRetardReapplyRate" units="deg/s">3.0</constant>
         <constant name="engineSyncCam">"Exhaust First Bank"</constant>
         <constant digits="0" name="vssFilterReciprocal" units="">3.0</constant>
         <constant digits="3" name="vssGearRatio" units="ratio">3.73</constant>
@@ -544,7 +544,7 @@
         <constant name="antiLagActivationMode">"Switch Input"</constant>
         <constant digits="0" name="launchSpeedThreshold" units="Kph">30.0</constant>
         <constant digits="0" name="launchTimingRpmRange" units="RPM">500.0</constant>
-        <constant digits="0" name="launchFuelAdded" units="%">0.0</constant>
+        <constant digits="0" name="launchSparkSkipPercent" units="%">0.0</constant>
         <constant digits="0" name="launchBoostDuty" units="%">0.0</constant>
         <constant digits="0" name="hardCutRpmRange" units="RPM">500.0</constant>
         <constant digits="0" name="turbochargerFilter" units="">0.01</constant>
@@ -792,8 +792,11 @@
         <constant name="mc33810Gpgd2Mode">"false"</constant>
         <constant name="mc33810Gpgd3Mode">"false"</constant>
         <constant name="enableExtendedCanBroadcast">"true"</constant>
+        <constant name="luaCanRxWorkaround">"false"</constant>
         <constant name="useAuxSpeedForSlipRatio">"false"</constant>
         <constant name="useVssAsSecondWheelSpeed">"false"</constant>
+        <constant name="is_enabled_spi_5">"false"</constant>
+        <constant name="is_enabled_spi_6">"false"</constant>
         <constant digits="0" name="afterCrankingIACtaperDuration" units="cycles">200.0</constant>
         <constant digits="0" name="iacByTpsTaper" units="percent">2.0</constant>
         <constant name="auxSerialTxPin">"NONE"</constant>
@@ -1397,7 +1400,7 @@
         <constant name="hpfpCam">"NONE"</constant>
         <constant digits="0" name="auxiliarySetting1" units="">0.0</constant>
         <constant digits="0" name="hpfpMinAngle" units="deg">10.0</constant>
-        <constant digits="3" name="hpfpPumpVolume" units="cc">0.0</constant>
+        <constant digits="3" name="hpfpPumpVolume" units="cc">0.29</constant>
         <constant digits="0" name="hpfpActivationAngle" units="deg">30.0</constant>
         <constant digits="0" name="issFilterReciprocal" units="">2.0</constant>
         <constant digits="3" name="hpfpPidP" units="%/kPa">0.01</constant>
@@ -1815,7 +1818,7 @@
         <constant digits="0" name="simulatorCamPosition3" units="">0.0</constant>
         <constant digits="0" name="simulatorCamPosition4" units="">0.0</constant>
         <constant name="ignKeyAdcChannel">"Disabled"</constant>
-        <constant digits="0" name="unusedExplicitFilling2" units="">0.0</constant>
+        <constant name="spi6MisoMode">"default"</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom1" units="ratio">0.0</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom2" units="ratio">0.0</constant>
         <constant digits="3" name="triggerVVTGapOverrideFrom3" units="ratio">0.0</constant>
@@ -1864,33 +1867,25 @@
          0.0 0.0 0.0 0.0 0.0 0.0
 </constant>
         <constant digits="0" name="auxSpeed1Multiplier" units="">1.0</constant>
-        <constant cols="1" digits="0" name="mainUnusedEnd" rows="146">
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
-         0.0
+        <constant digits="0" name="brakeMeanEffectivePressureDifferential" units="">0.0</constant>
+        <constant name="spi4mosiPin">"NONE"</constant>
+        <constant name="spi4misoPin">"NONE"</constant>
+        <constant name="spi4sckPin">"NONE"</constant>
+        <constant name="spi5mosiPin">"NONE"</constant>
+        <constant name="spi5misoPin">"NONE"</constant>
+        <constant name="spi5sckPin">"NONE"</constant>
+        <constant name="spi6mosiPin">"NONE"</constant>
+        <constant name="spi6misoPin">"NONE"</constant>
+        <constant name="spi6sckPin">"NONE"</constant>
+        <constant name="spi4SckMode">"default"</constant>
+        <constant name="spi4MosiMode">"default"</constant>
+        <constant name="spi4MisoMode">"default"</constant>
+        <constant name="spi5SckMode">"default"</constant>
+        <constant name="spi5MosiMode">"default"</constant>
+        <constant name="spi5MisoMode">"default"</constant>
+        <constant name="spi6SckMode">"default"</constant>
+        <constant name="spi6MosiMode">"default"</constant>
+        <constant cols="1" digits="0" name="unusedOftenChangesDuringFirmwareUpdate" rows="120">
          0.0
          0.0
          0.0
@@ -2572,6 +2567,9 @@ end
 
 function printPacket(bus, id, dlc, data)
     print('Received ' .. arrayToString(data))
+end
+
+function onCanRx(bus, id, dlc, data)
 end
 
 function onTick()
@@ -4555,8 +4553,8 @@ end</constant>
          7000.0
 </constant>
     </page>
-    <versionInfo firmwareInfo="20240130" nPages="1" signature="rusEFI master.2024.02.02.f407-discovery.1959391057" version="5.0"/>
-    <bibliography author="rusEFI 20240130" writeDate="date"/>
+    <versionInfo firmwareInfo="20240227" nPages="1" signature="rusEFI master.2024.03.03.f407-discovery.590483655" version="5.0"/>
+    <bibliography author="rusEFI 20240227" writeDate="date"/>
     <settings/>
     <userComments/>
 </msq>

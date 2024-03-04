@@ -128,7 +128,7 @@ On some Ford and Toyota vehicles one of the pedal sensors is not linear on the f
 
 
 ### useSpiImu
-
+If enabled - use onboard SPI Accelerometer, otherwise listen for CAN messages
 
 ### enableStagedInjection
 
@@ -140,10 +140,10 @@ Closed throttle, 1 volt = 200 units.\nSee also tps1_1AdcChannel\nset tps_min X
 Full throttle.\nSee also tps1_1AdcChannel\nset tps_max X
 
 ### tpsErrorDetectionTooLow
-TPS error detection: what throttle % is unrealistically low?\nAlso used for accelerator pedal error detection if so equiped.
+TPS error detection: what throttle % is unrealistically low?\nAlso used for accelerator pedal error detection if so equipped.
 
 ### tpsErrorDetectionTooHigh
-TPS error detection: what throttle % is unrealistically high?\nAlso used for accelerator pedal error detection if so equiped.
+TPS error detection: what throttle % is unrealistically high?\nAlso used for accelerator pedal error detection if so equipped.
 
 ### cranking.baseFuel
 Base mass of the per-cylinder fuel injected during cranking. This is then modified by the multipliers for CLT, IAT, TPS ect, to give the final cranking pulse width.\nA reasonable starting point is 60mg per liter per cylinder.\nex: 2 liter 4 cyl = 500cc/cyl, so 30mg cranking fuel.
@@ -257,7 +257,7 @@ Expected oil pressure after starting the engine. If oil pressure does not reach 
 This value is the ignition timing used when in 'fixed timing' mode, i.e. constant timing\nThis mode is useful when adjusting distributor location.
 
 ### globalTriggerAngleOffset
-Angle between Top Dead Center (TDC) and the first trigger event.\nPositive value in case of synchnization point before TDC and negative in case of synchnization point after TDC\n.Knowing this angle allows us to control timing and other angles in reference to TDC.\nset global_trigger_offset_angle X
+Angle between Top Dead Center (TDC) and the first trigger event.\nPositive value in case of synchronization point before TDC and negative in case of synchronization point after TDC\n.Knowing this angle allows us to control timing and other angles in reference to TDC.\nset global_trigger_offset_angle X
 
 ### analogInputDividerCoefficient
 Ratio/coefficient of input voltage dividers on your PCB. For example, use '2' if your board divides 5v into 2.5v. Use '1.66' if your board divides 5v into 3v.
@@ -278,6 +278,9 @@ Number of revolutions per kilometer for the wheels your vehicle speed sensor is 
 CANbus thread period in ms
 
 ### camDecoder2jzPrecision
+null
+
+### justATempTest
 null
 
 ### byFirmwareVersion
@@ -302,9 +305,6 @@ Extra air taper amount
 Duty cycle to use in case of a sensor failure. This duty cycle should produce the minimum possible amount of boost. This duty is also used in case any of the minimum RPM/TPS/MAP conditions are not met.
 
 ### acrRevolutions
-
-
-### globalFuelCorrection
 
 
 ### adcVcc
@@ -641,7 +641,7 @@ In Alpha-N mode, compensate for air temperature.
 
 
 ### useRawOutputToDriveIdleStepper
-If enabled we use four Push-Pull outputs to directly drive stepper idle air valve coilss
+If enabled we use four Push-Pull outputs to directly drive stepper idle air valve coils
 
 ### verboseCan2
 Print incoming and outgoing second bus CAN messages in rusEFI console
@@ -676,8 +676,8 @@ Launch disabled above this speed if setting is above zero
 ### launchTimingRpmRange
 Range from Launch RPM for Timing Retard to activate
 
-### launchFuelAdded
-Extra Fuel Added
+### launchSparkSkipPercent
+Spark Skip Transition Target
 
 ### launchBoostDuty
 Duty Cycle for the Boost Solenoid
@@ -1078,11 +1078,23 @@ See Over/Undervoltage Shutdown/Retry bit in documentation
 ### enableExtendedCanBroadcast
 
 
+### luaCanRxWorkaround
+
+
+### flexSensorInverted
+
+
 ### useAuxSpeedForSlipRatio
 
 
 ### useVssAsSecondWheelSpeed
 VSS and auxSpeed1 or auxSpeed1 with auxSpeed2?
+
+### is_enabled_spi_5
+
+
+### is_enabled_spi_6
+
 
 ### afterCrankingIACtaperDuration
 This is the duration in cycles that the IAC will take to reach its normal idle position, it can be used to hold the idle higher for a few seconds after cranking to improve startup.
@@ -1760,5 +1772,8 @@ If injector duty cycle hits this value for the specified delay time, cut fuel.
 Timeout period for duty cycle over the sustained limit to trigger duty cycle protection.
 
 ### auxSpeed1Multiplier
+null
+
+### brakeMeanEffectivePressureDifferential
 null
 

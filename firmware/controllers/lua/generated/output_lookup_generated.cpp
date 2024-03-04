@@ -152,9 +152,6 @@ float getOutputValueByName(const char *name) {
 // injectorDutyCycle
 		case -354325031:
 			return engine->outputChannels.injectorDutyCycle;
-// veValue
-		case 1933507837:
-			return engine->outputChannels.veValue;
 // injectionOffset
 		case -243031057:
 			return engine->outputChannels.injectionOffset;
@@ -206,6 +203,9 @@ float getOutputValueByName(const char *name) {
 // tuneCrc16
 		case -1158359776:
 			return engine->outputChannels.tuneCrc16;
+// veValue
+		case 1933507837:
+			return engine->outputChannels.veValue;
 // seconds
 		case -1962923820:
 			return engine->outputChannels.seconds;
@@ -812,6 +812,11 @@ float getOutputValueByName(const char *name) {
 		case -1453554940:
 			return engine->fuelComputer.brokenInjector;
 #endif
+// idealEngineTorque
+#if EFI_ENGINE_CONTROL
+		case -791713926:
+			return engine->fuelComputer.idealEngineTorque;
+#endif
 // injectorHwIssue
 #if EFI_ENGINE_CONTROL
 		case -1237512821:
@@ -823,9 +828,9 @@ float getOutputValueByName(const char *name) {
 // sparkDwell
 		case -903101570:
 			return engine->ignitionState.sparkDwell;
-// dwellAngle
-		case -1573373756:
-			return engine->ignitionState.dwellAngle;
+// dwellDurationAngle
+		case -1208021110:
+			return engine->ignitionState.dwellDurationAngle;
 // cltTimingCorrection
 		case 256951528:
 			return engine->ignitionState.cltTimingCorrection;
@@ -841,6 +846,9 @@ float getOutputValueByName(const char *name) {
 // correctedIgnitionAdvance
 		case 352421907:
 			return engine->ignitionState.correctedIgnitionAdvance;
+// tractionAdvanceDrop
+		case -899895696:
+			return engine->ignitionState.tractionAdvanceDrop;
 // dwellVoltageCorrection
 		case -80612537:
 			return engine->ignitionState.dwellVoltageCorrection;
@@ -868,6 +876,81 @@ float getOutputValueByName(const char *name) {
 // m_maximumRetard
 		case 164334513:
 			return ___engine.module<KnockController>()->m_maximumRetard;
+// m_deadtime
+#if EFI_PROD_CODE && EFI_IDLE_CONTROL
+		case -1167844818:
+			return ___engine.module<InjectorModelPrimary>()->m_deadtime;
+#endif
+// pressureDelta
+#if EFI_PROD_CODE && EFI_IDLE_CONTROL
+		case -376325528:
+			return ___engine.module<InjectorModelPrimary>()->pressureDelta;
+#endif
+// pressureRatio
+#if EFI_PROD_CODE && EFI_IDLE_CONTROL
+		case -359858019:
+			return ___engine.module<InjectorModelPrimary>()->pressureRatio;
+#endif
+// retardThresholdRpm
+#if EFI_LAUNCH_CONTROL
+		case -1374156957:
+			return engine->launchController.retardThresholdRpm;
+#endif
+// combinedConditions
+#if EFI_LAUNCH_CONTROL
+		case 1199675808:
+			return engine->launchController.combinedConditions;
+#endif
+// launchActivatePinState
+#if EFI_LAUNCH_CONTROL
+		case 1928406809:
+			return engine->launchController.launchActivatePinState;
+#endif
+// isLaunchPreCondition
+#if EFI_LAUNCH_CONTROL
+		case -1235396182:
+			return engine->launchController.isLaunchPreCondition;
+#endif
+// isLaunchCondition
+#if EFI_LAUNCH_CONTROL
+		case -1959120957:
+			return engine->launchController.isLaunchCondition;
+#endif
+// isSwitchActivated
+#if EFI_LAUNCH_CONTROL
+		case 1699495432:
+			return engine->launchController.isSwitchActivated;
+#endif
+// isClutchActivated
+#if EFI_LAUNCH_CONTROL
+		case 1569151513:
+			return engine->launchController.isClutchActivated;
+#endif
+// isValidInputPin
+#if EFI_LAUNCH_CONTROL
+		case -978523544:
+			return engine->launchController.isValidInputPin;
+#endif
+// activateSwitchCondition
+#if EFI_LAUNCH_CONTROL
+		case 1265600943:
+			return engine->launchController.activateSwitchCondition;
+#endif
+// rpmCondition
+#if EFI_LAUNCH_CONTROL
+		case -1221336517:
+			return engine->launchController.rpmCondition;
+#endif
+// speedCondition
+#if EFI_LAUNCH_CONTROL
+		case 1722712413:
+			return engine->launchController.speedCondition;
+#endif
+// tpsCondition
+#if EFI_LAUNCH_CONTROL
+		case 827982787:
+			return engine->launchController.tpsCondition;
+#endif
 // isTpsInvalid
 #if EFI_BOOST_CONTROL
 		case -575666209:
@@ -1132,9 +1215,9 @@ float getOutputValueByName(const char *name) {
 // fuelInjectionCounter
 		case -1839290700:
 			return engine->engineState.fuelInjectionCounter;
-// sparkCounter
-		case -1515591290:
-			return engine->engineState.sparkCounter;
+// globalSparkCounter
+		case 642962903:
+			return engine->engineState.globalSparkCounter;
 // fuelingLoad
 		case 583799407:
 			return engine->engineState.fuelingLoad;

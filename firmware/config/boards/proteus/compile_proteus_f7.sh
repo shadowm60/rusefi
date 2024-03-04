@@ -1,6 +1,2 @@
-#!/bin/bash
-
-export USE_OPENBLT=yes
-export DEBUG_LEVEL_OPT="-Os -ggdb -g"
-
-bash ../common_make.sh proteus ARCH_STM32F7
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/proteus/meta-info-proteus_f7.env

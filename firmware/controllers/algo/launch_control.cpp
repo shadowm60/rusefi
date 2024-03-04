@@ -46,14 +46,14 @@ bool LaunchControlBase::isInsideSwitchCondition() {
 
 /**
  * Returns True when Vehicle speed ALLOWS launch control
- */ 
+ */
 bool LaunchControlBase::isInsideSpeedCondition() const {
 	if (engineConfiguration->launchSpeedThreshold == 0) {
 		return true; // allow launch, speed does not matter
 	}
 
 	int speed = Sensor::getOrZero(SensorType::VehicleSpeed);
-	
+
 	return engineConfiguration->launchSpeedThreshold > speed;
 }
 
@@ -92,10 +92,11 @@ bool LaunchControlBase::isLaunchConditionMet(int rpm) {
 
 LaunchControlBase::LaunchControlBase() {
 	launchActivatePinState = false;
+	isLaunchPreCondition = false;
 	isLaunchCondition = false;
 }
 
-bool LaunchControlBase::getFuelCoefficient() const {
+float LaunchControlBase::getFuelCoefficient() const {
     return 1 + (isLaunchCondition && engineConfiguration->launchControlEnabled ? engineConfiguration->launchFuelAdderPercent / 100.0 : 0);
 }
 

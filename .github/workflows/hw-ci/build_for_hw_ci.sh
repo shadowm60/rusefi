@@ -9,18 +9,24 @@ HW_TARGET=$2
 # .github/workflows/hw-ci/build_for_hw_ci.sh config/boards/proteus        proteus_f7_debug
 
 set -e
-echo "HW CI build [$HW_FOLDER][$HW_TARGET]"
+echo "[build_for_hw_ci.sh] enter [$HW_FOLDER][$HW_TARGET]"
 
 cd firmware
 
-./gen_live_documentation.sh
-./gen_config_board.sh $HW_FOLDER $HW_TARGET
+export BOARD_META_PATH=$(bash bin/find_meta_info.sh ${HW_FOLDER} ${HW_TARGET})
+source config/boards/common_script_read_meta_env.inc "${BOARD_META_PATH}"
 
-echo "We aren't guaranteed a clean machine every time, so manually clean the output."
+bash gen_live_documentation.sh
+bash gen_signature.sh $HW_TARGET
+bash gen_config_board.sh $HW_FOLDER $HW_TARGET
+bash bin/gen_image_board.sh $HW_FOLDER $HW_TARGET
+
+echo "[build_for_hw_ci.sh] We aren't guaranteed a clean machine every time, so manually clean the output."
 make clean
-cd ..
 
 export EXTRA_2_PARAMS=-DHARDWARE_CI
 
-echo Build Firmware
-misc/jenkins/compile_other_versions/compile.sh $HW_FOLDER $HW_TARGET
+echo "[build_for_hw_ci.sh] Building Firmware"
+make -j$(nproc) -r deliver/rusefi.bin
+
+echo "[build_for_hw_ci.sh] Done!"

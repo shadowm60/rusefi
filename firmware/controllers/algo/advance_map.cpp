@@ -31,6 +31,8 @@
 // todo: reset this between cranking attempts?! #2735
 int minCrankingRpm = 0;
 
+static Map3D<TRACTION_CONTROL_ETB_DROP_SIZE, TRACTION_CONTROL_ETB_DROP_SIZE, int8_t, uint16_t, uint8_t> tcTimingDropTable;
+
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 
 /**
@@ -54,6 +56,12 @@ static angle_t getRunningAdvance(int rpm, float engineLoad) {
 		config->ignitionLoadBins, engineLoad,
 		config->ignitionRpmBins, rpm
 	);
+
+  float vehicleSpeed = Sensor::getOrZero(SensorType::VehicleSpeed);
+  float wheelSlip = Sensor::getOrZero(SensorType::WheelSlipRatio);
+  engine->ignitionState.tractionAdvanceDrop = tcTimingDropTable.getValue(vehicleSpeed, wheelSlip);
+
+  advanceAngle += engine->ignitionState.tractionAdvanceDrop;
 
 #if EFI_ANTILAG_SYSTEM
 	if (engine->antilagController.isAntilagCondition) {
@@ -197,12 +205,8 @@ angle_t getAdvance(int rpm, float engineLoad) {
 #endif
 }
 
-angle_t getCombinedCylinderIgnitionTrim(size_t cylinderNumber, int rpm, float ignitionLoad) {
-    // we have two separate per-cylinder trims, that's a feature
-	// Plus or minus any adjustment if this is an odd-fire engine
-	auto adjustment = engineConfiguration->timing_offset_cylinder[cylinderNumber];
-
-	return adjustment + interpolate3d(
+angle_t getCylinderIgnitionTrim(size_t cylinderNumber, int rpm, float ignitionLoad) {
+	return interpolate3d(
 		config->ignTrims[cylinderNumber].table,
 		config->ignTrimLoadBins, ignitionLoad,
 		config->ignTrimRpmBins, rpm
@@ -245,6 +249,10 @@ size_t getMultiSparkCount(int rpm) {
 	} else {
 		return 0;
 	}
+}
+
+void initIgnitionAdvanceControl() {
+	tcTimingDropTable.init(engineConfiguration->tractionControlTimingDrop, engineConfiguration->tractionControlSpeedBins, engineConfiguration->tractionControlSlipBins);
 }
 
 #endif // EFI_ENGINE_CONTROL

@@ -1,4 +1,4 @@
-// this section was generated automatically by rusEFI tool config_definition_base.jar based on (unknown script) controllers/algo/ignition_state.txt Wed Jan 03 20:30:10 UTC 2024
+// this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) controllers/algo/ignition_state.txt Thu Feb 29 00:39:49 UTC 2024
 // by class com.rusefi.output.CHeaderConsumer
 // begin
 #pragma once
@@ -25,7 +25,7 @@ struct ignition_state_s {
 	 * units: deg
 	 * offset 8
 	 */
-	angle_t dwellAngle = (angle_t)0;
+	angle_t dwellDurationAngle = (angle_t)0;
 	/**
 	 * Ign: CLT correction
 	 * units: deg
@@ -57,11 +57,11 @@ struct ignition_state_s {
 	 */
 	scaled_channel<int16_t, 50, 1> correctedIgnitionAdvance = (int16_t)0;
 	/**
-	 * need 4 byte alignment
-	 * units: units
+	 * Traction: timing correction
+	 * units: deg
 	 * offset 22
 	 */
-	uint8_t alignmentFill_at_22[2];
+	scaled_channel<int16_t, 50, 1> tractionAdvanceDrop = (int16_t)0;
 	/**
 	 * Ign: Dwell voltage correction
 	 * offset 24
@@ -180,4 +180,4 @@ struct ignition_state_s {
 static_assert(sizeof(ignition_state_s) == 40);
 
 // end
-// this section was generated automatically by rusEFI tool config_definition_base.jar based on (unknown script) controllers/algo/ignition_state.txt Wed Jan 03 20:30:10 UTC 2024
+// this section was generated automatically by rusEFI tool config_definition_base-all.jar based on (unknown script) controllers/algo/ignition_state.txt Thu Feb 29 00:39:49 UTC 2024

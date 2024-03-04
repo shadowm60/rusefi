@@ -72,7 +72,7 @@
 #define EFI_ACTIVE_CONFIGURATION_IN_FLASH FALSE
 
 #ifndef EFI_MC33816
-#define EFI_MC33816 TRUE
+#define EFI_MC33816 FALSE
 #endif
 
 #ifndef EFI_HPFP
@@ -162,7 +162,6 @@
 
 #define EFI_SIGNAL_EXECUTOR_SLEEP FALSE
 #define EFI_SIGNAL_EXECUTOR_ONE_TIMER TRUE
-#define EFI_SIGNAL_EXECUTOR_HW_TIMER FALSE
 
 #define FUEL_MATH_EXTREME_LOGGING FALSE
 
@@ -403,14 +402,11 @@
 #define EFI_INTERNAL_FAST_ADC_GPT	&GPTD6
 
 #define EFI_SPI1_AF 5
-
 #define EFI_SPI2_AF 5
-
-/**
- * This section is for right-side center SPI
- */
-
 #define EFI_SPI3_AF 6
+#define EFI_SPI4_AF 5
+#define EFI_SPI5_AF 5
+#define EFI_SPI6_AF 6
 
 /**
  * Patched version of ChibiOS/RT support extra details in the system error messages

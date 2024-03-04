@@ -1,3 +1,2 @@
-#!/bin/bash
-
-bash ../common_make.sh nucleo_f413 ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../.. && bash bin/compile.sh config/boards/nucleo_f413/meta-info.env

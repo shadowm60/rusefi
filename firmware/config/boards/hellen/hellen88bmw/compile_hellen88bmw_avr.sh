@@ -1,12 +1,2 @@
-#!/bin/bash
-
-cd ..
-
-export EXTRA_PARAMS="\
--DEFI_SOFTWARE_KNOCK=FALSE \
--DHAL_TRIGGER_USE_ADC=TRUE \
--DSTM32_ADC_USE_ADC3=TRUE \
-"
-
-
-bash ../common_make.sh hellen/hellen88bmw ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../../.. && bash bin/compile.sh config/boards/hellen/hellen88bmw/meta-info-hellen88bmw_avr.env

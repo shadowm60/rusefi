@@ -7,9 +7,6 @@ name: Build Custom Board Firmware
 on:
   workflow_call:
     inputs:
-      shortBoardName:
-        required: true
-        type: string
       token:
         description: 'Token for accessing private repos'
         required: false
@@ -18,10 +15,30 @@ on:
         required: false
         type: string
         default: ext/rusefi
-      relative_board_dir:
+      board_dir:
         required: false
         type: string
-        default: ../..
+        default: .
+      bundle_name:
+        required: false
+        type: string
+    secrets:
+      MY_REPO_PAT:
+        required: false
+      RUSEFI_ONLINE_FTP_USER:
+        required: false
+      RUSEFI_ONLINE_FTP_PASS:
+        required: false
+      RUSEFI_FTP_SERVER:
+        required: false
+      RUSEFI_SSH_SERVER:
+        required: false
+      RUSEFI_SSH_USER:
+        required: false
+      RUSEFI_SSH_PASS:
+        required: false
+      ADDITIONAL_ENV:
+        required: false
 
 jobs:
   create-board:
@@ -43,17 +60,9 @@ jobs:
 
       - name: Echo
         run: |
-          echo "shortBoardName=${{inputs.shortBoardName}}"
+          echo "bundle_name=${{inputs.bundle_name}}"
           echo "rusefi_dir=${{inputs.rusefi_dir}}"
-          echo "relative_board_dir=${{inputs.relative_board_dir}}"
-
-      - name: Set Env Variables
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-        run: |
-          echo "META_OUTPUT_ROOT_FOLDER=../${{inputs.relative_board_dir}}/generated/" >> $GITHUB_ENV
-          echo "gha_shortBoardName=${{inputs.shortBoardName}}" >> $GITHUB_ENV
-          echo "gha_iniFileName=rusefi_${{inputs.shortBoardName}}.ini" >> $GITHUB_ENV
+          echo "board_dir=${{inputs.board_dir}}"
 
       - uses: actions/checkout@v4
         with:
@@ -66,14 +75,30 @@ jobs:
             bash .github/workflows/actions/post-checkout.sh
           fi
 
-      # Build machines don't have arm-none-eabi gcc, so let's download it and put it on the path
-      - name: Download & Install GCC
-        if: ${{ env.skip != 'true' }}
+      - name: Set Env Variables
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
         run: |
-          ${{inputs.rusefi_dir}}/firmware/provide_gcc.sh
-          echo "::add-path::`pwd`/gcc-arm-none-eabi/bin"
+          echo "REF=${{github.ref_name}}" >> $GITHUB_ENV
+          ROOT_DIR="../$(echo ${{inputs.rusefi_dir}} | sed -E 's/[^/]{2,}/../g')"
+          cd ${{inputs.rusefi_dir}}/firmware
+          BOARD_DIR=$(realpath --relative-to=. "$ROOT_DIR/${{inputs.board_dir}}")
+          BOARD_META_PATH=$(bash bin/find_meta_info.sh "$BOARD_DIR" "${{inputs.bundle_name}}")
+          source config/boards/common_script_read_meta_env.inc "$BOARD_META_PATH"
+          echo "BOARD_META_PATH=$BOARD_META_PATH" >> $GITHUB_ENV
+          echo "BOARD_DIR=$BOARD_DIR" >> $GITHUB_ENV
+          echo "SHORT_BOARD_NAME=$SHORT_BOARD_NAME" >> $GITHUB_ENV
+          echo "BUNDLE_NAME=$SHORT_BOARD_NAME" >> $GITHUB_ENV
+          cd ..
+          echo "META_OUTPUT_ROOT_FOLDER=$(realpath firmware/$BOARD_DIR/generated)/" >> $GITHUB_ENV
+          echo "${{ secrets.ADDITIONAL_ENV }}" >> $GITHUB_ENV
+          echo "BUNDLE_SIMULATOR=no" >> $GITHUB_ENV
+
+      - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
+        if: ${{ env.skip != 'true' }}
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '12.3.Rel1'
 
       - uses: actions/setup-java@v4
         with:
@@ -88,11 +113,6 @@ jobs:
           sudo bash ${{inputs.rusefi_dir}}/misc/actions/add-ubuntu-latest-apt-mirrors.sh
           sudo apt-get install sshpass sshpass mtools
 
-      - name: Gen Config
-        working-directory: ${{inputs.rusefi_dir}}/firmware
-        run: |
-          bash gen_config_board.sh ../${{inputs.relative_board_dir}} ${{env.gha_shortBoardName}}
-
       - name: Repo Status
         run: |
           git status
@@ -105,6 +125,27 @@ jobs:
           else
             echo Not a repository
           fi
+
+      - name: Configs build_server upload SSH variables
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run: |
+          if ([ "${{github.event_name}}" = "push" ] || [ "${{github.event_name}}" = "schedule" ] || [ "${{github.event_name}}" = "workflow_dispatch" ] ) && [ "${{github.ref}}" = "refs/heads/master" ]; then
+            echo "Setting credentials..."
+            echo "RUSEFI_SSH_SERVER=${{secrets.RUSEFI_SSH_SERVER}}" >> $GITHUB_ENV
+            echo "RUSEFI_SSH_USER=${{secrets.RUSEFI_SSH_USER}}" >> $GITHUB_ENV
+            echo "RUSEFI_SSH_PASS=${{secrets.RUSEFI_SSH_PASS}}" >> $GITHUB_ENV
+          else
+            echo "NOT setting credentials: ${{github.event_name}} ${{github.ref}}"
+          fi
+
+      - name: Build Firmware Everything
+        working-directory: ${{inputs.rusefi_dir}}/firmware
+        run: bash bin/compile.sh -b ${{env.BOARD_META_PATH}}
+
+      - name: Upload Bundle
+        working-directory: ${{inputs.rusefi_dir}}/artifacts
+        run: bash ../firmware/bin/upload_bundle.sh
 
       - name: Push Config
         run: |
@@ -139,67 +180,48 @@ jobs:
         with:
           github_token: ${{ github.token }}
 
-      - name: Upload .ini files to server
+      - name: Upload .ini files to rusEFI Online server
         working-directory: generated/tunerstudio/generated
-        run: ../../../${{inputs.rusefi_dir}}/firmware/tunerstudio/upload_ini.sh ${{env.gha_iniFileName}} ${{ secrets.RUSEFI_ONLINE_FTP_USER }} ${{ secrets.RUSEFI_ONLINE_FTP_PASS }} ${{ secrets.RUSEFI_FTP_SERVER }}
+        run: ../../../${{inputs.rusefi_dir}}/firmware/tunerstudio/upload_ini.sh ${{ secrets.RUSEFI_ONLINE_FTP_USER }} ${{ secrets.RUSEFI_ONLINE_FTP_PASS }} ${{ secrets.RUSEFI_FTP_SERVER }}
 
-      - name: Build Firmware
-        working-directory: ${{inputs.rusefi_dir}}
-        run: bash misc/jenkins/compile_other_versions/compile.sh ../${{inputs.relative_board_dir}} ${{env.gha_shortBoardName}}
-
-      - name: Upload build bin artifact
+      - name: Upload github action bin artifact
         uses: actions/upload-artifact@v4
         with:
           name: rusefi.bin
           path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.bin
 
-      - name: Upload build hex artifact
+      - name: Upload github action srec artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rusefi_update.srec
+          path: ${{inputs.rusefi_dir}}/firmware/build/rusefi.srec
+
+      - name: Upload github action hex artifact
         uses: actions/upload-artifact@v4
         with:
           name: rusefi.hex
-          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.hex
+          path: ${{inputs.rusefi_dir}}/firmware/build/rusefi*.hex
 
-      - name: Upload build list artifact
+      - name: Upload github action list artifact
         uses: actions/upload-artifact@v4
         with:
           name: rusefi.list
-          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.list
+          path: ${{inputs.rusefi_dir}}/firmware/build/rusefi*.list
 
-      - name: Upload build map artifact
+      - name: Upload github action map artifact
         uses: actions/upload-artifact@v4
         with:
           name: rusefi.map
-          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.map
+          path: ${{inputs.rusefi_dir}}/firmware/build/rusefi*.map
 
-      - name: Upload build elf artifact
+      - name: Upload github action elf artifact
         uses: actions/upload-artifact@v4
         with:
           name: rusefi.elf
-          path: ${{inputs.rusefi_dir}}/firmware/deliver/rusefi*.elf
+          path: ${{inputs.rusefi_dir}}/firmware/build/rusefi*.elf
 
-      - name: Build console
-        working-directory: ${{inputs.rusefi_dir}}
-        run: bash misc/jenkins/build_java_console.sh
-
-      - name: Set SSH variables
-        env:
-          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-        run: |
-          if [ "${{github.event_name}}" = "push" ] && [ "${{github.ref}}" = "refs/heads/master" ]; then
-            echo "Setting credentials..."
-            echo "RUSEFI_SSH_SERVER=${{secrets.RUSEFI_SSH_SERVER}}" >> $GITHUB_ENV
-            echo "RUSEFI_SSH_USER=${{secrets.RUSEFI_SSH_USER}}" >> $GITHUB_ENV
-            echo "RUSEFI_SSH_PASS=${{secrets.RUSEFI_SSH_PASS}}" >> $GITHUB_ENV
-          else
-            echo "NOT setting credentials: ${{github.event_name}} ${{github.ref}}"
-          fi
-
-      - name: Package and Upload Bundle
-        working-directory: ${{inputs.rusefi_dir}}
-        run: bash misc/jenkins/compile_other_versions/prepare_bundle.sh ${{env.gha_shortBoardName}} "${{inputs.relative_board_dir}}/generated/tunerstudio/generated/${{env.gha_iniFileName}}" master
-
-      - name: Upload bundle artifact
+      - name: Upload github action bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rusefi_bundle_${{env.gha_shortBoardName}}.zip
+          name: rusefi_bundle_${{env.SHORT_BOARD_NAME}}.zip
           path: ${{inputs.rusefi_dir}}/artifacts/rusefi_bundle*.zip

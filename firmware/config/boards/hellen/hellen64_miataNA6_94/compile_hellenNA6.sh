@@ -1,4 +1,2 @@
-#!/bin/bash
-
-cd ..
-bash ../common_make.sh hellen/hellen64_miataNA6_94 ARCH_STM32F4
+#!/usr/bin/env bash
+cd ../../../.. && bash bin/compile.sh config/boards/hellen/hellen64_miataNA6_94/meta-info.env

@@ -2,7 +2,7 @@
  * @file	can_msg_tx.cpp
  *
  * CAN message transmission
- * 
+ *
  * @date Mar 13, 2020
  * @author Matthew Kennedy, (c) 2012-2020
  */
@@ -113,9 +113,16 @@ void CanTxMessage::setBus(size_t bus) {
 	busIndex = bus;
 }
 
+// LSB Little-endian System, "Intel"
 void CanTxMessage::setShortValue(uint16_t value, size_t offset) {
 	m_frame.data8[offset] = value & 0xFF;
 	m_frame.data8[offset + 1] = value >> 8;
+}
+
+// MOTOROLA order, MSB (Most Significant Byte/Big Endian) comes first.
+void CanTxMessage::setShortValueMsb(uint16_t value, size_t offset) {
+	m_frame.data8[offset] = value >> 8;
+	m_frame.data8[offset + 1] = value & 0xFF;
 }
 
 void CanTxMessage::setBit(size_t byteIdx, size_t bitIdx) {

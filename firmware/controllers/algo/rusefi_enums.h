@@ -28,7 +28,9 @@
 
 /* diagnostic for brain pins
  * can be combination of few bits
- * defined as bit mask */
+ * defined as bit mask
+ * PIN_UNKNOWN is reported for pins with no diagnostic support, like on-chip gpio
+ */
 typedef enum __attribute__ ((__packed__))
 {
 	PIN_OK = 0,
@@ -38,7 +40,7 @@ typedef enum __attribute__ ((__packed__))
 	PIN_OVERLOAD =	0x08,
 	PIN_DRIVER_OVERTEMP = 0x10,
 	PIN_DRIVER_OFF = 0x20,
-	PIN_INVALID = 0x80
+	PIN_UNKNOWN = 0x80
 } brain_pin_diag_e;
 
 // see also PWM_PHASE_MAX_WAVE_PER_PWM
@@ -112,7 +114,9 @@ typedef enum  __attribute__ ((__packed__)) {
 
 	VVT_FORD_COYOTE = 19,
 
-    VVT_MITSUBISHI_6G72 = 20,
+  VVT_MITSUBISHI_6G72 = 20,
+
+  VVT_HONDA_CBR_600 = 21,
 
 } vvt_mode_e;
 
@@ -339,7 +343,11 @@ typedef enum __attribute__ ((__packed__)) {
 	SPI_DEVICE_2 = 2,
 	SPI_DEVICE_3 = 3,
 	SPI_DEVICE_4 = 4,
+	SPI_DEVICE_5 = 5,
+	SPI_DEVICE_6 = 6,
 } spi_device_e;
+
+#define SPI_TOTAL_COUNT 6
 
 typedef enum __attribute__ ((__packed__)) {
 	BMW_e46 = 0,
@@ -624,6 +632,8 @@ typedef enum __attribute__ ((__packed__)) {
 	DC_None = 0,
 	DC_Throttle1 = 1,
 	DC_Throttle2 = 2,
+	// this is about SINGLE DC-motor idle valve like 90s volkswagen/earlier M111 engines
+	// NOT to be used in dual H-bridge stepper control
 	DC_IdleValve = 3,
 	DC_Wastegate = 4,
 } dc_function_e;

@@ -4,6 +4,7 @@ import com.opensr5.ini.IniFileModel;
 import com.opensr5.ini.field.ArrayIniField;
 import com.opensr5.ini.field.IniField;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -36,16 +37,20 @@ public class CurveData implements HoHo {
         return curveData;
     }
 
-    @NotNull
+    @Nullable
     public static CurveData valueOf(String msqFileName, String curveName, IniFileModel model) throws IOException {
         IniField iniField = model.allIniFields.get(curveName);
         if (!(iniField instanceof ArrayIniField))
             return null;
         ArrayIniField field = (ArrayIniField) iniField;
         int curveSize = field.getRows();
-        BufferedReader r = TS2C.readAndScroll(msqFileName, curveName + "\"", TS2C.fileFactory);
         float[] curveValues = new float[curveSize];
-        readAxle(curveValues, r);
+        try (BufferedReader r = TS2C.readAndScroll(msqFileName, curveName + "\"", TS2C.fileFactory)) {
+            readAxle(curveValues, r);
+        } catch (NumberFormatException e) {
+            // we read potentially old tune using current IniFileModel, curve dimension might not match
+            System.err.println("[NumberFormatException] while " + curveName);
+        }
 
         return new CurveData(curveName, curveValues);
     }
