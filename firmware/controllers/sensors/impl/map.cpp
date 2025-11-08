@@ -16,7 +16,7 @@
 static float validateBaroMap(float mapKPa) {
 	// Highest interstate is the Eisenhower Tunnel at 11158 feet -> 66 kpa
 	// Lowest point is the Dead Sea, -1411 feet -> 106 kpa
-	if (cisnan(mapKPa) || mapKPa > 110 || mapKPa < 60) {
+	if (std::isnan(mapKPa) || mapKPa > 110 || mapKPa < 60) {
 		warning(ObdCode::OBD_Barometric_Press_Circ, "Invalid start-up baro pressure = %.2fkPa", mapKPa);
 		return NAN;
 	}
@@ -25,24 +25,22 @@ static float validateBaroMap(float mapKPa) {
 
 #if EFI_PROD_CODE
 
-extern int mapMinBufferLength;
-
 static void printMAPInfo() {
 #if EFI_ANALOG_SENSORS
 	efiPrintf("instant value=%.2fkPa", Sensor::getOrZero(SensorType::Map));
 
-#if EFI_MAP_AVERAGING
-	efiPrintf("map type=%d/%s MAP=%.2fkPa mapMinBufferLength=%d", engineConfiguration->map.sensor.type,
+#if EFI_MAP_AVERAGING && defined (MODULE_MAP_AVERAGING)
+	efiPrintf("map type=%d/%s MAP=%.2fkPa", engineConfiguration->map.sensor.type,
 			getAir_pressure_sensor_type_e(engineConfiguration->map.sensor.type),
-			Sensor::getOrZero(SensorType::Map),
-			mapMinBufferLength);
+			Sensor::getOrZero(SensorType::Map));
 #endif // EFI_MAP_AVERAGING
 
 	adc_channel_e mapAdc = engineConfiguration->map.sensor.hwChannel;
 	char pinNameBuffer[16];
 
-	efiPrintf("MAP %.2fv @%s", getVoltage("mapinfo", mapAdc),
-			getPinNameByAdcChannel("map", mapAdc, pinNameBuffer));
+	efiPrintf("MAP %.2fv @%s",
+			adcGetRawVoltage("mapinfo", mapAdc).value_or(0),
+			getPinNameByAdcChannel("map", mapAdc, pinNameBuffer, sizeof(pinNameBuffer)));
 	if (engineConfiguration->map.sensor.type == MT_CUSTOM) {
 		efiPrintf("at %.2fv=%.2f at %.2fv=%.2f",
 				engineConfiguration->mapLowValueVoltage,
@@ -68,11 +66,11 @@ static void printMAPInfo() {
 void initMapDecoder() {
 	if (engineConfiguration->useFixedBaroCorrFromMap) {
 		// Read initial MAP sensor value and store it for Baro correction.
-		float storedInitialBaroPressure = Sensor::get(SensorType::MapSlow).value_or(101.325);
+		float storedInitialBaroPressure = Sensor::get(SensorType::MapSlow).value_or(STD_ATMOSPHERE);
 		efiPrintf("Get initial baro MAP pressure = %.2fkPa", storedInitialBaroPressure);
 		// validate if it's within a reasonable range (the engine should not be spinning etc.)
 		storedInitialBaroPressure = validateBaroMap(storedInitialBaroPressure);
-		if (!cisnan(storedInitialBaroPressure)) {
+		if (!std::isnan(storedInitialBaroPressure)) {
 			efiPrintf("Using this fixed MAP pressure to override the baro correction!");
 
 			// TODO: do literally anything other than this

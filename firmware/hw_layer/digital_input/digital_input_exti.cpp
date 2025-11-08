@@ -18,9 +18,9 @@
  * because pin '0' would be used on two different ports
  */
 
-#ifdef STM32_I2C_I2C1_IRQ_PRIORITY
+#ifdef EFI_IRQ_EXTI_HANDOFF_PRIORITY
 void efiExtiInit() {
-	nvicEnableVector(I2C1_EV_IRQn, STM32_I2C_I2C1_IRQ_PRIORITY);
+	nvicEnableVector(I2C1_EV_IRQn, EFI_IRQ_EXTI_HANDOFF_PRIORITY);
 }
 
 struct ExtiChannel
@@ -35,25 +35,21 @@ struct ExtiChannel
 static ExtiChannel channels[16];
 
 // EXT is not able to give you the front direction but you could read the pin in the callback.
-void efiExtiEnablePin(const char *msg, brain_pin_e brainPin, uint32_t mode, ExtiCallback cb, void *cb_data) {
+int efiExtiEnablePin(const char *msg, brain_pin_e brainPin, uint32_t mode, ExtiCallback cb, void *cb_data) {
 	/* paranoid check, in case of Gpio::Unassigned getHwPort will return NULL
 	 * and we will fail on next check */
 	if (!isBrainPinValid(brainPin)) {
-		return;
+		return -1;
 	}
 
-	criticalAssertVoid(msg, "efiExtiEnablePin msg must not be null");
+	criticalAssert(msg, "efiExtiEnablePin msg must not be null", -1);
 
 	ioportid_t port = getHwPort(msg, brainPin);
 	if (port == NULL) {
-		return;
+		return -1;
 	}
 
-	bool wasUsed = brain_pin_markUsed(brainPin, msg);
-	if (wasUsed) {
-		// error condition we shall bail
-		return;
-	}
+	efiSetPadMode(msg, brainPin, PAL_MODE_INPUT);
 
 	int index = getHwPin(msg, brainPin);
 
@@ -61,12 +57,12 @@ void efiExtiEnablePin(const char *msg, brain_pin_e brainPin, uint32_t mode, Exti
 
 	/* is this index already used? */
 	if (channel.Callback) {
-		firmwareError(ObdCode::CUSTOM_ERR_PIN_ALREADY_USED_2, "%s: pin %s/index %d: exti index already used by %s",
-		msg,
-		hwPortname(brainPin),
-		index,
-		channel.Name);
-		return;
+		firmwareError(ObdCode::CUSTOM_ERR_PIN_ALREADY_USED_2, "%s: pin %s/index %d: exti index already used by %s (stm32 limitation, cannot use those two pins as event inputs simultaneously)",
+			msg,
+			hwPortname(brainPin),
+			index,
+			channel.Name);
+		return -1;
 	}
 
 	channel.Callback = cb;
@@ -75,6 +71,8 @@ void efiExtiEnablePin(const char *msg, brain_pin_e brainPin, uint32_t mode, Exti
 
 	ioline_t line = PAL_LINE(port, index);
 	palEnableLineEvent(line, mode);
+
+	return 0;
 }
 
 void efiExtiDisablePin(brain_pin_e brainPin)
@@ -192,6 +190,8 @@ CH_IRQ_HANDLER(STM32_I2C1_EVENT_HANDLER) {
 		}
 	}
 
+	assertInterruptPriority(__func__, EFI_IRQ_EXTI_HANDOFF_PRIORITY);
+
 	OSAL_IRQ_EPILOGUE();
 }
 
@@ -256,7 +256,10 @@ void efiExtiInit() {
 	criticalError("exti not supported");
 }
 
-void efiExtiEnablePin(const char *, brain_pin_e, uint32_t, ExtiCallback, void *) { }
+int efiExtiEnablePin(const char *, brain_pin_e, uint32_t, ExtiCallback, void *)
+{
+	return 0;
+}
 void efiExtiDisablePin(brain_pin_e) { }
 
 uint8_t getExtiOverflowCounter() {

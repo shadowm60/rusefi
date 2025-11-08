@@ -12,7 +12,7 @@ void ClosedLoopFuelCellBase::update(float lambdaDeadband, bool ignoreErrorMagnit
 	float lambdaError = getLambdaError();
 
 	// If we're within the deadband, make no adjustment.
-	if (absF(lambdaError) < lambdaDeadband) {
+	if (std::abs(lambdaError) < lambdaDeadband) {
 		return;
 	}
 
@@ -29,18 +29,8 @@ void ClosedLoopFuelCellBase::update(float lambdaDeadband, bool ignoreErrorMagnit
 	float adjust = getIntegratorGain() * lambdaError * integrator_dt
 					+ m_adjustment;
 
-	// Clamp to bounds
-	float minAdjust = getMinAdjustment();
-	float maxAdjust = getMaxAdjustment();
-
-	if (adjust > maxAdjust) {
-		adjust = maxAdjust;
-	} else if (adjust < minAdjust) {
-		adjust = minAdjust;
-	}
-
-	// Save state
-	m_adjustment = adjust;
+	// Clamp to bounds and save
+	m_adjustment = clampF(getMinAdjustment(), adjust, getMaxAdjustment());
 }
 
 float ClosedLoopFuelCellBase::getAdjustment() const {
@@ -66,9 +56,9 @@ float ClosedLoopFuelCellImpl::getMaxAdjustment() const {
 		return 0;
 	}
 
-	float raw = m_config->maxAdd * 0.01f;
+	float raw = 0.01 * m_config->maxAdd;
 	// Don't allow maximum less than 0, or more than maximum adjustment
-	return minF(MAX_ADJ, maxF(raw, 0));
+	return clampF(0, raw, MAX_ADJ);
 }
 
 float ClosedLoopFuelCellImpl::getMinAdjustment() const {
@@ -77,9 +67,9 @@ float ClosedLoopFuelCellImpl::getMinAdjustment() const {
 		return 0;
 	}
 
-	float raw = m_config->maxRemove * 0.01f;
+	float raw = -0.01f * m_config->maxRemove;
 	// Don't allow minimum more than 0, or more than maximum adjustment
-	return maxF(-MAX_ADJ, minF(raw, 0));
+	return clampF(-MAX_ADJ, raw, 0);
 }
 
 float ClosedLoopFuelCellImpl::getIntegratorGain() const {
@@ -89,7 +79,7 @@ float ClosedLoopFuelCellImpl::getIntegratorGain() const {
 	}
 
 	// Clamp to reasonable limits - 100ms to 100s
-	float timeConstant = maxF(0.1f, minF(m_config->timeConstant, 100));
+	float timeConstant = clampF(0.1f, m_config->timeConstant, 100);
 
 	return 1 / timeConstant;
 }

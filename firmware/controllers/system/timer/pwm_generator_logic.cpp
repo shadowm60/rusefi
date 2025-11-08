@@ -13,6 +13,7 @@
 
 #if EFI_PROD_CODE
 #include "mpu_util.h"
+#include "gpio_ext.h"
 #endif // EFI_PROD_CODE
 
 // 1% duty cycle
@@ -50,7 +51,7 @@ void SimplePwm::setSimplePwmDutyCycle(float dutyCycle) {
 		// we are here in order to not change pin once PWM stop was requested
 		return;
 	}
-	if (cisnan(dutyCycle)) {
+	if (std::isnan(dutyCycle)) {
 		warning(ObdCode::CUSTOM_DUTY_INVALID, "%s spwd:dutyCycle %.2f", m_name, dutyCycle);
 		return;
 	} else if (dutyCycle < 0) {
@@ -105,6 +106,7 @@ static efitick_t getNextSwitchTimeNt(PwmConfig *state) {
 	/**
 	 * Once 'iteration' gets relatively high, we might lose calculation precision here.
 	 * This is addressed by iterationLimit below, using any many cycles as possible without overflowing timeToSwitchNt
+	 * Shall we reuse 'sumTickAndFloat' here?
 	 */
 	uint32_t timeToSwitchNt = (uint32_t)((iteration + switchTime) * periodNt);
 
@@ -115,7 +117,7 @@ static efitick_t getNextSwitchTimeNt(PwmConfig *state) {
 }
 
 void PwmConfig::setFrequency(float frequency) {
-	if (cisnan(frequency)) {
+	if (std::isnan(frequency)) {
 		// explicit code just to be sure
 		periodNt = NAN;
 		return;
@@ -182,7 +184,7 @@ efitick_t PwmConfig::togglePwmState() {
 	efiPrintf("period=%.2f safe.period=%.2f", period, safe.periodNt);
 #endif
 
-	if (cisnan(periodNt)) {
+	if (std::isnan(periodNt)) {
 		// NaN period means PWM is paused, we also set the pin low
 		if (m_stateChangeCallback) {
 			m_stateChangeCallback(0, this);
@@ -266,7 +268,7 @@ static void timerCallback(PwmConfig *state) {
 		return;
 	}
 
-	state->m_executor->scheduleByTimestampNt(state->m_name, &state->scheduling, switchTimeNt, { timerCallback, state });
+	state->m_executor->schedule(state->m_name, &state->scheduling, switchTimeNt, action_s::make<timerCallback>( state ));
 	state->dbgNestingLevel--;
 }
 
@@ -285,7 +287,7 @@ void copyPwmParameters(PwmConfig *state, MultiChannelStateSequence const * seq) 
  * this method also starts the timer cycle
  * See also startSimplePwm
  */
-void PwmConfig::weComplexInit(ExecutorInterface *executor,
+void PwmConfig::weComplexInit(Scheduler *executor,
 		MultiChannelStateSequence const * seq,
 		pwm_cycle_callback *pwmCycleCallback, pwm_gen_callback *stateChangeCallback) {
 	m_executor = executor;
@@ -310,13 +312,38 @@ void PwmConfig::weComplexInit(ExecutorInterface *executor,
 	timerCallback(this);
 }
 
-void startSimplePwm(SimplePwm *state, const char *msg, ExecutorInterface *executor,
+void startSimplePwm(SimplePwm *state, const char *msg,
+		Scheduler *executor,
 		OutputPin *output, float frequency, float dutyCycle, pwm_gen_callback *callback) {
 	efiAssertVoid(ObdCode::CUSTOM_ERR_PWM_STATE_ASSERT, state != NULL, "state");
 	efiAssertVoid(ObdCode::CUSTOM_ERR_PWM_DUTY_ASSERT, dutyCycle >= 0 && dutyCycle <= PWM_MAX_DUTY, "dutyCycle");
 	if (frequency < 1) {
 		warning(ObdCode::CUSTOM_OBD_LOW_FREQUENCY, "low frequency %.2f %s", frequency, msg);
 		return;
+	}
+
+#if EFI_PROD_CODE
+#if (BOARD_EXT_GPIOCHIPS > 0)
+	if (!callback) {
+		/* No specific scheduler, we can try enabling HW PWM */
+		if (brain_pin_is_ext(output->brainPin)) {
+			/* this pin is driven by external gpio chip, let's see if it can PWM */
+			state->hardPwm = gpiochip_tryInitPwm(msg, output->brainPin, frequency, dutyCycle);
+		}
+		/* TODO: sohuld we try to init MCU PWM on on-chip brainPin?
+		 * Or this should be done only on startSimplePwmHard() call? */
+	}
+
+	/* We have succesufully started HW PWM on this output, no need to continue with SW */
+	if (state->hardPwm) {
+		return;
+	}
+#endif
+#endif
+
+	/* Set default executor for SW PWM */
+	if (!callback) {
+		callback = applyPinState;
 	}
 
 	state->seq.setSwitchTime(0, dutyCycle);
@@ -332,7 +359,7 @@ void startSimplePwm(SimplePwm *state, const char *msg, ExecutorInterface *execut
 }
 
 void startSimplePwmExt(SimplePwm *state, const char *msg,
-		ExecutorInterface *executor,
+		Scheduler *executor,
 		brain_pin_e brainPin, OutputPin *output, float frequency,
 		float dutyCycle, pwm_gen_callback *callback) {
 
@@ -345,7 +372,7 @@ void startSimplePwmExt(SimplePwm *state, const char *msg,
  * @param dutyCycle value between 0 and 1
  */
 void startSimplePwmHard(SimplePwm *state, const char *msg,
-		ExecutorInterface *executor,
+		Scheduler *executor,
 		brain_pin_e brainPin, OutputPin *output, float frequency,
 		float dutyCycle) {
 #if EFI_PROD_CODE && HAL_USE_PWM
@@ -361,6 +388,10 @@ void startSimplePwmHard(SimplePwm *state, const char *msg,
 #endif
 }
 
+/**
+ * default implementation of pwm_gen_callback which simply toggles the pins
+ *
+ */
 void PwmConfig::applyPwmValue(OutputPin *output, int stateIndex, /* weird argument order to facilitate default parameter value */int channelIndex) {
 	TriggerValue value = multiChannelStateSequence->getChannelState(channelIndex, stateIndex);
 	output->setValue(value == TriggerValue::RISE);

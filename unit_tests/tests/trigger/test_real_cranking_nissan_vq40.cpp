@@ -13,6 +13,7 @@ static void test(int engineSyncCam, float camOffsetAdd) {
 
 	reader.open("tests/trigger/resources/nissan_vq40_cranking-1.csv");
 	EngineTestHelper eth (engine_type_e::HELLEN_121_NISSAN_6_CYL);
+	setTable(config->ignitionIatCorrTable, 0);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engineConfiguration->alwaysInstantRpm = true;
 
@@ -49,9 +50,8 @@ static void test(int engineSyncCam, float camOffsetAdd) {
 	ASSERT_EQ(102, round(Sensor::getOrZero(SensorType::Rpm)))<< reader.lineIndex();
 
 	// TODO: why warnings?
-	ASSERT_EQ(2, eth.recentWarnings()->getCount());
-	ASSERT_EQ(ObdCode::CUSTOM_OUT_OF_ORDER_COIL, eth.recentWarnings()->get(0).Code);	// this is from a coil being protected by overdwell protection
-	ASSERT_EQ(ObdCode::CUSTOM_PRIMARY_TOO_MANY_TEETH, eth.recentWarnings()->get(1).Code);
+	ASSERT_EQ(1u, eth.recentWarnings()->getCount());
+	ASSERT_EQ(ObdCode::CUSTOM_PRIMARY_TOO_MANY_TEETH, eth.recentWarnings()->get(0).Code);
 }
 
 // On Nissan VQ, all cams have the same pattern, so all should be equally good for engine sync. Check them all!

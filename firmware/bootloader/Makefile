@@ -5,11 +5,14 @@
 # by default EXTRA_PARAMS is empty and we create 'debug' version of the firmware with additional assertions and statistics
 # for 'release' options see 'clean_compile_two_versions.bat' file
 
-ifeq ($(DEBUG_LEVEL_OPT),)
+ifeq ($(DEBUG_LEVEL_BLT_OPT),)
   # this value would be used by default. For 'debug' configuration override with '-O0 -ggdb -g' or something along these lines
-  DEBUG_LEVEL_OPT = -Os -ggdb -g
-  DDEFS += -DEFI_ENABLE_ASSERTS=FALSE -DCH_DBG_ENABLE_ASSERTS=FALSE -DCH_DBG_ENABLE_STACK_CHECK=FALSE -DCH_DBG_FILL_THREADS=FALSE -DCH_DBG_THREADS_PROFILING=FALSE
+  DEBUG_LEVEL_BLT_OPT = -Os -ggdb -g
+  DDEFS += -DEFI_ENABLE_ASSERTS=FALSE -DCH_DBG_ENABLE_ASSERTS=FALSE -DCH_DBG_FILL_THREADS=FALSE -DCH_DBG_THREADS_PROFILING=FALSE
 endif
+
+# Disable ChibiOS memory core and heap
+DDEFS += -DCH_CFG_USE_MEMCORE=FALSE -DCH_CFG_USE_HEAP=FALSE
 
 DDEFS += -DENABLE_AUTO_DETECT_HSE=TRUE -DSTM32_HSECLK=25000000
 
@@ -22,18 +25,33 @@ DDEFS += -DHAL_USE_FLASH=FALSE
 DDEFS += -DEFI_USE_UART_DMA=FALSE
 
 DDEFS += -DEFI_USB_SERIAL=TRUE -DHAL_USE_USB_MSD=FALSE
-# disable CAN
-DDEFS += -DEFI_CAN_SUPPORT=FALSE
 
 # Cache is disabled on F7, H7
-DDEFS += -DSTM32_SRAM2_NOCACHE=FALSE -DSTM32_NOCACHE_SRAM1_SRAM2=FALSE -DSTM32_NOCACHE_SRAM3=FALSE
+DDEFS += -DSTM32_NOCACHE_ENABLE=FALSE
 
 DDEFS += -DEFI_UNIT_TEST=0 -DEFI_PROD_CODE=1 -DEFI_SIMULATOR=0
 
+PROJECT_DIR = ..
+include $(PROJECT_DIR)/rusefi_rules.mk
+
 # Compiler options here.
 ifeq ($(USE_OPT),)
-  USE_OPT = $(EXTRA_PARAMS) $(DEBUG_LEVEL_OPT) $(RFLAGS) -Wno-error=implicit-fallthrough -Wno-error=bool-operation -fomit-frame-pointer -falign-functions=16 -Werror -Wno-error=pointer-sign -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=sign-compare -Wno-error=unused-parameter -Wno-error=missing-field-initializers -Werror=type-limits -Wno-error=strict-aliasing -Wno-error=attributes
+  USE_OPT = $(EXTRA_PARAMS) $(EXTRA_2_PARAMS) $(EXTRA_3_PARAMS) $(DEBUG_LEVEL_BLT_OPT) $(RFLAGS)
+  USE_OPT += $(RUSEFI_OPT)
+  # huh why do we have custom settings not uniform with rusefi_rules.mk?
+  USE_OPT += -Wno-error=implicit-fallthrough \
+    -Wno-error=bool-operation \
+    -fomit-frame-pointer \
+    -falign-functions=16 \
+    -Wno-error=pointer-sign \
+    -Wno-error=unused-function \
+    -Werror=type-limits \
+    -Wno-error=strict-aliasing\
+    -Wno-error=attributes
 endif
+
+# let everyone know that we are compiling bootloader
+IS_RE_BOOTLOADER = yes
 
 # Configure the linker script to build the bootloader, not the firmware
 USE_OPT += -Wl,--defsym=IS_BOOTLOADER=1
@@ -102,11 +120,6 @@ ifeq ($(USE_EXCEPTIONS_STACKSIZE),)
   USE_EXCEPTIONS_STACKSIZE = 0x1000
 endif
 
-# Enables the use of FPU on Cortex-M4 (no, softfp, hard).
-ifeq ($(USE_FPU),)
-  USE_FPU = hard
-endif
-
 #
 # Architecture or project specific options
 ##############################################################################
@@ -125,7 +138,6 @@ endif
 
 # Define project name here
 PROJECT = openblt_$(PROJECT_BOARD)
-PROJECT_DIR = ..
 
 # Configure precompiled header
 PCH_DIR = $(PROJECT_DIR)/pch
@@ -137,10 +149,7 @@ CHIBIOS = $(PROJECT_DIR)/ChibiOS
 # todo: looks like 'CHIBIOS_CONTRIB' path is universal shall we defined it only once?
 CHIBIOS_CONTRIB = $(CHIBIOS)/../ChibiOS-Contrib
 
-# Configure libfirmware Paths/Includes
-RUSEFI_LIB = $(PROJECT_DIR)/libfirmware
-include $(RUSEFI_LIB)/util/util.mk
-include $(RUSEFI_LIB)/pt2001/pt2001.mk
+include $(PROJECT_DIR)/common_libfirmware.mk
 
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk
 RULESFILE = $(RULESPATH)/rules.mk
@@ -160,7 +169,7 @@ include $(CPU_PLATFORM)
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # RTOS files (optional).
 include $(CHIBIOS)/os/rt/rt.mk
-include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
+include $(CHIBIOS)/os/common/ports/ARMv7-M/compilers/GCC/mk/port.mk
 include $(CHIBIOS)/os/various/cpp_wrappers/chcpp.mk
 # EX files (optional).
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
@@ -196,6 +205,7 @@ CSRC =  $(ALLCSRC) \
 	$(PROJECT_DIR)/ext/openblt/Target/Source/boot.c \
 	$(PROJECT_DIR)/ext/openblt/Target/Source/com.c \
 	$(PROJECT_DIR)/ext/openblt/Target/Source/xcp.c \
+	$(PROJECT_DIR)/ext/openblt/Target/Source/cop.c \
 	$(PROJECT_DIR)/bootloader/openblt_chibios/nvm.c \
 	$(PROJECT_DIR)/hw_layer/openblt/hooks.c \
 
@@ -208,9 +218,11 @@ CPPSRC = $(ALLCPPSRC) \
 	$(PROJECT_DIR)/util/efilib.cpp \
 	$(PROJECT_DIR)/hw_layer/pin_repository.cpp \
 	$(RUSEFI_LIB_CPP) \
+	$(MODULES_CPPSRC) \
 	$(PROJECT_DIR)/bootloader/openblt_chibios/openblt_chibios.cpp \
 	$(PROJECT_DIR)/bootloader/openblt_chibios/openblt_flash.cpp \
 	$(PROJECT_DIR)/bootloader/openblt_chibios/openblt_usb.cpp \
+	$(PROJECT_DIR)/bootloader/openblt_chibios/openblt_can.cpp \
 	bootloader_stubs.cpp \
 	bootloader_main.cpp
 
@@ -240,9 +252,10 @@ ASMXSRC = $(STARTUPASM) $(PORTASM) $(OSALASM) \
 	$(RUSEFIASM) \
 	$(PROJECT_DIR)/hw_layer/main_hardfault_asm.S
 
-INCDIR = $(ALLINC) \
+INCDIR += $(ALLINC) \
 	$(PCH_DIR) \
 	.. \
+	$(MODULES_INC) \
 	$(BOARDINC) \
 	$(CHIBIOS)/os/various \
 	$(CHIBIOS)/os/ex/ST \

@@ -48,6 +48,12 @@ static void assertCrcPacket(BufferTsChannel& dut) {
 	ASSERT_EQ(st5TestBuffer[9], 87);
 }
 
+TEST(binary, testIsTouching) {
+  EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+  ASSERT_FALSE(isTouchingArea(0, 0, offsetof(persistent_config_s, veTable), sizeof(config->veTable)));
+  ASSERT_TRUE(isTouchingArea(offsetof(persistent_config_s, veTable), 5, offsetof(persistent_config_s, veTable), sizeof(config->veTable)));
+}
+
 TEST(binary, testWriteCrc) {
 	BufferTsChannel test;
 
@@ -80,7 +86,7 @@ TEST(TunerstudioCommands, writeChunkEngineConfig) {
 	// two step - writes to the engineConfiguration section require a burn
 	uint8_t val = 50;
 	TunerStudio instance;
-	instance.handleWriteChunkCommand(&channel, TS_CRC, 100, 1, &val);
+	instance.handleWriteChunkCommand(&channel, 0, 100, 1, &val);
 
 	EXPECT_EQ(configBytes[100], 50);
 }

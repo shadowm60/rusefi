@@ -1,16 +1,17 @@
 #pragma once
 
 #include "shutdown_controller.h"
+#include "max_limit_with_hysteresis.h"
 
 #include <cstdint>
 
-// Keep this list in sync with fuelIgnCutCodeList in rusefi.input!
+// Keep this list in sync with fuelIgnCutCodeList in tunerstudio.template.ini!
 enum class ClearReason : uint8_t {
 	None, // 0
 	Fatal, // 1
 	Settings, // 2
 	HardLimit, // 3
-	FaultRevLimit,
+	EtbFaultRevLimit, // 4 means 1500 RPM limit in case of ETB fault
 	BoostCut, // 5
 	OilPressure, // 6
 	StopRequested, // 7
@@ -24,26 +25,30 @@ enum class ClearReason : uint8_t {
 	Lua, // 15
 	ACR, // 16 - Harley Automatic Compression Release
 	LambdaProtection, // 17
-	GdiComms,
-	PleaseBrake,
+	GdiComms, // 18
+	PleaseBrake, // 19
+	FatalErrorRevLimit, // 20
+	GdiLimits, // 21
+	GdiPumpLimit, // 22
 
-	// Keep this list in sync with fuelIgnCutCodeList in rusefi.input!
-	// todo: add a code generator between ClearReason and fuelIgnCutCodeList in rusefi.input
+	// Keep this list in sync with fuelIgnCutCodeList in tunerstudio.template.ini!
+	// todo: add a code generator between ClearReason and fuelIgnCutCodeList in tunerstudio.template.ini
 };
 
-enum class TpsState : uint8_t {
+enum class EtbStatus : uint8_t {
 	None, // 0
 	EngineStopped, // 1
 	TpsError, // 2
 	PpsError, // 3
 	IntermittentTps, // 4
-	PidJitter, // 5
+	AutoTune, // 5
 	Lua, // 6
-	Manual, // 7
+	AutoCalibrate, // 7
 	NotConfigured, // 8
 	Redundancy, // 9
 	IntermittentPps, // 10
-	// keep this list in sync with etbCutCodeList in rusefi.input!
+	JamDetected, // 11
+	// keep this list in sync with etbCutCodeList in tunerstudio.template.ini!
 };
 
 // Only allows clearing the value, but never resetting it.
@@ -82,33 +87,14 @@ struct LimpState {
 	}
 };
 
-class Hysteresis {
-public:
-	// returns true if value > rising, false if value < falling, previous if falling < value < rising.
-	bool test(float value, float rising, float falling) {
-		return test(value > rising, value < falling);
-	}
-
-	bool test (bool risingCondition, bool fallingCondition) {
-		if (risingCondition) {
-			m_state = true;
-		} else if (fallingCondition) {
-			m_state = false;
-		}
-
-		return m_state;
-	}
-
-private:
-	bool m_state = false;
-};
-
 class LimpManager : public EngineModule {
 public:
 	ShutdownController shutdownController;
+	// Mockable<> interface
+	using interface_t = LimpManager;
 
 	// This is called from periodicFastCallback to update internal state
-	void updateState(int rpm, efitick_t nowNt);
+	void updateState(float rpm, efitick_t nowNt);
 
 	void onFastCallback() override;
 	void onIgnitionStateChanged(bool ignitionOn) override;
@@ -123,20 +109,20 @@ public:
 
 	bool allowTriggerInput() const;
 
-	void updateRevLimit(int rpm);
+	void updateRevLimit(float rpm);
 	angle_t getLimitingTimingRetard() const;
 	float getLimitingFuelCorrection() const;
 
 	// Other subsystems call these APIs to indicate a problem has occurred
 	void reportEtbProblem();
 	void fatalError();
-	Timer gdiComms;
+	Timer externalGdiCanBusComms;
 
 private:
-	void setFaultRevLimit(int limit);
+	void setFaultRevLimit(int limit, ClearReason rpmLimitReason);
 
 	Hysteresis m_revLimitHysteresis;
-	Hysteresis m_boostCutHysteresis;
+	MaxLimitWithHysteresis<> m_boostCutHysteresis;
 	Hysteresis m_injectorDutyCutHysteresis;
 
 	// Start with no fault rev limit
@@ -160,6 +146,7 @@ private:
 
 	// todo: migrate to engineState->desiredRpmLimit to get this variable logged
 	float m_revLimit;
+	ClearReason m_rpmLimitReason = ClearReason::None;
 	float resumeRpm;
 
 	// Tracks how long since a cut (ignition or fuel) was active for any reason
@@ -167,6 +154,10 @@ private:
 
 	// Tracks how long injector duty has been over the sustained limit
 	Timer m_injectorDutySustainedTimer;
+
+	// Tracks how long oil pressure has been out of thresholds
+	Timer m_lowOilPressureTimer;
+	Timer m_highOilPressureTimer;
 };
 
 #if EFI_ENGINE_CONTROL

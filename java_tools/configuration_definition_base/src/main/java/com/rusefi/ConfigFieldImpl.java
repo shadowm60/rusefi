@@ -3,7 +3,9 @@ package com.rusefi;
 import com.devexperts.logging.Logging;
 import com.opensr5.ini.field.EnumIniField;
 import com.rusefi.core.Pair;
+import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.output.ConfigStructure;
+import com.rusefi.output.ConfigStructureImpl;
 import com.rusefi.output.JavaFieldsConsumer;
 
 import java.util.Arrays;
@@ -12,8 +14,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.devexperts.logging.Logging.getLogging;
+import static com.rusefi.TokenUtils.tokenizeWithBraces;
 
 import com.rusefi.parse.TypesHelper;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -27,7 +31,7 @@ public class ConfigFieldImpl implements ConfigField {
 
     private static final String typePattern = "([\\w\\d_]+)(\\[([\\w\\d]+)(\\sx\\s([\\w\\d]+))?(\\s([\\w\\d]+))?\\])?";
 
-    private static final String namePattern = "[[\\w\\d\\s_]]+";
+    private static final String namePattern = "[[@\\w\\d\\s_]]+";
     private static final String commentPattern = ";([^;]*)";
 
     private static final Pattern FIELD = Pattern.compile(typePattern + "\\s(" + namePattern + ")(" + commentPattern + ")?(;(.*))?");
@@ -50,10 +54,15 @@ public class ConfigFieldImpl implements ConfigField {
     private final boolean hasAutoscale;
     private final String trueName;
     private final String falseName;
-    private final ConfigStructure parent;
+    private final ConfigStructure parentType;
     private boolean isFromIterate;
     private String iterateOriginalName;
     private int iterateIndex;
+
+    // this is used to override the units used on rusefi_config.txt
+    // only used to replace "SPECIAL_CASE_TEMPERATURE" to "C" and "F", and apply the correct scale
+    @Nullable
+    private String mockedTsInfo;
 
     /**
      * todo: one day someone should convert this into a builder
@@ -75,11 +84,13 @@ public class ConfigFieldImpl implements ConfigField {
         Objects.requireNonNull(name, comment + " " + type);
         assertNoWhitespaces(name);
         this.name = name;
+        if (TypesHelper.isBoolean(type) && trueName == null && !getName().startsWith(ConfigStructureImpl.UNUSED_BIT_PREFIX))
+            state.intDefaultBitNameCounter();
 
         if (!isVoid())
             Objects.requireNonNull(state);
         this.state = state;
-        this.parent = state == null ? null : (state.isStackEmpty() ? null : state.peek());
+        this.parentType = state == null ? null : (state.isStackEmpty() ? null : state.peek());
         this.comment = comment;
 
         if (!isVoid())
@@ -89,7 +100,7 @@ public class ConfigFieldImpl implements ConfigField {
         this.arraySizes = arraySizes;
         this.tsInfo = tsInfo == null ? null : state.getVariableRegistry().applyVariables(tsInfo);
         this.isIterate = isIterate;
-        if (tsInfo != null) {
+        if (tsInfo != null && !TypesHelper.isFloat(type)) {
             String[] tokens = getTokens();
             if (tokens.length > 1) {
                 String scale = tokens[1].trim();
@@ -104,11 +115,30 @@ public class ConfigFieldImpl implements ConfigField {
                 }
             }
         }
+        validateRange();
     }
 
+    private void validateRange() {
+        if (!TypesHelper.withRange(type))
+            return;
+        String[] tokens = getTokens();
+        if (tokens.length < 4)
+            return;
+        double scale = autoscaleSpecNumber();
+        double min = getMin();
+        double minValue = scale * TypesHelper.getMinValue(type);
+        if (min < minValue)
+            throw new FieldOutOfRangeException(name + ": min value outside of range " + min + " for " + type + " should be " + minValue);
+        double max = getMax();
+        double maxValue = scale * TypesHelper.getMaxValue(type);
+        if (max > maxValue)
+            throw new FieldOutOfRangeException(name + ": max value " + max + " outside of range. Type " + type + " maxValue " + maxValue);
+    }
+
+
     @Override
-    public ConfigStructure getParent() {
-        return parent;
+    public ConfigStructure getParentStructureType() {
+        return parentType;
     }
 
     private static int getSize(VariableRegistry variableRegistry, String s) {
@@ -120,7 +150,7 @@ public class ConfigFieldImpl implements ConfigField {
 
     @Override
     public ConfigStructure getStructureType() {
-        return getState().getStructures().get(getType());
+        return getState().getStructures().get(getTypeName());
     }
 
     @Override
@@ -166,21 +196,15 @@ public class ConfigFieldImpl implements ConfigField {
      * @see ConfigFieldParserTest#testParseLine()
      */
     public static ConfigFieldImpl parse(ReaderState state, String line) {
-        Matcher matcher = FIELD.matcher(line);
+        Matcher matcher = FIELD.matcher(line.trim());
         if (!matcher.matches())
             return null;
 
-        String nameString = matcher.group(8).trim();
+        String nameString = state.getVariableRegistry().applyVariables(matcher.group(8).trim());
         String[] nameTokens = nameString.split("\\s");
         String name = nameTokens[nameTokens.length - 1];
 
-        boolean hasAutoscale = false;
-        for (String autoscaler : nameTokens) {
-            if (autoscaler.equals("autoscale")) {
-                hasAutoscale = true;
-                break;
-            }
-        }
+        boolean hasAutoscale = isHasAutoscale(nameTokens);
 
         String comment = matcher.group(10);
         validateComment(comment);
@@ -215,6 +239,17 @@ public class ConfigFieldImpl implements ConfigField {
             log.debug("comment " + comment);
 
         return field;
+    }
+
+    private static boolean isHasAutoscale(String[] nameTokens) {
+        boolean hasAutoscale = false;
+        for (String autoscaler : nameTokens) {
+            if (autoscaler.equals("autoscale")) {
+                hasAutoscale = true;
+                break;
+            }
+        }
+        return hasAutoscale;
     }
 
     private static void validateComment(String comment) {
@@ -282,7 +317,7 @@ public class ConfigFieldImpl implements ConfigField {
      * @see TypesHelper
      */
     @Override
-    public String getType() {
+    public String getTypeName() {
         return type;
     }
 
@@ -311,11 +346,21 @@ public class ConfigFieldImpl implements ConfigField {
 
     @Override
     public String getTsInfo() {
+        if (mockedTsInfo != null) {
+            return mockedTsInfo;
+        }
         return tsInfo;
     }
 
     @Override
+    public void setTsInfo(String newTsInfo) {
+    	mockedTsInfo = newTsInfo;
+    }
+
+    @Override
     public String autoscaleSpec() {
+        if (!hasAutoscale)
+            return null;
         Pair<Integer, Integer> pair = autoscaleSpecPair();
         if (pair == null)
             return null;
@@ -342,6 +387,10 @@ public class ConfigFieldImpl implements ConfigField {
             throw new IllegalArgumentException("Second comma-separated token expected in [" + tsInfo + "] for " + name);
 
         String scale = tokens[1].trim();
+        return getScaleSpec(scale, name);
+    }
+
+    public static @NotNull Pair<Integer, Integer> getScaleSpec(String scale, String name) {
         double factor;
         if (scale.startsWith("{") && scale.endsWith("}")) {
             // Handle just basic division, not a full fledged eval loop
@@ -366,16 +415,14 @@ public class ConfigFieldImpl implements ConfigField {
         double accuracy = Math.abs((factor2 / factor) - 1.);
         if (accuracy > 0.0000001) {
             // Don't want to deal with exception propogation; this should adequately not compile
-            throw new IllegalStateException("$*@#$* Cannot accurately represent autoscale for " + tokens[1]);
+            throw new IllegalStateException("$*@#$* Cannot accurately represent autoscale for [" + scale + "] got " + accuracy);
         }
 
         return new Pair<>(mul, div);
     }
 
     private String[] getTokens() {
-        if (tsInfo == null)
-            return new String[0];
-        return tsInfo.split(",");
+        return tokenizeWithBraces(tsInfo);
     }
 
     @Override
@@ -457,6 +504,12 @@ public class ConfigFieldImpl implements ConfigField {
     @Override
     public String getCommentTemplated() {
         return state.getVariableRegistry().applyVariables(getComment());
+    }
+
+    public static class FieldOutOfRangeException extends RuntimeException {
+        public FieldOutOfRangeException(String s) {
+            super(s);
+        }
     }
 }
 

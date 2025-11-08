@@ -17,7 +17,6 @@
 #include "status_loop.h"
 #include "trigger_emulator_algo.h"
 #include "main_trigger_callback.h"
-#include "sensor_chart.h"
 #include "bench_test.h"
 #include "tunerstudio.h"
 #include "map_averaging.h"
@@ -87,8 +86,8 @@ static void runChprintfTest() {
 		LoggingWithStorage testLogging("test");
 		testLogging.appendPrintf( "a%.2fb%fc", -1.2, -3.4);
 		// different compilers produce different 8th digit
-		testLogging.buffer[strlen(testLogging.buffer) - 1] = 'X';
-		assertString(testLogging.buffer, "a-1.20b-3.400000095X");
+		testLogging.buffer[strlen(testLogging.buffer) - 2] = 'X';
+		assertString(testLogging.buffer, "a-1.20b-3.40000009Xc");
 	}
 
 }
@@ -147,6 +146,7 @@ static void assertNear(float actual, float expected) {
 }
 
 static void	runNotSquareTest() {
+    // [tag:runNotSquareTest]
     assertNear(getscriptTable(3)->getValue(0, 20), 140);
     assertNear(getscriptTable(3)->getValue(0, 30), 240);
 
@@ -165,7 +165,9 @@ static void writeEngineTypeDefaultConfig(engine_type_e type) {
 	writeSimulatorTune(fileName);
 }
 
-void rusEfiFunctionalTest(void) {
+void rusEfiFunctionalTest() {
+  printf("Running rusEFI simulator version: [%d]", (int)getRusEfiVersion());
+  // todo: do we still need 'printToConsole' for any reason?!
 	printToConsole("Running rusEFI simulator version:");
 	static char versionBuffer[20];
 	itoa10(versionBuffer, (int)getRusEfiVersion());
@@ -182,16 +184,11 @@ void rusEfiFunctionalTest(void) {
 
 	initFlash();
 
-  // [CannedTunes]
-	for (auto const type : {
-			engine_type_e::MRE_M111,
-			engine_type_e::HONDA_K,
-			engine_type_e::HELLEN_154_HYUNDAI_COUPE_BK1,
-			engine_type_e::HELLEN_154_HYUNDAI_COUPE_BK2,
-			engine_type_e::HYUNDAI_PB,
-			engine_type_e::MAVERICK_X3,
-			engine_type_e::HARLEY,
-	} ) {
+  printf("[CannedTunes]: %d \n", (int)getLastEngineType());
+  // [CannedTunes] let's export all just for simplicity. See also WriteSimulatorConfiguration.java
+	for (size_t typeIndex = 0;typeIndex<(size_t)getLastEngineType();typeIndex++) {
+    engine_type_e type = (engine_type_e)typeIndex;
+		printf("[CannedTunes]: testing engineConfig: %d \n", (int)type);
 		writeEngineTypeDefaultConfig(type);
 	}
 
@@ -227,14 +224,15 @@ void rusEfiFunctionalTest(void) {
 
 	engineConfiguration->enableVerboseCanTx = true;
 
-	initPeriodicEvents();
+	initPeriodicEvents(); //TODO: replace to initMainLoop();
+	initMainLoop();
 	rememberCurrentConfiguration();
 
 	extern bool main_loop_started;
 	main_loop_started = true;
 }
 
-void printPendingMessages(void) {
+void printPendingMessages() {
 	updateDevConsoleState();
 #if EFI_ENGINE_SNIFFER
 	waveChart.publishIfFull();
@@ -243,11 +241,11 @@ void printPendingMessages(void) {
 
 int isSerialOverTcpReady;
 
-bool isCommandLineConsoleReady(void) {
+bool isCommandLineConsoleReady() {
 	return isSerialOverTcpReady;
 }
 
-void applyNewConfiguration(void) {
+void applyNewConfiguration() {
 }
 
 void onFatalError(const char *msg, const char * file, int line) {
@@ -255,7 +253,7 @@ void onFatalError(const char *msg, const char * file, int line) {
 	exit(-1);
 }
 
-void logMsg(const char *format, ...) {
+void logMsg(const char * /*format*/, ...) {
 //	FILE * fp;
 //	fp = fopen ("simulator.log", "a");
 //
@@ -268,7 +266,7 @@ void logMsg(const char *format, ...) {
 
 #if HAL_USE_CAN
 static bool didInitCan = false;
-CANDriver* detectCanDevice(brain_pin_e pinRx, brain_pin_e pinTx) {
+CANDriver* detectCanDevice(brain_pin_e /*pinRx*/, brain_pin_e /*pinTx*/) {
 	if (didInitCan) {
 		return nullptr;
 	}

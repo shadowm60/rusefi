@@ -1,6 +1,6 @@
 package com.rusefi.output;
 
-import com.opensr5.ini.IniFileModel;
+import com.opensr5.ini.IniFileModelImpl;
 import com.rusefi.*;
 import com.rusefi.parse.TypesHelper;
 
@@ -16,11 +16,11 @@ public abstract class JavaFieldsConsumer implements ConfigurationConsumer {
     private final StringBuilder content = new StringBuilder();
     protected final StringBuffer allFields = new StringBuffer();
     protected final ReaderState state;
-    private final int baseOffset;
+    private final int structureStartingTsPosition;
 
-    public JavaFieldsConsumer(ReaderState state, int baseOffset) {
+    public JavaFieldsConsumer(ReaderState state, int structureStartingTsPosition) {
         this.state = state;
-        this.baseOffset = baseOffset;
+        this.structureStartingTsPosition = structureStartingTsPosition;
     }
 
     public String getContent() {
@@ -47,8 +47,8 @@ public abstract class JavaFieldsConsumer implements ConfigurationConsumer {
     }
 
     private boolean isStringField(ConfigField configField) {
-        String custom = state.getTsCustomLine().get(configField.getType());
-        return custom != null && custom.toLowerCase().startsWith(IniFileModel.FIELD_TYPE_STRING);
+        String custom = state.getTsCustomLine().get(configField.getTypeName());
+        return custom != null && custom.toLowerCase().startsWith(IniFileModelImpl.FIELD_TYPE_STRING);
     }
 
     @Override
@@ -75,54 +75,57 @@ public abstract class JavaFieldsConsumer implements ConfigurationConsumer {
                 String nameWithPrefix = prefix + configField.getName();
 
                 if (configField.isBit()) {
-                    if (!configField.getName().startsWith(ConfigStructure.UNUSED_ANYTHING_PREFIX)) {
+                    if (isUsefulField(configField)) {
                         writeJavaFieldName(nameWithPrefix, tsPosition);
                         content.append("FieldType.BIT, " + bitIndex + ")" + terminateField());
                     }
-                    tsPosition += configField.getSize(next);
-                    return tsPosition;
+                    return iterator.adjustSize(tsPosition);
                 }
 
-                if (TypesHelper.isFloat(configField.getType())) {
+                if (TypesHelper.isFloat(configField.getTypeName())) {
                     writeJavaFieldName(nameWithPrefix, tsPosition);
                     content.append("FieldType.FLOAT)" + terminateField());
                 } else {
-                    String enumOptions = state.getVariableRegistry().get(configField.getType() + VariableRegistry.ARRAY_FORMAT_ENUM);
+                    String enumOptions = state.getVariableRegistry().get(configField.getTypeName() + VariableRegistry.ARRAY_FORMAT_ENUM);
                     if (enumOptions == null)
-                        enumOptions = state.getVariableRegistry().get(configField.getType() + VariableRegistry.KEY_VALUE_FORMAT_ENUM);
+                        enumOptions = state.getVariableRegistry().get(configField.getTypeName() + VariableRegistry.KEY_VALUE_FORMAT_ENUM);
 
-                    if (enumOptions != null && !existingJavaEnums.contains(configField.getType())) {
-                        existingJavaEnums.add(configField.getType());
-                        content.append("\tpublic static final String[] " + configField.getType() + " = {" + enumOptions + "};" + EOL);
+                    if (enumOptions != null && !existingJavaEnums.contains(configField.getTypeName())) {
+                        existingJavaEnums.add(configField.getTypeName());
+                        content.append("\tpublic static final String[] " + configField.getTypeName() + " = {" + enumOptions + "};" + EOL);
                     }
 
 
-                    writeJavaFieldName(nameWithPrefix, tsPosition);
-                    if (isStringField(configField)) {
-                        String custom = state.getTsCustomLine().get(configField.getType());
-                        String[] tokens = custom.split(",");
-                        String stringSize = tokens[3].trim();
-                        content.append(stringSize + ", FieldType.STRING");
-                    } else {
-                        content.append(getJavaType(configField.getElementSize()));
-                    }
-                    if (enumOptions != null) {
-                        content.append(", " + configField.getType());
-                    }
-                    content.append(")" + ".setScale(" + configField.autoscaleSpecNumber() + ")" +
+                    if (isUsefulField(configField)) {
+                        writeJavaFieldName(nameWithPrefix, tsPosition);
+                        if (isStringField(configField)) {
+                            String custom = state.getTsCustomLine().get(configField.getTypeName());
+                            String[] tokens = custom.split(",");
+                            String stringSize = tokens[3].trim();
+                            content.append(stringSize + ", FieldType.STRING");
+                        } else {
+                            content.append(getJavaType(configField.getElementSize()));
+                        }
+                        if (enumOptions != null) {
+                            content.append(", " + configField.getTypeName());
+                        }
+                        content.append(")" + ".setScale(" + configField.autoscaleSpecNumber() + ")" +
                             terminateField());
+                    }
                 }
 
-                tsPosition += configField.getSize(next);
-
-                return tsPosition;
+                return iterator.adjustSize(tsPosition);
             }
         };
         fieldsStrategy.run(state, structure, 0);
     }
 
+    private static boolean isUsefulField(ConfigField configField) {
+        return !configField.getName().startsWith(UnusedPrefix.UNUSED_ANYTHING_PREFIX);
+    }
+
     private String terminateField() {
-        return ".setBaseOffset(" + baseOffset + ")" +
+        return ".setBaseOffset(" + structureStartingTsPosition + ")" +
                 ";" + EOL;
     }
 }

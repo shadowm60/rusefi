@@ -21,8 +21,6 @@ public:
 
 static void func(TriggerCallback *callback) {
 	int formIndex = callback->toothIndex % callback->form->getSize();
-	Engine *engine = callback->engine;
-
 
 	TriggerValue value = callback->form->wave.getChannelState(0, formIndex);
 	efitick_t nowNt = getTimeNowNt();
@@ -32,7 +30,6 @@ static void func(TriggerCallback *callback) {
 		handleShaftSignal(0, value == TriggerValue::RISE, nowNt);
 	}
 }
-
 
 static void scheduleTriggerEvents(TriggerWaveform *shape,
 		float timeScale,
@@ -60,14 +57,17 @@ static void scheduleTriggerEvents(TriggerWaveform *shape,
 			param->isVvt = isVvt;
 			param->vvtBankIndex = vvtBankIndex;
 
-			engine->executor.scheduleByTimestamp("test", &param->sched, timeScale * 1000 * angle, { func, param.get() });
+			efitick_t timeNt = efitick_t{US2NT(timeScale * 1000 * angle)};
+
+			engine->scheduler.schedule("test", &param->sched, timeNt, action_s::make<func>(param.get()));
 			totalIndex++;
 		}
 	}
 }
 
-
 TEST(nissan, vq_vvt) {
+	extern bool unitTestTaskPrecisionHack;
+	unitTestTaskPrecisionHack = true;
 	// hold a reference to the heap allocated scheduling events until the test is done
 	std::vector<std::shared_ptr<TriggerCallback>> ptrs;
 
@@ -110,37 +110,38 @@ TEST(nissan, vq_vvt) {
 				/* timeScale */ vvtTimeScale,
 				cyclesCount / 6, true,
 				/* vvtBankIndex */1,
-				/* vvtOffset */ testVvtOffset + NISSAN_VQ_CAM_OFFSET,
+				/* vvtOffset, making it positive */ 720 + testVvtOffset + NISSAN_VQ_CAM_OFFSET,
 				ptrs);
 	}
 
-	eth.executeUntil(1473000);
+	eth.setTimeAndInvokeEventsUs(1473000);
 	ASSERT_EQ(167, round(Sensor::getOrZero(SensorType::Rpm)));
 
-	eth.executeUntil(1475000);
+	eth.setTimeAndInvokeEventsUs(1475000);
 	ASSERT_EQ(167, round(Sensor::getOrZero(SensorType::Rpm)));
 	TriggerCentral *tc = &engine->triggerCentral;
 
-	eth.executeUntil(3593000);
+	eth.setTimeAndInvokeEventsUs(3593000);
 	ASSERT_TRUE(tc->vvtState[0][0].getShaftSynchronized());
 
 	scheduling_s *head;
 
 	int queueIndex = 0;
-	while ((head = engine->executor.getHead()) != nullptr) {
-		eth.setTimeAndInvokeEventsUs(head->momentX);
+	while ((head = engine->scheduler.getHead()) != nullptr) {
+		// todo: what shall we change here once we migrate unit_tests to NT?
+		eth.setTimeAndInvokeEventsUs(head->getMomentUs());
 
 		ASSERT_TRUE(tc->vvtState[0][0].getShaftSynchronized());
 		// let's celebrate that vvtPosition stays the same
 		ASSERT_NEAR(34, tc->vvtPosition[0][0], EPS2D) << "queueIndex=" << queueIndex;
     	queueIndex++;
 	}
-	ASSERT_TRUE(queueIndex == 422) << "Total queueIndex=" << queueIndex;
+	ASSERT_EQ(queueIndex, 432) << "Total queueIndex=" << queueIndex;
 
 	ASSERT_TRUE(tc->vvtState[1][0].getShaftSynchronized());
 
 	ASSERT_NEAR(34, tc->vvtPosition[0][0], EPS2D);
 	ASSERT_NEAR(34, tc->vvtPosition[1][0], EPS2D);
 
-	EXPECT_EQ(0, eth.recentWarnings()->getCount());
+	EXPECT_EQ(0u, eth.recentWarnings()->getCount());
 }

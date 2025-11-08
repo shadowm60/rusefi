@@ -6,7 +6,7 @@
 
 extern bool printFuelDebug;
 
-void startSimultaneousInjection(void*) {
+void startSimultaneousInjection() {
 	efitick_t nowNt = getTimeNowNt();
 	for (size_t i = 0; i < engineConfiguration->cylindersCount; i++) {
 		enginePins.injectors[i].open(nowNt);
@@ -34,7 +34,7 @@ void InjectorOutputPin::open(efitick_t nowNt) {
 
 #if FUEL_MATH_EXTREME_LOGGING
 	if (printFuelDebug) {
-		printf("InjectorOutputPin::open %s %d now=%0.1fms\r\n", getName(), overlappingCounter, (int)getTimeNowUs() / 1000.0);
+		printf("InjectorOutputPin::open %s %d now=%0.1fms\r\n", getName(), overlappingCounter, time2print(getTimeNowUs()) / 1000.0);
 	}
 #endif /* FUEL_MATH_EXTREME_LOGGING */
 
@@ -45,12 +45,12 @@ void InjectorOutputPin::open(efitick_t nowNt) {
 //		 */
 #if FUEL_MATH_EXTREME_LOGGING
 		if (printFuelDebug) {
-			printf("overlapping, no need to touch pin %s %d\r\n", getName(), (int)getTimeNowUs());
+			printf("overlapping, no need to touch pin %s %d\r\n", getName(), time2print(getTimeNowUs()));
 		}
 #endif /* FUEL_MATH_EXTREME_LOGGING */
 	} else {
 #if EFI_TOOTH_LOGGER
-		LogTriggerInjectorState(nowNt, true);
+		LogTriggerInjectorState(nowNt, injectorIndex, true);
 #endif // EFI_TOOTH_LOGGER
 		setHigh();
 	}
@@ -59,7 +59,7 @@ void InjectorOutputPin::open(efitick_t nowNt) {
 void InjectorOutputPin::close(efitick_t nowNt) {
 #if FUEL_MATH_EXTREME_LOGGING
 	if (printFuelDebug) {
-		printf("InjectorOutputPin::close %s %d %d\r\n", getName(), overlappingCounter, (int)getTimeNowUs());
+		printf("InjectorOutputPin::close %s %d %d\r\n", getName(), overlappingCounter, time2print(getTimeNowUs()));
 	}
 #endif /* FUEL_MATH_EXTREME_LOGGING */
 
@@ -67,12 +67,12 @@ void InjectorOutputPin::close(efitick_t nowNt) {
 	if (overlappingCounter > 0) {
 #if FUEL_MATH_EXTREME_LOGGING
 		if (printFuelDebug) {
-			printf("was overlapping, no need to touch pin %s %d\r\n", getName(), (int)getTimeNowUs());
+			printf("was overlapping, no need to touch pin %s %d\r\n", getName(), time2print(getTimeNowUs()));
 		}
 #endif /* FUEL_MATH_EXTREME_LOGGING */
 	} else {
 #if EFI_TOOTH_LOGGER
-	LogTriggerInjectorState(nowNt, false);
+	LogTriggerInjectorState(nowNt, injectorIndex, false);
 #endif // EFI_TOOTH_LOGGER
 		setLow();
 	}

@@ -1,10 +1,4 @@
-
-// here am flirting with not using pch.h and not including at least Engine
-#include <rusefi/interpolation.h>
-#include <rusefi/arrays.h>
-#include "engine_configuration.h"
-#include "sensor.h"
-#include "error_handling.h"
+#include "pch.h"
 
 #include "injector_model.h"
 #include "fuel_computer.h"
@@ -29,6 +23,7 @@ constexpr float convertToGramsPerSecond(float ccPerMinute) {
 	return ccPerMinute * (fuelDensity / 60.f);
 }
 
+// returns: grams per second flow
 float InjectorModelWithConfig::getBaseFlowRate() const {
 	if (engineConfiguration->injectorFlowAsMassFlow) {
 		return m_cfg->flow;
@@ -43,11 +38,20 @@ float InjectorModelPrimary::getSmallPulseFlowRate() const {
 
 float InjectorModelPrimary::getSmallPulseBreakPoint() const {
 	// convert milligrams -> grams
+	// todo: make UI deal with scaling?!
 	return 0.001f * engineConfiguration->fordInjectorSmallPulseBreakPoint;
 }
 
 InjectorNonlinearMode InjectorModelPrimary::getNonlinearMode() const {
 	return engineConfiguration->injectorNonlinearMode;
+}
+
+injector_compensation_mode_e InjectorModelPrimary::getInjectorCompensationMode() const {
+	return engineConfiguration->injectorCompensationMode;
+}
+
+float InjectorModelPrimary::getFuelReferencePressure() const {
+	return engineConfiguration->fuelReferencePressure;
 }
 
 float InjectorModelSecondary::getSmallPulseFlowRate() const {
@@ -60,9 +64,31 @@ float InjectorModelSecondary::getSmallPulseBreakPoint() const {
 	return 0;
 }
 
+injector_compensation_mode_e InjectorModelSecondary::getInjectorCompensationMode() const {
+	return engineConfiguration->secondaryInjectorCompensationMode;
+}
+
+float InjectorModelSecondary::getFuelReferencePressure() const {
+	return engineConfiguration->secondaryInjectorFuelReferencePressure;
+}
+
 InjectorNonlinearMode InjectorModelSecondary::getNonlinearMode() const {
 	// nonlinear not supported on second bank
 	return InjectorNonlinearMode::INJ_None;
+}
+
+void InjectorModelWithConfig::updateState() {
+	// TODO: remove at the end of 2025
+	// hack not to break tunes before 2779925f54f5c2d23499cbb2797f71508c652f54 "injector lag lookup should be done based on differential pressure"
+	if (engineConfiguration->useAbsolutePressureForLagTime) {
+		pressureCorrectionReference = getFuelPressure().Value;
+	} else {
+		pressureCorrectionReference = getFuelDifferentialPressure().Value;
+	}
+}
+
+expected<float> InjectorModelWithConfig::getFuelPressure() const {
+  return getFuelDifferentialPressure().Value + Sensor::get(SensorType::Map).value_or(STD_ATMOSPHERE);
 }
 
 expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
@@ -70,20 +96,20 @@ expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
 	auto baro = Sensor::get(SensorType::BarometricPressure);
 
 	float baroKpa = baro.Value;
+	// todo: extract baro sensor validation logic
 	if (!baro || baro.Value > 120 || baro.Value < 50) {
-		baroKpa = 101.325f;
+		baroKpa = STD_ATMOSPHERE;
 	}
 
-	switch (engineConfiguration->injectorCompensationMode) {
+	switch (getInjectorCompensationMode()) {
 		case ICM_FixedRailPressure:
 			// Add barometric pressure, as "fixed" really means "fixed pressure above atmosphere"
-			return
-				  engineConfiguration->fuelReferencePressure
+			return getFuelReferencePressure()
 				+ baroKpa
-				- map.value_or(101.325);
+				- map.value_or(STD_ATMOSPHERE);
 		case ICM_SensedRailPressure: {
 			if (!Sensor::hasSensor(SensorType::FuelPressureInjector)) {
-				criticalError("Fuel pressure compensation is set to use a pressure sensor, but none is configured.");
+				warning(ObdCode::OBD_Fuel_Pressure_Sensor_Missing, "Fuel pressure compensation is set to use a pressure sensor, but none is configured.");
 				return unexpected;
 			}
 
@@ -118,11 +144,12 @@ expected<float> InjectorModelWithConfig::getFuelDifferentialPressure() const {
 
 float InjectorModelWithConfig::getInjectorFlowRatio() {
 	// Compensation disabled, use reference flow.
-	if (engineConfiguration->injectorCompensationMode == ICM_None) {
+	auto compensationMode = getInjectorCompensationMode();
+	if (compensationMode == ICM_None || compensationMode == ICM_HPFP_Manual_Compensation) {
 		return 1.0f;
 	}
 
-	float referencePressure = engineConfiguration->fuelReferencePressure;
+	const float referencePressure = getFuelReferencePressure();
 
 	if (referencePressure < 50) {
 		// impossibly low fuel ref pressure
@@ -154,23 +181,63 @@ float InjectorModelWithConfig::getInjectorFlowRatio() {
 }
 
 float InjectorModelWithConfig::getDeadtime() const {
-	return interpolate2d(
-		Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE),
-		m_cfg->battLagCorrBins,
-		m_cfg->battLagCorr
+	return interpolate3d(
+		m_cfg->battLagCorrTable,
+      	m_cfg->battLagCorrPressBins, pressureCorrectionReference,
+      	m_cfg->battLagCorrBattBins, Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE)
 	);
 }
 
-float InjectorModelBase::getInjectionDuration(float fuelMassGram) const {
+//TODO: only used in the tests, refactor pending to InjectorModelWithConfig
+floatms_t InjectorModelBase::getInjectionDuration(float fuelMassGram) const {
 	if (fuelMassGram <= 0) {
 		// If 0 mass, don't do any math, just skip the injection.
 		return 0.0f;
 	}
 
 	// Get the no-offset duration
-	float baseDuration = getBaseDurationImpl(fuelMassGram);
+	floatms_t baseDuration = getBaseDurationImpl(fuelMassGram);
 
-	// Add deadtime offset
+	return baseDuration + m_deadtime;
+}
+
+floatms_t InjectorModelWithConfig::getInjectionDuration(float fuelMassGram) const {
+	if (fuelMassGram <= 0) {
+		// If 0 mass, don't do any math, just skip the injection.
+		return 0.0f;
+	}
+
+  // hopefully one day we pick between useInjectorFlowLinearizationTable and ICM_HPFP_Manual_Compensation approaches
+  // and not more than one of these would stay
+	if (engineConfiguration->useInjectorFlowLinearizationTable) {
+	  auto fps = Sensor::get(SensorType::FuelPressureInjector);
+	// todo: KPA vs BAR mess?!
+    return interpolate3d(config->injectorFlowLinearization,
+			config->injectorFlowLinearizationPressureBins, KPA2BAR(fps.Value),// array values are on bar
+			config->injectorFlowLinearizationFuelMassBins, fuelMassGram * 1000);  // array values are on mg
+	}
+
+	// Get the no-offset duration
+	floatms_t baseDuration = getBaseDurationImpl(fuelMassGram);
+
+	// default non GDI case
+	if (getInjectorCompensationMode() != ICM_HPFP_Manual_Compensation) {
+		// Add deadtime offset
+		return baseDuration + m_deadtime;
+	}
+
+	if (!Sensor::hasSensor(SensorType::FuelPressureHigh)) {
+		return baseDuration + m_deadtime;
+	}
+
+	auto fps = Sensor::get(SensorType::FuelPressureHigh);
+	// todo: KPA vs BAR mess in code and UI?!
+	float fuelMassCompensation = interpolate3d(config->hpfpFuelMassCompensation,
+			config->hpfpFuelMassCompensationFuelPressure, KPA2BAR(fps.Value),// array values are on bar
+			config->hpfpFuelMassCompensationFuelMass, fuelMassGram * 1000);  // array values are on mg
+
+	// recalculate base duration with fuel mass compensation
+	baseDuration =  getBaseDurationImpl(fuelMassGram * fuelMassCompensation);
 	return baseDuration + m_deadtime;
 }
 
@@ -179,7 +246,8 @@ float InjectorModelBase::getFuelMassForDuration(floatms_t duration) const {
 	return duration * m_massFlowRate * 0.001f;
 }
 
-float InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
+// todo: all that *1000 and *0.001f is pretty annoying, we need a cleaner approach for units!
+floatms_t InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
 	floatms_t baseDuration = fuelMassGram / m_massFlowRate * 1000;
 
 	switch (getNonlinearMode()) {
@@ -199,7 +267,7 @@ float InjectorModelBase::getBaseDurationImpl(float fuelMassGram) const {
 	}
 }
 
-float InjectorModelBase::correctInjectionPolynomial(float baseDuration) const {
+floatms_t InjectorModelBase::correctInjectionPolynomial(floatms_t baseDuration) const {
 	if (baseDuration > engineConfiguration->applyNonlinearBelowPulse) {
 		// Large pulse, skip correction.
 		return baseDuration;

@@ -1,14 +1,23 @@
 package com.rusefi.test;
 
 import com.rusefi.ReaderStateImpl;
+import com.rusefi.TsFileContent;
 import com.rusefi.output.BaseCHeaderConsumer;
 import com.rusefi.output.JavaFieldsConsumer;
 import com.rusefi.output.TSProjectConsumer;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.StringBufferInputStream;
+
 import static com.rusefi.AssertCompatibility.assertEquals;
 
 public class TSProjectConsumerTest {
+    private static final String smallContent = "hello = \";\"\n" +
+        "world;comment\n" +
+        ";comment2\n" +
+        "end\n";
+
     @Test
     public void getTsCondition() {
         assertEquals("ts", TSProjectConsumer.getToken("\"HIP9011 Settings (knock sensor) (alpha version)\"  @@if_ts\r\n"));
@@ -38,7 +47,7 @@ public class TSProjectConsumerTest {
                 "";
 
         ReaderStateImpl state = new ReaderStateImpl();
-        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
 
 
@@ -89,7 +98,7 @@ public class TSProjectConsumerTest {
             "\t * units: units\n" +
             "\t * offset 22\n" +
             "\t */\n" +
-            "\tuint8_t alignmentFill_at_22[2];\n" +
+            "\tuint8_t alignmentFill_at_22[2] = {};\n" +
             "};\n" +
             "static_assert(sizeof(pid_s) == 24);\n" +
             "\n", consumer.getContent());
@@ -102,7 +111,7 @@ public class TSProjectConsumerTest {
                 "";
 
         ReaderStateImpl state = new ReaderStateImpl();
-        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
 
 
@@ -121,4 +130,23 @@ public class TSProjectConsumerTest {
                 "static_assert(sizeof(pid_s) == 1);\n" +
                 "\n", consumer.getContent());
     }
-}
+
+    @Test
+    public void testReaderKeepComments() throws IOException {
+        TSProjectConsumer consumer = new TestTSProjectConsumer(new ReaderStateImpl());
+        TsFileContent content = consumer.getTsFileContent(new StringBufferInputStream(smallContent));
+        assertEquals(smallContent, content.getPrefix());
+        assertEquals("", content.getPostfix());
+    }
+
+    @Test
+    public void testReaderDropComments() throws IOException {
+        ReaderStateImpl state = new ReaderStateImpl();
+        TSProjectConsumer consumer = new TestTSProjectConsumer(state);
+        state.getVariableRegistry().put(TSProjectConsumer.TS_DROP_TEMPLATE_COMMENTS, "true");
+        TsFileContent content = consumer.getTsFileContent(new StringBufferInputStream(smallContent));
+        assertEquals("hello = \";\"\n" +
+            "world;comment\n" +
+            "end\n", content.getPrefix());
+        assertEquals("", content.getPostfix());
+    }}

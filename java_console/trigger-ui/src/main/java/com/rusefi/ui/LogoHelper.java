@@ -1,5 +1,6 @@
 package com.rusefi.ui;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.core.io.BundleUtil;
 import com.rusefi.core.ui.AutoupdateUtil;
 import com.rusefi.ui.util.URLLabel;
@@ -9,14 +10,15 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import java.awt.*;
 
+import static com.devexperts.logging.Logging.getLogging;
+
 public class LogoHelper {
-    public static final String LOGO_PATH = "/com/rusefi/";
-    public static final String LINK_TEXT = "rusEFI (c) 2012-2024";
-    private static final String LOGO = LOGO_PATH + "logo.png";
+    private static final Logging log = getLogging(LogoHelper.class);
+    public static final String LINK_TEXT = "rusEFI (c) 2012-2025";
     public static final String URI = "http://rusefi.com/?java_console";
 
     public static JLabel createLogoLabel() {
-        ImageIcon logoIcon = getBundleIcon();
+        ImageIcon logoIcon = getBundleSpecificIcon();
         if (logoIcon == null)
             return null;
         JLabel logo = new JLabel(logoIcon);
@@ -27,22 +29,24 @@ public class LogoHelper {
     }
 
     @Nullable
-    public static ImageIcon getBundleIcon() {
-        String bundle = BundleUtil.readBundleFullNameNotNull();
+    public static ImageIcon getBundleSpecificIcon() {
+        String bundle = BundleUtil.readBundleFullNameNotNull().getTarget();
         String logoName;
         // these should be about 213px wide
         if (bundle.contains("proteus")) {
-            logoName = LOGO_PATH + "logo_proteus.png";
-        } else if (bundle.contains("honda")) {
-            logoName = LOGO_PATH + "logo_tutomo.png";
+            logoName = BasicLogoHelper.LOGO_PATH + "logo_proteus.png";
+//        } else if (bundle.contains("honda")) {
+//            logoName = LOGO_PATH + "logo_tutomo.png";
         } else if (bundle.contains("alphax")) {
-            logoName = LOGO_PATH + "logo_alphax.png";
+            logoName = BasicLogoHelper.LOGO_PATH + "logo_alphax.png";
         } else if (bundle.contains(".mre")) {
-            logoName = LOGO_PATH + "logo_mre.png";
+            logoName = BasicLogoHelper.LOGO_PATH + "logo_mre.png";
         } else {
-            logoName = LOGO;
+            logoName = BasicLogoHelper.GENERIC_LOGO;
         }
-        return AutoupdateUtil.loadIcon(logoName);
+        ImageIcon imageIcon = AutoupdateUtil.loadIcon(logoName);
+        log.info(imageIcon + " for " + logoName);
+        return imageIcon;
     }
 
     @NotNull

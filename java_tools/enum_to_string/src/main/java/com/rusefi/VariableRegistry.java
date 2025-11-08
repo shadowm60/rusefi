@@ -5,12 +5,10 @@ import com.rusefi.enum_reader.Value;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.Reader;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -33,22 +31,25 @@ public class VariableRegistry {
     public static final char MULT_TOKEN = '*';
     public static final String DEFINE = "#define";
     private static final String HEX_PREFIX = "0x";
+    private static final String TEMPLATE_QUITE_OPEN_TAG = "@#";
     private final TreeMap<String, String> data = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     // todo: smarter regex! See TsWriter.VAR which is a bit better but still not perfect
     // todo: https://github.com/rusefi/rusefi/issues/3053 ?
-    private final Pattern VAR = Pattern.compile("(@@(.*?)@@)");
-    private final Pattern VAR_REMOVE_QUOTE = Pattern.compile("(@#(.*?)#@)");
+    public final static String TEMPLATE_TAG = "@@";
+    private final Pattern VAR = Pattern.compile("(" + TEMPLATE_TAG + "(.*?)" + TEMPLATE_TAG + ")");
+    private final Pattern VAR_REMOVE_QUOTE = Pattern.compile("(" + TEMPLATE_QUITE_OPEN_TAG + "(.*?)#@)");
 
     public final Map<String, Integer> intValues = new HashMap<>();
 
     private final Map<String, String> cAllDefinitions = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-    // todo: move thid logic to JavaFieldsConsumer since that's the consumer?
+    // todo: move this logic to JavaFieldsConsumer since that's the consumer?
     private final Map<String, String> javaDefinitions = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     public static String unquote(String token) {
         return VariableRegistry.unquote(token, '\"');
     }
+
     @NotNull
     public static String unquote(String token, char quoteSymbol) {
         int length = token.length();
@@ -59,11 +60,20 @@ public class VariableRegistry {
         return token;
     }
 
-    public void readPrependValues(String prependFile) throws IOException {
-        readPrependValues(new FileReader(RootHolder.ROOT + prependFile));
+    static boolean looksLikeDefineLine(String line) {
+        return ToolUtil.startsWithToken(line, DEFINE);
     }
 
-    public void readPrependValues(Reader fileReader) throws IOException {
+    public void readPrependValues(String prependFile, boolean ignoreUnexpectedLined) {
+        File file = new File(IoUtil3.prependIfNotAbsolute(RootHolder.ROOT, prependFile));
+        try {
+            readPrependValues(new FileReader(file), ignoreUnexpectedLined);
+        } catch (Throwable e) {
+            throw new IllegalStateException("While reading from " + file.getAbsolutePath(), e);
+        }
+    }
+
+    public void readPrependValues(Reader fileReader, boolean ignoreUnexpectedLined) throws IOException {
         BufferedReader definitionReader = new BufferedReader(fileReader);
         String line;
         while ((line = definitionReader.readLine()) != null) {
@@ -75,8 +85,14 @@ public class VariableRegistry {
                 continue;
             if (ToolUtil.startsWithToken(line, DEFINE)) {
                 processDefine(line.substring(DEFINE.length()).trim());
+            } else if (!ignoreUnexpectedLined) {
+                throw new IllegalStateException("Unexpected line while prepending: [" + line + "]");
             }
         }
+    }
+
+    void processLine(String line) {
+        processDefine(line.substring(VariableRegistry.DEFINE.length()).trim());
     }
 
     void processDefine(String line) {
@@ -151,7 +167,7 @@ public class VariableRegistry {
                 return 0;
             if (o1.intValue() == 0)
                 return -1; // "None" always go first
-            if (o2.intValue()==0)
+            if (o2.intValue() == 0)
                 return 1;
             return valueNameById.get(o1).compareTo(valueNameById.get(o2));
         });
@@ -195,7 +211,9 @@ public class VariableRegistry {
             if (m.groupCount() < 2)
                 throw new IllegalStateException("Something broken in: [" + line + "]");
             String key = m.group(2);
-            line = m.replaceFirst(function.apply(key));
+            String newValue = function.apply(key);
+            newValue = newValue.replace("\\", "\\\\"); // hack out symbol escaping
+            line = m.replaceFirst(newValue);
         }
         return line;
     }
@@ -272,7 +290,7 @@ public class VariableRegistry {
             //SystemOut.println("Not an integer: " + value);
 
             if (!var.trim().endsWith(KEY_VALUE_FORMAT_ENUM) &&
-                    !var.trim().endsWith(ARRAY_FORMAT_ENUM)) {
+                !var.trim().endsWith(ARRAY_FORMAT_ENUM)) {
                 if (isQuoted(value, '"')) {
                     // quoted and not with enum suffix means plain string define statement
                     javaDefinitions.put(var, "\tpublic static final String " + var + " = " + value + ";" + ToolUtil.EOL);
@@ -310,7 +328,7 @@ public class VariableRegistry {
 
     public void registerHex(String name, int value) {
         register(name + _HEX_SUFFIX, Integer.toString(value, 16));
-        String _16_hex = String.format("\\\\x%02x\\\\x%02x", (value >> 8) & 0xFF, value & 0xFF);
+        String _16_hex = String.format("\\x%02x\\x%02x", (value >> 8) & 0xFF, value & 0xFF);
         register(name + _16_HEX_SUFFIX, _16_hex);
     }
 
@@ -334,6 +352,10 @@ public class VariableRegistry {
 
     public void put(String key, String value) {
         data.put(key, value);
+    }
+
+    public Set<String> getKeys() {
+        return data.keySet();
     }
 
     @Nullable

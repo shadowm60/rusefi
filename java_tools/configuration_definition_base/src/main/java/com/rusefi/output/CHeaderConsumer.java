@@ -1,12 +1,13 @@
 package com.rusefi.output;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.*;
 import com.rusefi.util.LazyFile;
 import com.rusefi.util.LazyFileImpl;
-import com.rusefi.util.SystemOut;
 
 import java.io.IOException;
 
+import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.ToolUtil.EOL;
 
 import org.jetbrains.annotations.NotNull;
@@ -15,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
  * Configuration consumer which writes C header file
  */
 public class CHeaderConsumer extends BaseCHeaderConsumer {
+    private static final Logging log = getLogging(CHeaderConsumer.class);
     @NotNull
     private final ReaderState state;
     /**
@@ -29,16 +31,16 @@ public class CHeaderConsumer extends BaseCHeaderConsumer {
         this.variableRegistry = state.getVariableRegistry();
         this.state = state;
         this.withC_Defines = withC_Defines;
-        SystemOut.println("Writing C header to " + destCHeader);
+        log.info("Writing C header to " + destCHeader);
         cHeader = fileFactory.create(destCHeader);
     }
 
     public static void writeDefinesToFile(VariableRegistry variableRegistry, String fileName, String headerComment) throws IOException {
 
-        SystemOut.println("Writing to " + fileName);
+        log.info("Writing to " + fileName);
         LazyFile cHeader = new LazyFileImpl(fileName);
 
-        cHeader.write("//\n// " + ToolUtil.getGeneratedAutomaticallyTag() + headerComment + "\n//\n\n");
+        cHeader.write("//\n// " + CHeaderConsumer.class.getSimpleName() + " " + ToolUtil.getGeneratedAutomaticallyTag() + headerComment + "\n//\n\n");
         cHeader.write(variableRegistry.getDefinesSection());
         cHeader.close();
     }
@@ -56,7 +58,7 @@ public class CHeaderConsumer extends BaseCHeaderConsumer {
     public void endFile() throws IOException {
         if (withC_Defines)
             cHeader.write(variableRegistry.getDefinesSection());
-        cHeader.write(getContent().toString());
+        cHeader.write(getContent());
         cHeader.write("// end" + EOL);
         cHeader.write("// this section " + state.getHeader() + EOL);
         cHeader.close();

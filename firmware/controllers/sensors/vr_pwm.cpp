@@ -10,7 +10,7 @@ static SimplePwm pwms[VR_THRESHOLD_COUNT];
 #define VR_SUPPLY_VOLTAGE 3.3f
 #endif
 
-static void updateVrThresholdPwm(int rpm, size_t index) {
+static void updateVrThresholdPwm(float rpm, size_t index) {
 	auto& cfg = engineConfiguration->vrThreshold[index];
 
 	if (!isBrainPinValid(cfg.pin)) {
@@ -45,7 +45,7 @@ void initVrThresholdPwm() {
 		}
 
 		startSimplePwmHard(&pwms[i], "VR Threshold",
-			&engine->executor,
+			&engine->scheduler,
 			cfg.pin,
 			&pins[i],
 			10000,	// it's guaranteed to be hardware PWM, the faster the PWM, the less noise makes it through

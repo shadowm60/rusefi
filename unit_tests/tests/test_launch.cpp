@@ -78,9 +78,14 @@ TEST(LaunchControl, RPMCondition) {
 
 	engineConfiguration->launchRpm = 3000;
 
-	EXPECT_FALSE(dut.isInsideRPMCondition(2900));
+	EXPECT_EQ(engineConfiguration->launchRpmWindow, 500);
 
-	EXPECT_TRUE(dut.isInsideRPMCondition(3100));
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(2499), LaunchCondition::NotMet);
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(2500), LaunchCondition::PreLaunch);
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(2900), LaunchCondition::PreLaunch);
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(2999), LaunchCondition::PreLaunch);
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(3000), LaunchCondition::Launch);
+	EXPECT_EQ(dut.calculateRPMLaunchCondition(3100), LaunchCondition::Launch);
 }
 
 TEST(LaunchControl, SwitchInputCondition) {
@@ -113,8 +118,7 @@ TEST(LaunchControl, SwitchInputCondition) {
 	engine->updateSwitchInputs();
 	EXPECT_FALSE(dut.isInsideSwitchCondition());
 
-	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
-	engineConfiguration->clutchDownPinInverted = true;
+	engineConfiguration->clutchDownPinMode = PI_INVERTED_PULLDOWN;
 	setMockState(engineConfiguration->clutchDownPin, false);
 	engine->updateSwitchInputs();
 	EXPECT_TRUE(dut.isInsideSwitchCondition());
@@ -141,31 +145,26 @@ TEST(LaunchControl, CombinedCondition) {
 	Sensor::setMockValue(SensorType::VehicleSpeed, 10.0);
 	Sensor::setMockValue(SensorType::Rpm,  1200);
 
-    EXPECT_FALSE(dut.isLaunchConditionMet(1200));
+	EXPECT_EQ(dut.calculateLaunchCondition(1200), LaunchCondition::NotMet);
 
-    Sensor::setMockValue(SensorType::Rpm,  3200);
-	EXPECT_TRUE(dut.isLaunchConditionMet(3200));
+	Sensor::setMockValue(SensorType::Rpm,  3200);
+	EXPECT_EQ(dut.calculateLaunchCondition(3200), LaunchCondition::Launch);
 
 	Sensor::setMockValue(SensorType::VehicleSpeed, 40.0);
-	EXPECT_FALSE(dut.isLaunchConditionMet(3200));
-
+	EXPECT_EQ(dut.calculateLaunchCondition(3200), LaunchCondition::NotMet);
 }
 
 static void setDefaultLaunchParameters() {
 	engineConfiguration->launchRpm = 4000;    // Rpm to trigger Launch condition
 //	engineConfiguration->launchTimingRetard = 10; // retard in absolute degrees ATDC
-	engineConfiguration->launchTimingRpmRange = 500; // Rpm above Launch triggered for full retard
+	engineConfiguration->launchRpmWindow = 500; // RPM window (Launch RPM - Window) for transitioning to full retard
 	engineConfiguration->launchSparkCutEnable = true;
 	engineConfiguration->launchFuelCutEnable = false;
-	engineConfiguration->hardCutRpmRange = 500; //Rpm above Launch triggered +(if retard enabled) launchTimingRpmRange to hard cut
 	engineConfiguration->launchSpeedThreshold = 10; //maximum speed allowed before disable launch
 	engineConfiguration->launchFuelAdderPercent = 10; // Extra fuel in % when launch are triggered
-	engineConfiguration->launchBoostDuty = 70; // boost valve duty cycle at launch
-	engineConfiguration->launchActivateDelay = 3; // Delay in seconds for launch to kick in
+//	engineConfiguration->launchBoostDuty = 70; // boost valve duty cycle at launch
 //	engineConfiguration->enableLaunchRetard = true;
-// dead code todo	engineConfiguration->enableLaunchBoost = true;
 	engineConfiguration->launchSmoothRetard = true; //interpolates the advance linear from launchrpm to fully retarded at launchtimingrpmrange
-	// dead code todo	engineConfiguration->antiLagRpmTreshold = 3000;
 }
 
 TEST(LaunchControl, CompleteRun) {
@@ -200,13 +199,6 @@ TEST(LaunchControl, CompleteRun) {
 	engine->launchController.update();
 
 
-	//we have a 3 seconds delay to actually enable it!
-	eth.moveTimeForwardAndInvokeEventsSec(1);
-	engine->launchController.update();
-
-	EXPECT_FALSE(engine->launchController.isLaunchSparkRpmRetardCondition());
-	EXPECT_FALSE(engine->launchController.isLaunchFuelRpmRetardCondition());
-
 	eth.moveTimeForwardAndInvokeEventsSec(3);
 	engine->launchController.update();
 
@@ -224,16 +216,18 @@ TEST(LaunchControl, CompleteRun) {
 }
 
 TEST(LaunchControl, hardSkip) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
 	SoftSparkLimiter hardSparkLimiter(true);
 	ASSERT_FALSE(hardSparkLimiter.shouldSkip());
 
 
-	hardSparkLimiter.setTargetSkipRatio(1);
+	hardSparkLimiter.updateTargetSkipRatio(1.0f, 0.0f);
 	// open question if we need special handling of '1' or random would just work?
 	ASSERT_TRUE(hardSparkLimiter.shouldSkip());
 
 	int counter = 0;
-	hardSparkLimiter.setTargetSkipRatio(0.5);
+	hardSparkLimiter.updateTargetSkipRatio(0.5f, 0.0f);
 	for (int i =0;i<1000;i++) {
 		if (hardSparkLimiter.shouldSkip()) {
 			counter++;

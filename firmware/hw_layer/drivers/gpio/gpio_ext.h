@@ -27,13 +27,15 @@ struct GpioChip {
 	virtual int setPadMode(size_t /*pin*/, iomode_t /*mode*/) { return -1; }
 	virtual int writePad(size_t /*pin*/, int /*value*/) { return -1; }
 	virtual int readPad(size_t /*pin*/) { return -1; }
+	virtual int setPadPWM(size_t /*pin*/, float /*frequency*/, float /*duty*/) { return -1; }
 	virtual brain_pin_diag_e getDiag(size_t /*pin*/) { return PIN_OK; }
 	virtual int deinit() { return 0; }
+	virtual void debug() { }
 
 	/* chip needs reinitialization due to some critical issue */
-	bool						need_init;
-	int							init_cnt;
-	int             alive_cnt;
+	bool						need_init = 0;
+	int							init_cnt = 0;
+	int             alive_cnt = 0;
 
 	int statusCode;
 };
@@ -55,6 +57,12 @@ int gpiochips_setPadMode(brain_pin_e pin, iomode_t mode);
 int gpiochips_writePad(brain_pin_e pin, int value);
 int gpiochips_readPad(brain_pin_e pin);
 brain_pin_diag_e gpiochips_getDiag(brain_pin_e pin);
+
+void gpiochips_debug();
+
+#if EFI_PROD_CODE
+hardware_pwm* gpiochip_tryInitPwm(const char* msg, brain_pin_e pin, float frequency, float duty);
+#endif
 
 /* return total number of external gpios */
 int gpiochips_get_total_pins(void);

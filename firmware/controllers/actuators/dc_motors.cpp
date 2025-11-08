@@ -7,8 +7,6 @@
 
 #include "pch.h"
 
-#include "periodic_task.h"
-
 #include "dc_motors.h"
 
 	void DcHardware::start(bool useTwoWires,
@@ -18,7 +16,7 @@
 			const char *disPinMsg,
 			brain_pin_e pinDisable,
 			bool isInverted,
-			ExecutorInterface* executor,
+			Scheduler* executor,
 			int frequency) {
 
 		if (isStarted) {
@@ -101,7 +99,7 @@ DcMotor* initDcMotor(const char *disPinMsg,const dc_io& io, size_t index, bool u
 		io.disablePin,
 		// todo You would not believe how you invert TLE9201 #4579
 		engineConfiguration->stepperDcInvertedPins,
-		&engine->executor,
+		&engine->scheduler,
 		engineConfiguration->etbFreq
 	);
 
@@ -119,7 +117,7 @@ DcMotor* initDcMotor(brain_pin_e coil_p, brain_pin_e coil_m, size_t index) {
 		nullptr,
 		Gpio::Unassigned, /* pinDisable */
 		engineConfiguration->stepperDcInvertedPins,
-		&engine->executor,
+		&engine->scheduler,
 		engineConfiguration->etbFreq /* same in case of stepper? */
 	);
 

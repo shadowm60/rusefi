@@ -2,6 +2,7 @@ DRIVERS_DIR=$(PROJECT_DIR)/hw_layer/drivers
 
 HW_LAYER_DRIVERS_INC = \
 	$(DRIVERS_DIR) \
+	$(DRIVERS_DIR)/adc \
 	$(DRIVERS_DIR)/gpio \
 	$(DRIVERS_DIR)/can \
 	$(DRIVERS_DIR)/sent \
@@ -22,16 +23,18 @@ HW_LAYER_DRIVERS_CORE_CPP = \
 HW_LAYER_DRIVERS =
 
 HW_LAYER_DRIVERS_CPP = \
+	$(DRIVERS_DIR)/adc/ads1015.cpp \
+	$(DRIVERS_DIR)/adc/mcp3208.cpp \
 	$(DRIVERS_DIR)/can/can_hw.cpp \
-	$(DRIVERS_DIR)/serial/serial_hw.cpp \
-	$(DRIVERS_DIR)/can_gpio.cpp \
 	$(PROJECT_DIR)/hw_layer/smart_gpio.cpp \
+	$(DRIVERS_DIR)/gpio/can_gpio_msiobox.cpp \
 	$(DRIVERS_DIR)/gpio/tle6240.cpp \
 	$(DRIVERS_DIR)/gpio/tle8888.cpp \
 	$(DRIVERS_DIR)/gpio/mc33972.cpp \
 	$(DRIVERS_DIR)/gpio/mc33810.cpp \
 	$(DRIVERS_DIR)/gpio/drv8860.cpp \
 	$(DRIVERS_DIR)/gpio/tle9104.cpp \
+	$(DRIVERS_DIR)/gpio/tle9201.cpp \
 	$(DRIVERS_DIR)/gpio/l9779.cpp \
 	$(DRIVERS_DIR)/gpio/protected_gpio.cpp \
 	$(DRIVERS_DIR)/sent/sent_hw_icu.cpp \

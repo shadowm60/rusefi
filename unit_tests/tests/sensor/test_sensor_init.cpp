@@ -85,7 +85,7 @@ TEST(SensorInit, TpsValuesTooClose) {
 	Sensor::resetRegistry();
 
 	// Test a random bogus pin index, shouldn't fail
-	engineConfiguration->tps1_1AdcChannel = static_cast<adc_channel_e>(175);
+	engineConfiguration->tps1_1AdcChannel = static_cast<adc_channel_e>(EFI_ADC_ERROR);
 	engineConfiguration->tpsMin = 200;	// 1.00 volt
 	engineConfiguration->tpsMax = 200;	// 1.00 volt
 	EXPECT_NO_FATAL_ERROR(initTps());
@@ -161,6 +161,31 @@ TEST(SensorInit, DriverIntentWithPedal) {
 
 	// Should get the pedal
 	EXPECT_EQ(Sensor::get(SensorType::DriverThrottleIntent).Value, 75);
+}
+
+TEST(SensorInit, FordTps) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+
+	// pedal
+	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_0;
+	engineConfiguration->throttlePedalPositionSecondAdcChannel = EFI_ADC_1;
+
+	// tps:
+	engineConfiguration->tps1_1AdcChannel = EFI_ADC_2;
+	engineConfiguration->tps1_2AdcChannel = EFI_ADC_3;
+
+	engineConfiguration->useFordRedundantTps = true;
+	engineConfiguration->useFordRedundantPps = true;
+
+	// Should succeed, 0.51 volts apart
+	engineConfiguration->tpsMin = 200;	// 1.00 volt
+	engineConfiguration->tpsMax = 302;	// 1.51 volts
+	EXPECT_NO_FATAL_ERROR(initTps());
+	Sensor::resetRegistry();
+
+	// de-init and re-init should also work without error
+	EXPECT_NO_FATAL_ERROR(deinitTps());
+	EXPECT_NO_FATAL_ERROR(initTps());
 }
 
 TEST(SensorInit, OilPressure) {

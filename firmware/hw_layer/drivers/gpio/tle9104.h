@@ -1,21 +1,29 @@
 #pragma once
 
-#if BOARD_TLE9104_COUNT > 0
+#include "global.h"
+
+#include "efifeatures.h"
+#include <hal.h>
+
+#define TLE9204_OUT_COUNT 4
 
 struct tle9104_config {
-	SPIDriver		*spi_bus;
+#if HAL_USE_SPI
+	SPIDriver	*spi_bus;
 	SPIConfig	spi_config;
+#endif
 
 	struct {
 		ioportid_t		port;
 		uint_fast8_t	pad;
-	} direct_io[4];
+	} direct_io[TLE9204_OUT_COUNT];
 
 	Gpio resn;
 	Gpio en;
 };
 
-void tle9104_add(Gpio base, int index, const tle9104_config* cfg);
+void initAll9104(const tle9104_config *configs);
+int tle9104_add(Gpio base, int index, const tle9104_config* cfg);
 
 // This example config worked on the bench!
 // tle9104_config tle9104_cfg = {
@@ -44,5 +52,3 @@ void tle9104_add(Gpio base, int index, const tle9104_config* cfg);
 // 	.resn = Gpio::A3,
 // 	.en   = Gpio::C9
 // };
-
-#endif // BOARD_TLE9104_COUNT > 0

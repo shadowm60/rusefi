@@ -3,7 +3,7 @@
  */
 
 #include "pch.h"
-#include "hip9011_logic.h"
+#include "board_overrides.h"
 
 static void setDefaultFrankensoStepperIdleParameters() {
 	engineConfiguration->idle.stepperDirectionPin = Gpio::E10;
@@ -24,48 +24,19 @@ Gpio getWarningLedPin() {
 }
 
 Gpio getCommsLedPin() {
-	return Gpio::D15; // blue LED on discovery
+#if defined(HW_NOT_COMMUNITY_FRANKENSO) || defined(EFI_BOOTLOADER)
+  // not f407-discovery but f407-discovery while reusing board file
+  return Gpio::D15;
+#else
+  // f407-discovery community board not frankenso
+	return config->communityCommsLedPin;
+#endif
 }
 
 Gpio getRunningLedPin() {
     // open question if we need those LEDs at all? shall those be configurable?
 	return Gpio::Unassigned;
 }
-
-#if EFI_HIP_9011
-static void setHip9011FrankensoPinout() {
-	/**
-	 * SPI on PB13/14/15
-	 */
-	//	engineConfiguration->hip9011CsPin = Gpio::D0; // rev 0.1
-
-	engineConfiguration->isHip9011Enabled = true;
-	engineConfiguration->hip9011PrescalerAndSDO = HIP_8MHZ_PRESCALER; // 8MHz chip
-	engineConfiguration->is_enabled_spi_2 = true;
-	// todo: convert this to rusEfi, hardware-independent enum
-#if EFI_PROD_CODE
-#ifdef EFI_HIP_CS_PIN
-	engineConfiguration->hip9011CsPin = EFI_HIP_CS_PIN;
-#else
-	engineConfiguration->hip9011CsPin = Gpio::B0; // rev 0.4
-#endif
-	engineConfiguration->hip9011CsPinMode = OM_OPENDRAIN;
-
-	engineConfiguration->hip9011IntHoldPin = Gpio::B11;
-	engineConfiguration->hip9011IntHoldPinMode = OM_OPENDRAIN;
-
-	engineConfiguration->spi2SckMode = PO_OPENDRAIN; // 4
-	engineConfiguration->spi2MosiMode = PO_OPENDRAIN; // 4
-	engineConfiguration->spi2MisoMode = PO_PULLUP; // 32
-#endif /* EFI_PROD_CODE */
-
-	engineConfiguration->hip9011Gain = 1;
-
-	if (!engineConfiguration->useTpicAdvancedMode) {
-	    engineConfiguration->hipOutputChannel = EFI_ADC_10; // PC0
-	}
-}
-#endif
 
 #if EFI_ONBOARD_MEMS
 static void configureAccelerometerPins() {
@@ -82,13 +53,14 @@ static void configureAccelerometerPins() {
 /**
  * @brief	Hardware board-specific default configuration (GPIO pins, ADC channels, SPI configs etc.)
  */
-void setBoardDefaultConfiguration() {
+static void f407_discovery_DefaultConfiguration() {
 	setDefaultFrankensoStepperIdleParameters();
 	setCanFrankensoDefaults();
 
-#if EFI_HIP_9011
-	setHip9011FrankensoPinout();
-#endif /* EFI_HIP_9011 */
+#ifndef HW_NOT_COMMUNITY_FRANKENSO
+  // f407-discovery community board not frankenso
+	config->communityCommsLedPin = Gpio::D15;  // blue LED on discovery
+#endif
 
 	// set optional subsystem configs
 #if EFI_ONBOARD_MEMS
@@ -109,7 +81,7 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->triggerSimulatorPins[1] = Gpio::D2;
 
 	engineConfiguration->triggerInputPins[0] = Gpio::C6;
-	engineConfiguration->triggerInputPins[1] = Gpio::A5;
+//	engineConfiguration->triggerInputPins[1] = Gpio::A5;
 
 	// set this to SPI_DEVICE_3 to enable stimulation
 	//engineConfiguration->digitalPotentiometerSpiDevice = SPI_DEVICE_3;
@@ -141,14 +113,19 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->is_enabled_spi_3 = true;
 }
 
-// weak linkage
-void boardInitHardware() {
-#if HW_FRANKENSO
+void f407_discovery_boardInitHardware() {
+
 static const struct mc33810_config mc33810 = {
 	.spi_bus = &SPID3,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+		.end_cb = nullptr,
+#else
+		.slave = false,
+		.data_cb = nullptr,
+		.error_cb = nullptr,
+#endif
 		// todo: use engineConfiguration->mc33810_cs
 		.ssport = GPIOC,
 		.sspad = 5,
@@ -178,18 +155,28 @@ static const struct mc33810_config mc33810 = {
 // meaning even if we do not use it we need a pin for now
 		[7] = {.port = GPIOD, .pad = 1},
 	},
-	.en = {.port = GPIOA, .pad = 6} // copy-paste with setMode code!
+	.en = {.port = GPIOA, .pad = 6}, // copy-paste with setMode code!
+	// TODO: pick from engineConfiguration->spi3sckPin or whatever SPI is used
+	.sck = {.port = GPIOB, .pad = 3},
+	.spkdur = Gpio::Unassigned,
+	.nomi = Gpio::Unassigned,
+	.maxi = Gpio::Unassigned
 };
 
     if (engineConfiguration->engineType == engine_type_e::FRANKENSO_TEST_33810) {
 	    int ret = mc33810_add(Gpio::MC33810_0_OUT_0, 0, &mc33810);
 	    efiPrintf("*****************+ mc33810_add %d +*******************", ret);
 
-
+#ifndef EFI_BOOTLOADER
 	    // todo: add to more appropriate location?
 	    addConsoleAction("injinfo", [](){
 	        efiPrintf("injinfo index=%d", engine->fuelComputer.brokenInjector);
 	    });
+#endif // EFI_BOOTLOADER
 	}
-#endif // HW_FRANKENSO
+}
+
+void setup_custom_board_overrides() {
+	custom_board_InitHardware = f407_discovery_boardInitHardware;
+	custom_board_DefaultConfiguration = f407_discovery_DefaultConfiguration;
 }

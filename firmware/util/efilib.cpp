@@ -9,8 +9,9 @@
 
 #include "pch.h"
 
-#include <string.h>
-#include <math.h>
+#include <cstring>
+#include <cctype>
+#include <cmath>
 #include "datalogging.h"
 #include "histogram.h"
 
@@ -31,7 +32,7 @@ float efiFloor(float value, float precision) {
  * @param precision for example '0.1' for one digit fractional part
  */
 float efiRound(float value, float precision) {
-	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, precision != 0, "zero precision", NAN);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, precision != 0, "Zero precision is not valid for efiRound maybe you mean '1'?", NAN);
 	float a = round(value / precision);
 	return fixNegativeZero(a * precision);
 }
@@ -40,25 +41,12 @@ char * efiTrim(char *param) {
 	while (param[0] == ' ') {
 		param++; // that would skip leading spaces
 	}
-	int len = efiStrlen(param);
+	int len = std::strlen(param);
 	while (len > 0 && param[len - 1] == ' ') {
 		param[len - 1] = 0;
 		len--;
 	}
 	return param;
-}
-
-bool startsWith(const char *line, const char *prefix) {
-	uint32_t len = efiStrlen(prefix);
-	if (efiStrlen(line) < len) {
-		return false;
-	}
-	for (uint32_t i = 0; i < len; i++) {
-		if (line[i] != prefix[i]) {
-			return false;
-		}
-	}
-	return true;
 }
 
 static char *ltoa_internal(char *p, uint32_t num, unsigned radix) {
@@ -144,19 +132,12 @@ int efiPow10(int param) {
 	return 10 * efiPow10(10 - 1);
 }
 
-/*
-** return lower-case of c if upper-case, else c
-*/
-int mytolower(const char c) {
-  return TO_LOWER(c);
-}
-
 int djb2lowerCase(const char *str) {
 	unsigned long hash = 5381;
 	int c;
 
 	while ( (c = *str++) ) {
-		c = TO_LOWER(c);
+		c = std::tolower(c);
 		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 	}
 
@@ -188,8 +169,8 @@ void printHistogram(Logging *logging, histogram_s *histogram) {
 
 float limitRateOfChange(float newValue, float oldValue, float incrLimitPerSec, float decrLimitPerSec, float secsPassed) {
 	if (newValue >= oldValue)
-		return (incrLimitPerSec <= 0.0f) ? newValue : oldValue + minF(newValue - oldValue, incrLimitPerSec * secsPassed);
-	return (decrLimitPerSec <= 0.0f) ? newValue : oldValue - minF(oldValue - newValue, decrLimitPerSec * secsPassed);
+		return (incrLimitPerSec <= 0.0f) ? newValue : oldValue + std::min(newValue - oldValue, incrLimitPerSec * secsPassed);
+	return (decrLimitPerSec <= 0.0f) ? newValue : oldValue - std::min(oldValue - newValue, decrLimitPerSec * secsPassed);
 }
 
 bool isPhaseInRange(float test, float current, float next) {
@@ -211,14 +192,60 @@ bool isPhaseInRange(float test, float current, float next) {
 	}
 }
 
-// see also getBitRange in lua_lib.h
-int getBitRangeLsb(const uint8_t data[], int bitIndex, int bitWidth) {
+static int getBitRangeCommon(const uint8_t data[], int bitIndex, int bitWidth, int secondByteOffset) {
 	int byteIndex = bitIndex >> 3;
 	int shift = bitIndex - byteIndex * 8;
 	int value = data[byteIndex];
 	if (shift + bitWidth > 8) {
-		value = value + data[1 + byteIndex] * 256;
+		value = value + data[secondByteOffset + byteIndex] * 256;
 	}
 	int mask = (1 << bitWidth) - 1;
 	return (value >> shift) & mask;
+}
+
+// see also getBitRange in lua_lib.h
+int getBitRangeLsb(const uint8_t data[], int bitIndex, int bitWidth) {
+  return getBitRangeCommon(data, bitIndex, bitWidth, 1);
+}
+
+// see also getBitRangeMsb in lua_lib.h
+int getBitRangeMsb(const uint8_t data[], int bitIndex, int bitWidth) {
+  return getBitRangeCommon(data, bitIndex, bitWidth, -1);
+}
+
+void setBitRangeMsb(uint8_t data[], const int totalBitIndex, const int bitWidth, const int value) {
+	int leftBitWidh = bitWidth;
+	const int byteIndex = totalBitIndex >> 3;
+	const int bitInByteIndex = totalBitIndex - byteIndex * 8;
+	if (bitInByteIndex + leftBitWidh > 8) {
+		const int bitsToHandleNow = 8 - bitInByteIndex;
+		setBitRangeMsb(data, (byteIndex - 1) * 8, leftBitWidh - bitsToHandleNow, value >> bitsToHandleNow);
+		leftBitWidh = bitsToHandleNow;
+	}
+	const int mask = (1 << leftBitWidh) - 1;
+	data[byteIndex] = data[byteIndex] & (~(mask << bitInByteIndex));
+	const int maskedValue = value & mask;
+	const int shiftedValue = maskedValue << bitInByteIndex;
+	data[byteIndex] = data[byteIndex] | shiftedValue;
+}
+
+int motorolaMagicFromDbc(int b, int length) {
+    // https://github.com/ebroecker/canmatrix/wiki/signal-Byteorder
+    // convert from lsb0 bit numbering to msb0 bit numbering (or msb0 to lsb0)
+    b = b - (b % 8) + 7 - (b % 8);
+    // convert from lsbit of signal data to msbit of signal data, when bit numbering is msb0
+    b = b + length - 1;
+    // convert from msbit of signal data to lsbit of signal data, when bit numbering is msb0
+    b = b - (b % 8) + 7 - (b % 8);
+    return b;
+}
+
+int getBitRangeMoto(const uint8_t data[], int bitIndex, int bitWidth) {
+	const int b = motorolaMagicFromDbc(bitIndex, bitWidth);
+	return getBitRangeMsb(data, b, bitWidth);
+}
+
+void setBitRangeMoto(uint8_t data[], const int totalBitIndex, const int bitWidth, const int value) {
+	const int b = motorolaMagicFromDbc(totalBitIndex, bitWidth);
+	return setBitRangeMsb(data, b, bitWidth, value);
 }

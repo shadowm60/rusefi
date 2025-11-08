@@ -8,6 +8,7 @@
 
 #include "pch.h"
 #include "board_id.h"
+#include "boards_id.h"
 #include "boards_dictionary.h"
 
 
@@ -17,6 +18,14 @@ board_id_t getBoardId() {
         // a way to test harness patch cord
         return STATIC_BOARD_ID_PROTEUS_CANAM;
     }
+    if (engineConfiguration->engineType == engine_type_e::ME17_9_MISC) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_PROTEUS_SLINGSHOT;
+    }
+    if (engineConfiguration->engineType == engine_type_e::PROTEUS_BMW_M73) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_PROTEUS_M73;
+    }
     if (engineConfiguration->engineType == engine_type_e::HARLEY) {
         // a way to test harness patch cord
         return STATIC_BOARD_ID_PROTEUS_HARLEY;
@@ -25,10 +34,43 @@ board_id_t getBoardId() {
         // a way to test harness patch cord
         return STATIC_BOARD_ID_PROTEUS_SBC;
     }
+    if (engineConfiguration->engineType == engine_type_e::SUBARU_2011) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_PROTEUS_SUBARU_2011;
+    }
+#endif
+
+#if HW_HELLEN_8CHAN
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_PLATINUM_SBC;
+    }
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC_GEN4) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_PLATINUM_GM_GEN4;
+    }
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC_GEN5) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_8CHAN_E92;
+    }
+#endif
+
+#if HW_HELLEN_UAEFI121
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_UAEFU121_SBC;
+    }
+#endif
+
+#if HW_HELLEN_UAEFI
+    if (engineConfiguration->engineType == engine_type_e::GM_SBC_GEN4) {
+        // a way to test harness patch cord
+        return STATIC_BOARD_ID_UAEFI_GM_GEN4;
+    }
 #endif
 
 #if HW_MICRO_RUSEFI
-    if (engineConfiguration->engineType == engine_type_e::MRE_M111) {
+    if (engineConfiguration->engineType == engine_type_e::MERCEDES_M111) {
         return STATIC_BOARD_ID_MRE_M111;
     }
 #endif
@@ -36,7 +78,14 @@ board_id_t getBoardId() {
 #if defined(HW_HELLEN_SKIP_BOARD_TYPE)
 	return (board_id_t)STATIC_BOARD_ID;
 #elif HW_HELLEN
-	return (board_id_t)engine->engineState.hellenBoardId;
+  int16_t hellenBoardId = engine->engineState.hellenBoardId;
+  if (hellenBoardId != -1)
+	  return (board_id_t)hellenBoardId;
+	#if STATIC_BOARD_ID
+	  return (board_id_t)STATIC_BOARD_ID;
+	#else
+	  return -2;
+	#endif
 #elif STATIC_BOARD_ID
 // should STATIC_BOARD_ID simply have priority over hellen board id? what's the use-case of HW_HELLEN with STATIC_BOARD_ID?
 	return (board_id_t)STATIC_BOARD_ID;

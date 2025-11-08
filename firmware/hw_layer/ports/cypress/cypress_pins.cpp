@@ -142,7 +142,7 @@ ioportid_t getHwPort(const char *msg, brain_pin_e brainPin) {
  *  https://github.com/dron0gus please help
 		firmwareError(ObdCode::CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
  */
-		return GPIO_NULL;
+		return nullptr;
 	}
 	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
 }
@@ -194,6 +194,11 @@ brain_pin_e parseBrainPin(const char *str) {
 
 unsigned int getBrainPinOnchipNum(void) {
 	return BRAIN_PIN_ONCHIP_PINS;
+}
+
+void debugBrainPin(char *buffer, size_t, brain_pin_e)
+{
+	buffer[0] = '\0';
 }
 
 #endif /* EFI_GPIO_HARDWARE */

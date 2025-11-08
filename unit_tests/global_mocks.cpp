@@ -8,16 +8,11 @@
 
 bool verboseMode = false;
 
-efitimems_t mockTimeMs = 0;
-
-efitimems_t getTimeNowMs(void) {
-	return mockTimeMs;
+efitimems_t getTimeNowMs() {
+	return US2MS(getTimeNowUs());
 }
 
 void initLogging(LoggingWithStorage *logging, const char *name) {
-}
-
-void setBoardConfigOverrides() {
 }
 
 void onCliCaseError(const char *token) {

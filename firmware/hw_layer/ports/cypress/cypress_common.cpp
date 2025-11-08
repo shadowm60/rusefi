@@ -147,6 +147,28 @@ adc_channel_e getAdcChannel(brain_pin_e pin) {
 	}
 }
 
+bool adcIsMuxedInput(adc_channel_e hwChannel) {
+    return false;
+}
+
+adc_channel_e adcMuxedGetParent(adc_channel_e hwChannel)
+{
+    return hwChannel;
+}
+
+int getAdcInternalChannel(ADC_TypeDef *adc, adc_channel_e hwChannel) {
+	(void)adc;
+
+	return (hwChannel - EFI_ADC_0);
+}
+
+adc_channel_e getHwChannelForAdcInput(ADC_TypeDef *adc, size_t hwIndex)
+{
+	(void)adc;
+
+	return (EFI_ADC_0 + hwIndex);
+}
+
 // deprecated - migrate to 'getAdcChannelBrainPin'
 ioportid_t getAdcChannelPort(const char *msg, adc_channel_e hwChannel) {
 	return getHwPort(msg, getAdcChannelBrainPin(msg, hwChannel));
@@ -159,7 +181,7 @@ int getAdcChannelPin(adc_channel_e hwChannel) {
 
 #endif /* HAL_USE_ADC */
 
-EXTERNC int getRemainingStack(thread_t *otp) {
+int getRemainingStack(thread_t *otp) {
     // todo: would stm32 code actually work here since similar Cortex?
     return 888888;
 }

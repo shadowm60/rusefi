@@ -1,11 +1,13 @@
 # List of all the board related files.
+
+# this board has 2Mb chip
+include $(PROJECT_DIR)/hw_layer/ports/stm32/2mb_flash.mk
+
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp \
   $(BOARD_DIR)/board_storage.cpp
 
 # board.c from this directory
 BOARD_C = $(BOARD_DIR)/board.c
-# Required include directories
-BOARDINC += $(BOARD_DIR)/config/controllers/algo
 
 #LED
 DDEFS +=  -DLED_CRITICAL_ERROR_BRAIN_PIN=Gpio::G7
@@ -29,5 +31,18 @@ DDEFS += -DEFI_EMBED_INI_MSD=TRUE
 # Shared variables
 ALLINC    += $(BOARDINC)
 
-#Serial flash support
-include $(PROJECT_DIR)/hw_layer/drivers/flash/sst26f_jedec.mk
+# this board has external QSPI NOR flash
+# see also *STM32_WSPI*
+DDEFS += -DHAL_USE_WSPI=TRUE
+DDEFS += -DSNOR_SHARED_BUS=FALSE
+DDEFS += -DWSPI_USE_MUTUAL_EXCLUSION=FALSE
+
+# This board uses ChibiOS MFS driver on internal flash
+include $(PROJECT_DIR)/hw_layer/ports/stm32/use_higher_level_flash_api.mk
+# We have cache
+DDEFS += -DSNOR_SPI_WORKAROUND_CACHE=TRUE
+# We want big intermediate buffer
+DDEFS += -DSNOR_BUFFER_SIZE=512
+
+#Serial flash driver
+include $(PROJECT_DIR)/hw_layer/drivers/flash/sst26f/sst26f_jedec.mk

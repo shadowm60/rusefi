@@ -9,7 +9,7 @@
 #include "stepper.h"
 #include "tunerstudio_io.h"
 #include "idle_thread.h"
-#include "global_execution_queue.h"
+#include "test_executor.h"
 
 #include "gmock/gmock.h"
 
@@ -19,14 +19,15 @@ public:
 	virtual ~MockEtb();
 
 	// IEtbController mocks
-	MOCK_METHOD(void, reset, (), (override));
-	MOCK_METHOD(bool, isEtbMode, (), (override));
+	MOCK_METHOD(void, reset, (const char *reason), (override));
+	MOCK_METHOD(bool, isEtbMode, (), (const, override));
 	MOCK_METHOD(void, update, (), (override));
-	MOCK_METHOD(bool, init, (dc_function_e function, DcMotor* motor, pid_s* pidParameters, const ValueProvider3D* pedalMap, bool initializeThrottles), (override));
+	MOCK_METHOD(bool, init, (dc_function_e function, DcMotor* motor, pid_s* pidParameters, const ValueProvider3D* pedalMap), (override));
 	MOCK_METHOD(void, setIdlePosition, (percent_t pos), (override));
 	MOCK_METHOD(void, setWastegatePosition, (percent_t pos), (override));
-	MOCK_METHOD(void, autoCalibrateTps, (), (override));
+	MOCK_METHOD(void, autoCalibrateTps, (bool), (override));
 	MOCK_METHOD(const pid_state_s&, getPidState, (), (const, override));
+	MOCK_METHOD(float, getCurrentTarget, (), (const, override));
 	MOCK_METHOD(void, setLuaAdjustment, (percent_t adjustment), (override));
 
 
@@ -79,9 +80,7 @@ public:
 	MockExecutor();
 	virtual ~MockExecutor();
 
-	MOCK_METHOD(void, scheduleByTimestamp, (const char *msg, scheduling_s *scheduling, efitimeus_t timeUs, action_s action), (override));
-	MOCK_METHOD(void, scheduleByTimestampNt, (const char *msg, scheduling_s *scheduling, efitick_t timeNt, action_s action), (override));
-	MOCK_METHOD(void, scheduleForLater, (const char *msg, scheduling_s *scheduling, int delayUs, action_s action), (override));
+	MOCK_METHOD(void, schedule, (const char *msg, scheduling_s *scheduling, efitick_t timeNt, action_s const& action), (override));
 	MOCK_METHOD(void, cancel, (scheduling_s*), (override));
 };
 
@@ -92,7 +91,7 @@ public:
 
 	MockVp3d veTable;
 
-	MOCK_METHOD(AirmassResult, getAirmass, (int rpm, bool postState), (override));
+	MOCK_METHOD(AirmassResult, getAirmass, (float rpm, bool postState), (override));
 };
 
 class MockInjectorModel2 : public IInjectorModel {
@@ -123,14 +122,43 @@ public:
 	MOCK_METHOD(size_t, readTimeout, (uint8_t* buffer, size_t size, int timeout), (override));
 };
 
-class MockIdleController : public IIdleController {
-	MOCK_METHOD(IIdleController::Phase, determinePhase, (int rpm, int targetRpm, SensorResult tps, float vss, float crankingTaperFraction), (override));
-	MOCK_METHOD(int, getTargetRpm, (float clt), (override));
+class MockIdleController : public IdleController {
+public:
+	MockIdleController();
+	virtual ~MockIdleController();
+
+  MOCK_METHOD(IdleController::Phase, determinePhase, (float rpm, IdleController::TargetInfo targetRpm, SensorResult tps, float vss, float crankingTaperFraction), (override));
+ 	MOCK_METHOD(IdleController::TargetInfo, getTargetRpm, (float clt), (override));
 	MOCK_METHOD(float, getCrankingOpenLoop, (float clt), (const, override));
-	MOCK_METHOD(float, getRunningOpenLoop, (IIdleController::Phase phase, float rpm, float clt, SensorResult tps), (override));
-	MOCK_METHOD(float, getOpenLoop, (IIdleController::Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction), (override));
-	MOCK_METHOD(float, getClosedLoop, (IIdleController::Phase phase, float tps, int rpm, int target), (override));
-	MOCK_METHOD(float, getCrankingTaperFraction, (), (const, override));
+	MOCK_METHOD(float, getRunningOpenLoop, (IdleController::Phase phase, float rpm, float clt, SensorResult tps), (override));
+	MOCK_METHOD(float, getOpenLoop, (IdleController::Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction), (override));
+	MOCK_METHOD(float, getClosedLoop, (IdleController::Phase phase, float tps, float rpm, float target), (override));
+	MOCK_METHOD(float, getCrankingTaperFraction, (float clt), (const, override));
 	MOCK_METHOD(bool, isIdlingOrTaper, (), (const, override));
-	MOCK_METHOD(float, getIdleTimingAdjustment, (int rpm), (override));
+	MOCK_METHOD(bool, isCoastingAdvance, (), (const, override));
+	MOCK_METHOD(IdleController::Phase, getCurrentPhase, (), (const, override));
+	MOCK_METHOD(float, getIdleTimingAdjustment, (float rpm), (override));
+};
+
+class MockIgnitionController : public IgnitionController {
+public:
+	MockIgnitionController();
+	virtual ~MockIgnitionController();
+
+	MOCK_METHOD(bool, getIgnState, (), (const, override));
+};
+
+class MockHpfpController : public HpfpController {
+public:
+	MockHpfpController();
+	virtual ~MockHpfpController();
+
+	bool isHpfpActive;
+	angle_t m_deadangle;
+};
+
+class MockLimpManager : public LimpManager {
+public:
+	MockLimpManager();
+	virtual ~MockLimpManager();
 };

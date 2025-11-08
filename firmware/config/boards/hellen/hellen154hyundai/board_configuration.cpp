@@ -13,6 +13,7 @@
 #include "pch.h"
 #include "defaults.h"
 #include "hellen_meta.h"
+#include "board_overrides.h"
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::H144_LS_1;
@@ -34,7 +35,7 @@ static void setupDefaultSensorInputs() {
 
     engineConfiguration->vehicleSpeedSensorInputPin = Gpio::H144_IN_VSS;
 
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG);
 
 	setPPSInputs(EFI_ADC_3, EFI_ADC_14);
 
@@ -47,11 +48,11 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
-
-
+#ifndef EFI_BOOTLOADER
 static bool isFirstInvocation = true;
+#endif // EFI_BOOTLOADER
 
-int hackHellenBoardId(int detectedId) {
+/*PUBLIC_API_WEAK*/ int hackHellenBoardId(int detectedId) {
   if (detectedId == BOARD_ID_VAG121_D) {
     // wow something bad has happened to that batch of boards?!
     return BOARD_ID_154HYUNDAI_C;
@@ -59,7 +60,7 @@ int hackHellenBoardId(int detectedId) {
   return detectedId;
 }
 
-void setBoardConfigOverrides() {
+static void hellen154_hyundai_boardConfigOverrides() {
 	setHellenVbatt();
 
 	setHellenSdCardSpi2();
@@ -70,8 +71,9 @@ void setBoardConfigOverrides() {
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
 	// Direct hall-only cam input
 	// exhaust input same on both revisions
-	engineConfiguration->camInputs[1] = Gpio::H144_IN_D_AUX4;
+	engineConfiguration->camInputs[1] = Gpio::H144_ORIGINAL_MCU_IN_D_AUX4;
 
+#ifndef EFI_BOOTLOADER
     int16_t hellenBoardId = engine->engineState.hellenBoardId;
 
     if (hellenBoardId == -1) {
@@ -124,24 +126,27 @@ void setBoardConfigOverrides() {
 	   	// Disable pin
 	   	engineConfiguration->etbIo[1].disablePin = Gpio::H144_OUT_IO13;
     }
+#endif // EFI_BOOTLOADER
 }
 
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
 
  */
-void setBoardDefaultConfiguration() {
+static void hellen154_hyundai_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
+	engineConfiguration->isSdCardEnabled = true;
 	setHellenCan();
 
 	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_IO9;
 	engineConfiguration->fanPin = Gpio::H144_OUT_IO7;
 	engineConfiguration->mainRelayPin = Gpio::H144_OUT_IO3;	// pin: 111a
+	// BK1 uses wire, BK2 uses CANbus
 	engineConfiguration->malfunctionIndicatorPin = Gpio::H144_OUT_PWM8;
 
 	engineConfiguration->brakePedalPin = Gpio::H144_IN_RES3;
@@ -190,4 +195,9 @@ int getBoardMetaDcOutputsCount() {
 
 Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = hellen154_hyundai_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = hellen154_hyundai_boardConfigOverrides;
 }

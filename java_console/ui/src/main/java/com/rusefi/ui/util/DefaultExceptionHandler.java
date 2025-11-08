@@ -1,8 +1,6 @@
 package com.rusefi.ui.util;
 
 import com.devexperts.logging.Logging;
-import com.rusefi.FileLog;
-import com.rusefi.ui.light.LightweightGUI;
 
 import javax.swing.*;
 import java.awt.*;
@@ -20,6 +18,10 @@ public class DefaultExceptionHandler implements Thread.UncaughtExceptionHandler 
     private static final Logging log = getLogging(DefaultExceptionHandler.class);
 
     private static boolean hadExceptionAlready;
+
+    public static void install() {
+        Thread.setDefaultUncaughtExceptionHandler(new DefaultExceptionHandler());
+    }
 
     public void uncaughtException(Thread t, Throwable e) {
         handleException(e);

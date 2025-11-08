@@ -14,30 +14,28 @@
 #define DEFAULT_ENGINE_TYPE engine_type_e::MINIMAL_PINS
 #endif
 
-#define CLT_MANUAL_IDLE_CORRECTION config->cltIdleCorrBins, config->cltIdleCorr, CLT_CURVE_SIZE
 #define WARMUP_CLT_EXTRA_FUEL_CURVE config->cltFuelCorrBins, config->cltFuelCorr, CLT_CURVE_SIZE
 #define IAT_FUEL_CORRECTION_CURVE config->iatFuelCorrBins, config->iatFuelCorr, IAT_CURVE_SIZE
-#define INJECTOR_LAG_CURVE engineConfiguration->injector.battLagCorrBins, engineConfiguration->injector.battLagCorr, VBAT_INJECTOR_CURVE_SIZE
 
 #define MOCK_UNDEFINED -1
 
-#if !defined(EFI_SIM_IS_WINDOWS) || !EFI_SIM_IS_WINDOWS
-#define BOARD_WEAK __attribute__((weak))
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826 Weak symbol does not work reliably on windows
+// https://sourceware.org/bugzilla/show_bug.cgi?id=9687 Weak symbols not working on mingw32
+// DEPRECATED see PUBLIC_API_WEAK
+#if !defined(IS_WINDOWS_COMPILER) || !IS_WINDOWS_COMPILER
+#define PUBLIC_API_WEAK_SOMETHING_WEIRD __attribute__((weak))
 #else
-#define BOARD_WEAK
+#define PUBLIC_API_WEAK_SOMETHING_WEIRD
 #endif
 
 void setCrankOperationMode();
 void setCamOperationMode();
-void setTwoStrokeOperationMode();
 
 void prepareVoidConfiguration(engine_configuration_s *activeConfiguration);
-void setTargetRpmCurve(int rpm);
-void setWholeIgnitionIatCorr(float value);
+void setTargetRpmCurve(float rpm);
 void setFuelTablesLoadBin(float minValue, float maxValue);
 void setWholeIatCorrTimingTable(float value);
-void setWholeTimingTable_d(angle_t value);
-#define setWholeTimingTable(x) setWholeTimingTable_d(x);
+void setWholeTimingTable(angle_t value);
 void setConstantDwell(floatms_t dwellMs);
 
 // needed by bootloader
@@ -69,18 +67,19 @@ void rememberCurrentConfiguration();
 void setBoardDefaultConfiguration();
 void setBoardConfigOverrides();
 void onBoardStandBy();
-void boardOnConfigurationChange(engine_configuration_s *previousConfiguration);
 Gpio getCommsLedPin();
+// fun fact: the red LED for critical error is defined via LED_CRITICAL_ERROR_BRAIN_PIN
 Gpio getWarningLedPin();
+// technical debt: only used to blink from bootloader?
 Gpio getRunningLedPin();
 
 int hackHellenBoardId(int detectedId);
+void applyEngineType(engine_type_e engineType);
 
 #if !EFI_UNIT_TEST
 extern persistent_config_container_s persistentState;
-static engine_configuration_s * const engineConfiguration =
-	&persistentState.persistentConfiguration.engineConfiguration;
-static persistent_config_s * const config = &persistentState.persistentConfiguration;
+static constexpr engine_configuration_s * engineConfiguration = &persistentState.persistentConfiguration.engineConfiguration;
+static constexpr persistent_config_s * config = &persistentState.persistentConfiguration;
 #else // EFI_UNIT_TEST
 extern engine_configuration_s *engineConfiguration;
 extern persistent_config_s *config;

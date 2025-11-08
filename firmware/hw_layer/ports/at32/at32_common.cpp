@@ -7,6 +7,7 @@
  */
 
 #include "pch.h"
+#include "os_util.h"
 
 int at32GetMcuType(uint32_t id, const char **pn, const char **package, uint32_t *flashSize)
 {
@@ -101,6 +102,7 @@ static void reset_and_jump(void) {
     NVIC_SystemReset();
 }
 
+#if EFI_DFU_JUMP
 void jump_to_bootloader() {
     // leave DFU breadcrumb which assembly startup code would check, see [rusefi][DFU] section in assembly code
 
@@ -108,6 +110,7 @@ void jump_to_bootloader() {
 
     reset_and_jump();
 }
+#endif
 
 void jump_to_openblt() {
 #if EFI_USE_OPENBLT
@@ -140,7 +143,7 @@ void tryResetWatchdog() {
 void setWatchdogResetPeriod(int) {
 }
 
-void baseMCUInit(void) {
+void baseMCUInit() {
     // looks like this holds a random value on start? Let's set a nice clean zero
     DWT->CYCCNT = 0;
 
@@ -158,7 +161,7 @@ extern uint32_t __main_stack_base__;
 
 typedef struct port_intctx intctx_t;
 
-EXTERNC int getRemainingStack(thread_t *otp) {
+int getRemainingStack(thread_t *otp) {
 #if CH_DBG_ENABLE_STACK_CHECK
     // this would dismiss coverity warning - see http://rusefi.com/forum/viewtopic.php?f=5&t=655
     // coverity[uninit_use]
@@ -166,7 +169,7 @@ EXTERNC int getRemainingStack(thread_t *otp) {
     otp->activeStack = r13;
 
     int remainingStack;
-    if (ch.dbg.isr_cnt > 0) {
+    if (ch0.dbg.isr_cnt > 0) {
         // ISR context
         remainingStack = (int)(r13 - 1) - (int)&__main_stack_base__;
     } else {

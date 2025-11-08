@@ -16,14 +16,11 @@
 #include "bench_test.h"
 #include "yaw_rate_sensor.h"
 #include "pin_repository.h"
-#include "max31855.h"
 #include "logic_analyzer.h"
 #include "smart_gpio.h"
 #include "accelerometer.h"
 #include "eficonsole.h"
 #include "console_io.h"
-#include "sensor_chart.h"
-#include "serial_hw.h"
 #include "idle_thread.h"
 #include "odometer.h"
 #include "kline.h"
@@ -35,20 +32,20 @@
 
 #include "mmc_card.h"
 
-#include "AdcConfiguration.h"
+#include "adc_device.h"
 #include "idle_hardware.h"
-#include "mcp3208.h"
-#include "hip9011.h"
+
 #include "histogram.h"
 #include "gps_uart.h"
 #include "sent.h"
 #include "cdm_ion_sense.h"
 #include "trigger_central.h"
-#include "svnversion.h"
 #include "vvt.h"
 #include "trigger_emulator_algo.h"
 #include "boost_control.h"
+#if EFI_SOFTWARE_KNOCK
 #include "software_knock.h"
+#endif
 #include "trigger_scope.h"
 #include "init.h"
 #if EFI_MC33816
@@ -58,11 +55,11 @@
 #include "WS2812.h"
 #endif /* EFI_WS2812 */
 
-#if EFI_MAP_AVERAGING
+#if EFI_MAP_AVERAGING && defined (MODULE_MAP_AVERAGING)
 #include "map_averaging.h"
 #endif
 
-#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
+#if EFI_CONFIGURATION_STORAGE
 #include "flash_main.h"
 #endif
 
@@ -73,6 +70,16 @@
 #if EFI_CAN_SUPPORT
 #include "can_vss.h"
 #endif
+
+#include "board_overrides.h"
+
+std::optional<setup_custom_board_overrides_type> custom_board_InitHardwareEarly;
+std::optional<setup_custom_board_overrides_type> custom_board_InitHardware;
+std::optional<setup_custom_board_overrides_type> custom_board_InitHardwareExtra;
+std::optional<setup_custom_board_overrides_type> custom_board_BeforeTuneDefaults;
+
+std::optional<setup_custom_board_engine_type_type> custom_board_AfterTuneDefaults;
+std::optional<setup_custom_board_engine_type_type> custom_board_applyUnknownType;
 
 #if HAL_USE_SPI
 /* zero index is SPI_NONE */
@@ -144,7 +151,7 @@ brain_pin_e getSckPin(spi_device_e device) {
  */
 SPIDriver * getSpiDevice(spi_device_e spiDevice) {
 	if (spiDevice == SPI_NONE) {
-		return NULL;
+		return nullptr;
 	}
 #if STM32_SPI_USE_SPI1
 	if (spiDevice == SPI_DEVICE_1) {
@@ -177,7 +184,7 @@ SPIDriver * getSpiDevice(spi_device_e spiDevice) {
 	}
 #endif
 	firmwareError(ObdCode::CUSTOM_ERR_UNEXPECTED_SPI, "Unexpected SPI device: %d", spiDevice);
-	return NULL;
+	return nullptr;
 }
 
 /**
@@ -259,20 +266,11 @@ void printSpiConfig(const char *msg, spi_device_e device) {
 
 #if HAL_USE_ADC
 
-static FastAdcToken fastMapSampleIndex;
-static FastAdcToken hipSampleIndex;
+static AdcToken fastMapSampleIndex;
 
 #if HAL_TRIGGER_USE_ADC
-static FastAdcToken triggerSampleIndex;
+static AdcToken triggerSampleIndex;
 #endif // HAL_TRIGGER_USE_ADC
-
-extern AdcDevice fastAdc;
-
-#ifdef FAST_ADC_SKIP
-// No reason to enable if N = 1
-static_assert(FAST_ADC_SKIP > 1);
-static size_t fastAdcSkipCount = 0;
-#endif // FAST_ADC_SKIP
 
 /**
  * This method is not in the adc* lower-level file because it is more business logic then hardware.
@@ -285,43 +283,23 @@ void onFastAdcComplete(adcsample_t*) {
 	triggerAdcCallback(getFastAdc(triggerSampleIndex));
 #endif /* HAL_TRIGGER_USE_ADC */
 
-#ifdef FAST_ADC_SKIP
-	// If we run the fast ADC _very_ fast for triggerAdcCallback's benefit, we may want to
-	// skip most of the samples for the rest of the callback.
-	if (fastAdcSkipCount++ == FAST_ADC_SKIP) {
-		fastAdcSkipCount = 0;
-	} else {
-		return;
-	}
-#endif
-
 	/**
 	 * this callback is executed 10 000 times a second, it needs to be as fast as possible
 	 */
 	efiAssertVoid(ObdCode::CUSTOM_STACK_ADC, hasLotsOfRemainingStack(), "lowstck#9b");
 
-#if EFI_SENSOR_CHART && EFI_SHAFT_POSITION_INPUT
-	if (getEngineState()->sensorChartMode == SC_AUX_FAST1) {
-		float voltage = getAdcValue("fAux1", engineConfiguration->auxFastSensor1_adcChannel);
-		scAddData(engine->triggerCentral.getCurrentEnginePhase(getTimeNowNt()).value_or(0), voltage);
-	}
-#endif /* EFI_SENSOR_CHART */
-
-#if EFI_MAP_AVERAGING
-	mapAveragingAdcCallback(adcToVoltsDivided(getFastAdc(fastMapSampleIndex), engineConfiguration->map.sensor.hwChannel));
+	auto mapRaw = adcRawValueToScaledVoltage(getFastAdc(fastMapSampleIndex), engineConfiguration->map.sensor.hwChannel);
+	engine->outputChannels.rawMapFast = mapRaw;
+#if EFI_MAP_AVERAGING && defined (MODULE_MAP_AVERAGING)
+	mapAveragingAdcCallback(mapRaw);
 #endif /* EFI_MAP_AVERAGING */
-#if EFI_HIP_9011
-	if (engineConfiguration->isHip9011Enabled) {
-		hipAdcCallback(adcToVoltsDivided(getFastAdc(hipSampleIndex), engineConfiguration->hipOutputChannel));
-	}
-#endif /* EFI_HIP_9011 */
 }
 #endif /* HAL_USE_ADC */
 
 static void calcFastAdcIndexes() {
 #if HAL_USE_ADC
 	fastMapSampleIndex = enableFastAdcChannel("Fast MAP", engineConfiguration->map.sensor.hwChannel);
-	hipSampleIndex = enableFastAdcChannel("HIP9011", engineConfiguration->hipOutputChannel);
+
 #if HAL_TRIGGER_USE_ADC
 	triggerSampleIndex = enableFastAdcChannel("Trigger ADC", getAdcChannelForTrigger());
 #endif /* HAL_TRIGGER_USE_ADC */
@@ -329,16 +307,10 @@ static void calcFastAdcIndexes() {
 #endif/* HAL_USE_ADC */
 }
 
-static void adcConfigListener() {
-	// todo: something is not right here - looks like should be a callback for each configuration change?
-	calcFastAdcIndexes();
-}
-
 /**
  * this method is NOT currently invoked on ECU start
  * todo: reduce code duplication by moving more logic into startHardware method
  */
-
 void applyNewHardwareSettings() {
     /**
      * All 'stop' methods need to go before we begin starting pins.
@@ -358,7 +330,7 @@ void applyNewHardwareSettings() {
 	stopTriggerInputPins();
 #endif /* EFI_SHAFT_POSITION_INPUT */
 
-#if EFI_SENT_SUPPORT
+#if EFI_PROD_CODE && EFI_SENT_SUPPORT
 	stopSent();
 #endif // EFI_SENT_SUPPORT
 
@@ -368,13 +340,6 @@ void applyNewHardwareSettings() {
 
 	stopKLine();
 
-#if EFI_AUX_SERIAL
-	stopAuxSerialPins();
-#endif /* EFI_AUX_SERIAL */
-
-#if EFI_HIP_9011
-	stopHip9001_pins();
-#endif /* EFI_HIP_9011 */
 
 	stopHardware();
 
@@ -386,10 +351,6 @@ void applyNewHardwareSettings() {
 		// bug? duplication with stopSwitchPins?
 		efiSetPadUnused(activeConfiguration.clutchUpPin);
 	}
-
-#if EFI_SHAFT_POSITION_INPUT
-	stopTriggerDebugPins();
-#endif // EFI_SHAFT_POSITION_INPUT
 
 	enginePins.unregisterPins();
 
@@ -419,17 +380,7 @@ void applyNewHardwareSettings() {
 	startSmartCsPins();
 #endif /* (BOARD_EXT_GPIOCHIPS > 0) */
 
-#if EFI_AUX_SERIAL
-	startAuxSerialPins();
-#endif /* EFI_AUX_SERIAL */
-
     startKLine();
-
-
-#if EFI_HIP_9011
-	startHip9001_pins();
-#endif /* EFI_HIP_9011 */
-
 
 #if EFI_PROD_CODE && EFI_IDLE_CONTROL
 	if (isIdleHardwareRestartNeeded()) {
@@ -450,19 +401,30 @@ void applyNewHardwareSettings() {
 	startVvtControlPins();
 #endif /* EFI_VVT_PID */
 
-#if EFI_SENT_SUPPORT
+#if EFI_PROD_CODE && EFI_SENT_SUPPORT
 	startSent();
 #endif
 
-	adcConfigListener();
+	calcFastAdcIndexes();
 }
 
-#if EFI_BOR_LEVEL
+#if EFI_PROD_CODE && EFI_BOR_LEVEL
 void setBor(int borValue) {
 	efiPrintf("setting BOR to %d", borValue);
 	BOR_Set((BOR_Level_t)borValue);
 }
 #endif /* EFI_BOR_LEVEL */
+
+// Called before configuration is loaded
+void boardInitHardwareEarly() {
+  // forcing migration to custom_board_InitHardwareEarly
+}
+void boardInitHardware() {
+  // time to force migration to custom_board_InitHardware
+}
+void boardInitHardwareExtra() {
+  // forcing migration to custom_board_InitHardwareExtra
+}
 
 // This function initializes hardware that can do so before configuration is loaded
 void initHardwareNoConfig() {
@@ -472,6 +434,10 @@ void initHardwareNoConfig() {
 
 #if EFI_PROD_CODE
 	initPinRepository();
+#endif
+
+#if EFI_PROD_CODE
+	call_board_override(custom_board_InitHardwareEarly);
 #endif
 
 #if EFI_HISTOGRAMS
@@ -497,7 +463,7 @@ void initHardwareNoConfig() {
 	initRtc();
 #endif // EFI_PROD_CODE && EFI_RTC
 
-#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
+#if EFI_CONFIGURATION_STORAGE
 	initFlash();
 #endif
 
@@ -537,7 +503,9 @@ void stopHardware() {
  * TODO: move move hardware code here
  */
 void startHardware() {
+#if EFI_SHAFT_POSITION_INPUT
 	initStartStopButton();
+#endif
 
 #if EFI_PROD_CODE && EFI_SHAFT_POSITION_INPUT
 	startTriggerInputPins();
@@ -550,8 +518,6 @@ void startHardware() {
 #if EFI_SHAFT_POSITION_INPUT
 	validateTriggerInputs();
 
-	startTriggerDebugPins();
-
 #endif // EFI_SHAFT_POSITION_INPUT
 
 	startSwitchPins();
@@ -561,11 +527,7 @@ void startHardware() {
 #endif /* EFI_CAN_SUPPORT */
 }
 
-// Weak link a stub so that every board doesn't have to implement this function
-__attribute__((weak)) void boardInitHardware() { }
-__attribute__((weak)) void boardInitHardwareExtra() { }
-
-__attribute__((weak)) void setPinConfigurationOverrides() { }
+PUBLIC_API_WEAK void setPinConfigurationOverrides() { }
 
 #if HAL_USE_I2C
 const I2CConfig i2cfg = {
@@ -580,20 +542,22 @@ void initHardware() {
 		return;
 	}
 
-#if STM32_I2C_USE_I2C3
+#if EFI_PROD_CODE && STM32_I2C_USE_I2C3
 	if (engineConfiguration->useEeprom) {
 	    i2cStart(&EE_U2CD, &i2cfg);
 	}
 #endif // STM32_I2C_USE_I2C3
 
-	boardInitHardware();
-	boardInitHardwareExtra();
+	call_board_override(custom_board_InitHardware);
+#if EFI_PROD_CODE
+	// this applies some board configurations
+	call_board_override(custom_board_OnConfigurationChange, nullptr);
+#endif // EFI_PROD_CODE
+
+	call_board_override(custom_board_InitHardwareExtra);
 
 #if HAL_USE_ADC
 	initAdcInputs();
-
-	// wait for first set of ADC values so that we do not produce invalid sensor data
-	waitForSlowAdc(1);
 #endif /* HAL_USE_ADC */
 
 #if EFI_SOFTWARE_KNOCK
@@ -620,10 +584,6 @@ void initHardware() {
 	initMc33816();
 #endif /* EFI_MC33816 */
 
-#if EFI_MAX_31855
-	initMax31855(engineConfiguration->max31855spiDevice, engineConfiguration->max31855_cs);
-#endif /* EFI_MAX_31855 */
-
 #if EFI_CAN_SUPPORT
 #if EFI_SIMULATOR
 	// Set CAN device name
@@ -638,10 +598,6 @@ void initHardware() {
 	onEcuStartTriggerImplementation();
 #endif /* EFI_SHAFT_POSITION_INPUT */
 	onEcuStartDoSomethingTriggerInputPins();
-
-#if EFI_HIP_9011
-	initHip9011();
-#endif /* EFI_HIP_9011 */
 
 #if EFI_WS2812
 	initWS2812();
@@ -659,10 +615,6 @@ void initHardware() {
 	initGps();
 #endif
 
-#if EFI_AUX_SERIAL
-	initAuxSerial();
-#endif /* EFI_AUX_SERIAL */
-
 #if EFI_CAN_SUPPORT
 	initCanVssSupport();
 #endif // EFI_CAN_SUPPORT
@@ -671,7 +623,7 @@ void initHardware() {
 	cdmIonInit();
 #endif // EFI_CDM_INTEGRATION
 
-#if EFI_SENT_SUPPORT
+#if EFI_PROD_CODE && EFI_SENT_SUPPORT
 	initSent();
 #endif
 
@@ -686,39 +638,4 @@ void initHardware() {
 	startHardware();
 
 	efiPrintf("initHardware() OK!");
-}
-
-#if HAL_USE_SPI
-// this is F4 implementation but we will keep it here for now for simplicity
-int getSpiPrescaler(spi_speed_e speed, spi_device_e device) {
-	switch (speed) {
-	case _5MHz:
-		return device == SPI_DEVICE_1 ? SPI_BaudRatePrescaler_16 : SPI_BaudRatePrescaler_8;
-	case _2_5MHz:
-		return device == SPI_DEVICE_1 ? SPI_BaudRatePrescaler_32 : SPI_BaudRatePrescaler_16;
-	case _1_25MHz:
-		return device == SPI_DEVICE_1 ? SPI_BaudRatePrescaler_64 : SPI_BaudRatePrescaler_32;
-
-	case _150KHz:
-		// SPI1 does not support 150KHz, it would be 300KHz for SPI1
-		return SPI_BaudRatePrescaler_256;
-	default:
-		// unexpected
-		return 0;
-	}
-}
-
-#endif /* HAL_USE_SPI */
-
-void checkLastResetCause() {
-#if EFI_PROD_CODE
-	Reset_Cause_t cause = getMCUResetCause();
-	const char *causeStr = getMCUResetCause(cause);
-	efiPrintf("Last Reset Cause: %s", causeStr);
-
-	// if reset by watchdog, signal a fatal error
-	if (cause == Reset_Cause_IWatchdog || cause == Reset_Cause_WWatchdog) {
-		firmwareError(ObdCode::OBD_PCM_Processor_Fault, "Watchdog Reset");
-	}
-#endif // EFI_PROD_CODE
 }

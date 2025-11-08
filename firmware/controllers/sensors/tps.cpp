@@ -3,49 +3,56 @@
  */
 #include "pch.h"
 #include "sent.h"
+#include "tunerstudio.h"
+#include "tunerstudio_calibration_channel.h"
 
+/*
 void grabTPSIsClosed() {
 #if EFI_PROD_CODE
-	printTPSInfo();
 	engineConfiguration->tpsMin = convertVoltageTo10bitADC(Sensor::getRaw(SensorType::Tps1));
-	printTPSInfo();
-#endif /* EFI_PROD_CODE */
+#endif // EFI_PROD_CODE
 }
 
 void grabTPSIsWideOpen() {
 #if EFI_PROD_CODE
-	printTPSInfo();
 	engineConfiguration->tpsMax = convertVoltageTo10bitADC(Sensor::getRaw(SensorType::Tps1));
-	printTPSInfo();
-#endif /* EFI_PROD_CODE */
+#endif // EFI_PROD_CODE
+}
+*/
+
+static void onGrabPedal() {
+  static uint8_t grabPedalCounter = 0;
+	grabPedalCounter++;
+	if (grabPedalCounter % 2 == 0) {
+	  // todo fix root cause! work-around: make sure not to write bad tune since that would brick requestBurn();
+	}
 }
 
 void grabPedalIsUp() {
 	/**
 	 * search for 'maintainConstantValue' to find how this TS magic works
 	 */
-	engine->outputChannels.calibrationMode = (uint8_t)TsCalMode::PedalMin;
-	engine->outputChannels.calibrationValue = Sensor::getRaw(SensorType::AcceleratorPedalPrimary);
-	engine->outputChannels.calibrationValue2 = Sensor::getRaw(SensorType::AcceleratorPedalSecondary);
+	tsCalibrationSetData(TsCalMode::PedalMin, Sensor::getRaw(SensorType::AcceleratorPedalPrimary), Sensor::getRaw(SensorType::AcceleratorPedalSecondary));
+	onGrabPedal();
 }
 
 void grabPedalIsWideOpen() {
-	engine->outputChannels.calibrationMode = (uint8_t)TsCalMode::PedalMax;
-	engine->outputChannels.calibrationValue = Sensor::getRaw(SensorType::AcceleratorPedalPrimary);
-	engine->outputChannels.calibrationValue2 = Sensor::getRaw(SensorType::AcceleratorPedalSecondary);
+	tsCalibrationSetData(TsCalMode::PedalMax, Sensor::getRaw(SensorType::AcceleratorPedalPrimary), Sensor::getRaw(SensorType::AcceleratorPedalSecondary));
+	onGrabPedal();
 }
 
-bool isTps1Error() {
-	return !Sensor::get(SensorType::Tps1).Valid;
+// In case of cable throttle we need support calibration of primary sensor of first throttle only
+void grapTps1PrimaryIsClosed()
+{
+	tsCalibrationSetData(TsCalMode::Tps1Min, Sensor::getRaw(SensorType::Tps1Primary));
 }
 
-bool isTps2Error() {
-    return !Sensor::get(SensorType::Tps2).Valid && Sensor::hasSensor(SensorType::Tps2Primary);
+void grapTps1PrimaryIsOpen()
+{
+	tsCalibrationSetData(TsCalMode::Tps1Max, Sensor::getRaw(SensorType::Tps1Primary));
 }
 
-bool isPedalError() {
-    return !Sensor::get(SensorType::AcceleratorPedal).Valid && Sensor::hasSensor(SensorType::AcceleratorPedalPrimary);
-}
+#if EFI_SENT_SUPPORT
 
 extern SentTps sentTps;
 
@@ -60,15 +67,21 @@ float decodeTpsSentValue(float sentValue) {
     }
 }
 
-void sentTpsDecode() {
-#if EFI_SENT_SUPPORT
-    if (!isDigitalTps1()) {
+#if EFI_PROD_CODE
+void sentTpsDecode(SentInput sentCh) {
+    if ((!isDigitalTps1()) || (engineConfiguration->EtbSentInput != sentCh)) {
         return;
     }
     // todo: move away from weird float API
-    float sentValue = getSentValue(0);
+    float sentValue = getSentValue(sentCh);
     float tpsValue = decodeTpsSentValue(sentValue);
 
     sentTps.setValidValue(tpsValue, getTimeNowNt());
-#endif // EFI_SENT_SUPPORT
 }
+#endif // EFI_PROD_CODE
+
+bool isDigitalTps1() {
+    return (engineConfiguration->sentEtbType != SentEtbType::NONE);
+}
+
+#endif /* EFI_SENT_SUPPORT */

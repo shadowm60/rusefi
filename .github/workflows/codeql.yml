@@ -12,12 +12,13 @@
 name: "CodeQL"
 
 on:
-  push:
-    branches: [ "main", "master" ]
-  schedule:
-    - cron: '0 0 * * *'
-  pull_request:
-    branches: '*'
+  workflow_dispatch:
+#  push:
+#    branches: [ "main", "master" ]
+#  schedule:
+#    - cron: '0 0 * * *'
+#  pull_request:
+#    branches: '*'
 
 jobs:
   analyze:
@@ -27,7 +28,7 @@ jobs:
     #   - https://gh.io/supported-runners-and-hardware-resources
     #   - https://gh.io/using-larger-runners
     # Consider using larger runners for possible analysis time improvements.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-20.04' }}
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-22.04' }}
     timeout-minutes: ${{ (matrix.language == 'swift' && 120) || 360 }}
     permissions:
       actions: read
@@ -45,7 +46,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: recursive
 
@@ -54,23 +55,19 @@ jobs:
         sudo bash misc/actions/add-ubuntu-latest-apt-mirrors.sh
         sudo apt-get install mtools dosfstools zip
 
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
-        java-version: '11'
+        java-version: '17'
 
     - name: Code generation tools
       working-directory: ./java_tools
       run: ./gradlew :config_definition:shadowJar
 
-    - name: Generate Configs, Enums & Live Documentation
-      working-directory: ./firmware/
-      run: ./gen_default_everything.sh
-
     - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
-      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      uses: carlosperate/arm-none-eabi-gcc-action@v1.11.0
       with:
-        release: '12.3.Rel1'
+        release: '14.2.Rel1'
 
       # Make sure the compiler we just downloaded works - just print out the version
     - name: Test arm-none-eabi-gcc Compiler
@@ -78,7 +75,7 @@ jobs:
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
         # If you wish to specify custom queries, you can do so here or in a config file.
@@ -105,7 +102,7 @@ jobs:
         ./.github/workflows/codeql-buildscript.sh
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{matrix.language}}"
         upload: false
@@ -134,14 +131,14 @@ jobs:
         output: ${{ steps.step1.outputs.sarif-output }}/cpp.sarif
 
     - name: Upload CodeQL results to code scanning
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ steps.step1.outputs.sarif-output }}
         category: "/language:${{matrix.language}}"
 
     - name: Upload CodeQL results as an artifact
       if: success() || failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: codeql-results
         path: ${{ steps.step1.outputs.sarif-output }}

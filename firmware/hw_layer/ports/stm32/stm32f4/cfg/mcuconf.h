@@ -14,8 +14,8 @@
     limitations under the License.
 */
 
-#ifndef _MCUCONF_H_
-#define _MCUCONF_H_
+#ifndef MCUCONF_H
+#define MCUCONF_H
 
 /*
  * STM32F4xx drivers configuration.
@@ -87,7 +87,7 @@
 #define STM32_GPT_TIM3_IRQ_PRIORITY         7
 #define STM32_GPT_TIM4_IRQ_PRIORITY         7
 #define STM32_GPT_TIM5_IRQ_PRIORITY         7
-#define STM32_GPT_TIM6_IRQ_PRIORITY         7
+// GPT TIM6 is in mcuconf_common_f4_f7.h
 #define STM32_GPT_TIM7_IRQ_PRIORITY         7
 #define STM32_GPT_TIM8_IRQ_PRIORITY         7
 #define STM32_GPT_TIM9_IRQ_PRIORITY         7
@@ -108,4 +108,4 @@
 
 #include "mcuconf_common_f4_f7.h"
 
-#endif /* _MCUCONF_H_ */
+#endif /* MCUCONF_H */

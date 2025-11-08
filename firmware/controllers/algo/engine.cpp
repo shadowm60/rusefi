@@ -19,20 +19,17 @@
 #include "init.h"
 
 #include "aux_valves.h"
-#include "map_averaging.h"
 #include "perf_trace.h"
 #include "backup_ram.h"
 #include "idle_thread.h"
 #include "idle_hardware.h"
 #include "gppwm.h"
-#include "tachometer.h"
 #include "speedometer.h"
 #include "dynoview.h"
 #include "boost_control.h"
-#include "fan_control.h"
 #include "ac_control.h"
 #include "vr_pwm.h"
-#include "max31855.h"
+#include "max3185x.h"
 #if EFI_MC33816
  #include "mc33816.h"
 #endif // EFI_MC33816
@@ -63,12 +60,21 @@ void Engine::resetEngineSnifferIfInTestMode() {
 #endif /* EFI_ENGINE_SNIFFER */
 }
 
+PUBLIC_API_WEAK trigger_type_e getCustomVvtTriggerType(vvt_mode_e vvtMode) {
+		criticalError("Broken VVT mode maybe corrupted calibration %d: %s", vvtMode, getVvt_mode_e(vvtMode));
+		return trigger_type_e::TT_HALF_MOON; // we have to return something for the sake of -Werror=return-type
+}
+
+// todo: move this method from engine.cpp already?
 /**
  * VVT decoding delegates to universal trigger decoder. Here we map vvt_mode_e into corresponding trigger_type_e
  */
 trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	switch (vvtMode) {
+	case VVT_CUSTOM_1:
+	case VVT_CUSTOM_2:
 	case VVT_INACTIVE:
+	  // hold on, what? 'VVT_INACTIVE' means TT_HALF_MOON?!
 		return trigger_type_e::TT_HALF_MOON;
 	case VVT_TOYOTA_3_TOOTH:
 		return trigger_type_e::TT_VVT_TOYOTA_3_TOOTH;
@@ -88,8 +94,12 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 		return trigger_type_e::TT_VVT_BARRA_3_PLUS_1;
 	case VVT_FORD_COYOTE:
 	    return trigger_type_e::TT_VVT_FORD_COYOTE;
+	case VVT_DEV:
+	    return trigger_type_e::TT_DEV;
 	case VVT_MAZDA_SKYACTIV:
 	    return trigger_type_e::TT_VVT_MAZDA_SKYACTIV;
+	case VVT_MAZDA_L:
+		return trigger_type_e::TT_VVT_MAZDA_L;
 	case VVT_NISSAN_VQ:
 		return trigger_type_e::TT_VVT_NISSAN_VQ35;
 	case VVT_TOYOTA_4_1:
@@ -102,28 +112,30 @@ trigger_type_e getVvtTriggerType(vvt_mode_e vvtMode) {
 	    return trigger_type_e::TT_VVT_MITSU_6G72;
 	case VVT_HONDA_CBR_600:
 	    return trigger_type_e::TT_HONDA_CBR_600;
-	case VVT_MITSUBISHI_6G75:
+	case VVT_CHRYSLER_PHASER:
+		return trigger_type_e::TT_CHRYSLER_PHASER;
+	case VVT_TOYOTA_3TOOTH_UZ:
+		return trigger_type_e::TT_TOYOTA_3_TOOTH_UZ;
 	case VVT_NISSAN_MR:
 		return trigger_type_e::TT_NISSAN_MR18_CAM_VVT;
-	case VVT_MITSUBISHI_4G9x:
-		return trigger_type_e::TT_MITSU_4G9x_CAM;
+	case VVT_UNUSED_17:
 	case VVT_MITSUBISHI_4G63:
 		return trigger_type_e::TT_MITSU_4G63_CAM;
+	case VVT_HR12DDR_IN:
+	    return trigger_type_e::TT_NISSAN_HR_CAM_IN;
+	case VVT_SUBARU_7TOOTH:
+			return trigger_type_e::TT_VVT_SUBARU_7_WITHOUT_6;
 	default:
-		criticalError("Broken VVT mode maybe corrupted calibration %d: %s", vvtMode, getVvt_mode_e(vvtMode));
-		return trigger_type_e::TT_HALF_MOON; // we have to return something for the sake of -Werror=return-type
+	  return getCustomVvtTriggerType(vvtMode);
 	}
 }
 
-void Engine::updateTriggerWaveform() {
-
-
+void Engine::updateTriggerConfiguration() {
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	// we have a confusing threading model so some synchronization would not hurt
 	chibios_rt::CriticalSectionLocker csl;
 
-	engine->triggerCentral.updateWaveform();
-
+	engine->triggerCentral.applyShapesConfiguration();
 
 	if (!engine->triggerCentral.triggerShape.shapeDefinitionError) {
 		prepareOutputSignals();
@@ -131,13 +143,18 @@ void Engine::updateTriggerWaveform() {
 #endif /* EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT */
 }
 
-#if ANALOG_HW_CHECK_MODE
-static void assertCloseTo(const char* msg, float actual, float expected) {
-	if (actual < 0.95f * expected || actual > 1.05f * expected) {
-		criticalError("%s validation failed actual=%f vs expected=%f", msg, actual, expected);
-	}
+#include "board_overrides.h"
+
+std::optional<setup_custom_board_overrides_type> custom_board_periodicSlowCallback;
+std::optional<setup_custom_board_overrides_type> custom_board_periodicFastCallback;
+
+void boardPeriodicSlowCallback() {
+  // placeholder to force upgrade
 }
-#endif // ANALOG_HW_CHECK_MODE
+
+void boardPeriodicFastCallback() {
+  // placeholder to force upgrade
+}
 
 void Engine::periodicSlowCallback() {
 	ScopePerf perf(PE::EnginePeriodicSlowCallback);
@@ -158,7 +175,7 @@ void Engine::periodicSlowCallback() {
 	updateSlowSensors();
 	checkShutdown();
 
-	tpsAccelEnrichment.onNewValue(Sensor::getOrZero(SensorType::Tps1));
+	module<TpsAccelEnrichment>()->onNewValue(Sensor::getOrZero(SensorType::Tps1));
 
 	updateVrThresholdPwm();
 
@@ -174,38 +191,24 @@ void Engine::periodicSlowCallback() {
 	updateDynoView();
 #endif
 
+	// TODO: move to sensor_checker.cpp?
+	if ((engine->rpmCalculator.isCranking()) && (Sensor::getOrZero(SensorType::BatteryVoltage) < 7)) {
+		// undervoltage crancking!
+		if (getEngineState()->undervoltageCrankingTimer.getElapsedSeconds() > 1) {
+			warningTsReport(ObdCode::OBD_System_Voltage_Low, "Cranking on low battery!");
+		}
+	} else {
+		getEngineState()->undervoltageCrankingTimer.reset();
+	}
+
 	slowCallBackWasInvoked = true;
 
 #if EFI_PROD_CODE
 	void baroLps25Update();
 	baroLps25Update();
 #endif // EFI_PROD_CODE
-
-#if ANALOG_HW_CHECK_MODE
-	criticalAssertVoid(isAdcChannelValid(engineConfiguration->clt.adcChannel), "No CLT setting");
-	efitimesec_t secondsNow = getTimeNowS();
-
-#if ! HW_CHECK_ALWAYS_STIMULATE
-	fail("HW_CHECK_ALWAYS_STIMULATE required to have self-stimulation")
-#endif
-
-    int hwCheckRpm = 204;
-	if (secondsNow > 2 && secondsNow < 180) {
-		assertCloseTo("RPM", Sensor::get(SensorType::Rpm).Value, hwCheckRpm);
-	} else if (!hasFirmwareError() && secondsNow > 180) {
-		static bool isHappyTest = false;
-		if (!isHappyTest) {
-			setTriggerEmulatorRPM(5 * hwCheckRpm);
-			efiPrintf("TEST PASSED");
-			isHappyTest = true;
-		}
-	}
-
-	assertCloseTo("clt", Sensor::getRaw(SensorType::Clt), 1.351f);
-	assertCloseTo("iat", Sensor::getRaw(SensorType::Iat), 2.245f);
-	assertCloseTo("aut1", Sensor::getRaw(SensorType::AuxTemp1), 2.750f);
-	assertCloseTo("aut2", Sensor::getRaw(SensorType::AuxTemp2), 3.176f);
-#endif // ANALOG_HW_CHECK_MODE
+  boardPeriodicSlowCallback();
+  call_board_override(custom_board_periodicSlowCallback);
 }
 
 /**
@@ -215,37 +218,55 @@ void Engine::periodicSlowCallback() {
 void Engine::updateSlowSensors() {
 	updateSwitchInputs();
 
-#if EFI_SHAFT_POSITION_INPUT
-	int rpm = Sensor::getOrZero(SensorType::Rpm);
-	triggerCentral.isEngineSnifferEnabled = rpm < engineConfiguration->engineSnifferRpmThreshold;
-	getEngineState()->sensorChartMode = rpm < engineConfiguration->sensorSnifferRpmThreshold ? engineConfiguration->sensorChartMode : SC_OFF;
+#if EFI_PROD_CODE
+	// todo: extract method? do better? see https://github.com/rusefi/rusefi/issues/7511 for details
+	engine->module<InjectorModelSecondary>()->updateState();
+	engine->module<InjectorModelPrimary>()->updateState();
+#endif // EFI_PROD_CODE
 
-	engineState.updateSlowSensors();
+#if EFI_SHAFT_POSITION_INPUT
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
+	triggerCentral.isEngineSnifferEnabled = rpm < engineConfiguration->engineSnifferRpmThreshold;
 #endif // EFI_SHAFT_POSITION_INPUT
 }
 
+bool getClutchDownState() {
 #if EFI_GPIO_HARDWARE
-static bool getClutchUpState() {
-	if (isBrainPinValid(engineConfiguration->clutchUpPin)) {
-		return engineConfiguration->clutchUpPinInverted ^ efiReadPin(engineConfiguration->clutchUpPin);
+	if (isBrainPinValid(engineConfiguration->clutchDownPin)) {
+		return efiReadPin(engineConfiguration->clutchDownPin, engineConfiguration->clutchDownPinMode);
 	}
+#endif // EFI_GPIO_HARDWARE
+	// todo: boolean sensors should leverage sensor framework #6342
+	return engine->engineState.lua.clutchDownState;
+}
+
+static bool getClutchUpState() {
+#if EFI_GPIO_HARDWARE
+	if (isBrainPinValid(engineConfiguration->clutchUpPin)) {
+		return efiReadPin(engineConfiguration->clutchUpPin, engineConfiguration->clutchUpPinMode);
+	}
+#endif // EFI_GPIO_HARDWARE
+	// todo: boolean sensors should leverage sensor framework #6342
 	return engine->engineState.lua.clutchUpState;
 }
 
-static bool getBrakePedalState() {
+bool getBrakePedalState() {
+#if EFI_GPIO_HARDWARE
 	if (isBrainPinValid(engineConfiguration->brakePedalPin)) {
-		return efiReadPin(engineConfiguration->brakePedalPin);
+		return efiReadPin(engineConfiguration->brakePedalPin, engineConfiguration->brakePedalPinMode);
 	}
+#endif // EFI_GPIO_HARDWARE
+	// todo: boolean sensors should leverage sensor framework #6342
 	return engine->engineState.lua.brakePedalState;
 }
-#endif // EFI_GPIO_HARDWARE
+
 
 void Engine::updateSwitchInputs() {
-#if EFI_GPIO_HARDWARE
 	// this value is not used yet
-	if (isBrainPinValid(engineConfiguration->clutchDownPin)) {
-		engine->engineState.clutchDownState = engineConfiguration->clutchDownPinInverted ^ efiReadPin(engineConfiguration->clutchDownPin);
-	}
+  engine->engineState.clutchDownState = getClutchDownState();
+	engine->clutchUpSwitchedState.update(getClutchUpState());
+	engine->brakePedalSwitchedState.update(getBrakePedalState());
+#if EFI_GPIO_HARDWARE
 	{
 		bool currentState;
 		if (hasAcToggle()) {
@@ -260,42 +281,22 @@ extern bool kAcRequestState;
 		}
 		AcController & acController = engine->module<AcController>().unmock();
 		if (engine->acButtonSwitchedState.update(currentState)) {
-			acController.acSwitchLastChangeTimeMs = US2MS(getTimeNowUs());
+			acController.timeSinceStateChange.reset();
 		}
 	}
-	engine->clutchUpSwitchedState.update(getClutchUpState());
 
-#if EFI_IDLE_CONTROL
-	if (isBrainPinValid(engineConfiguration->throttlePedalUpPin)) {
-		engine->module<IdleController>().unmock().throttlePedalUpState = efiReadPin(engineConfiguration->throttlePedalUpPin);
-	}
-#endif // EFI_IDLE_CONTROL
-
-	engine->brakePedalSwitchedState.update(getBrakePedalState());
 	pokeAuxDigital();
 
 #endif // EFI_GPIO_HARDWARE
 }
 
-Engine::Engine()
-    : clutchUpSwitchedState(&engineState.clutchUpState),
-	brakePedalSwitchedState(&engineState.brakePedalState),
-	acButtonSwitchedState(&module<AcController>().unmock().acButtonState)
-
-#if EFI_LAUNCH_CONTROL
-
-	, softSparkLimiter(false), hardSparkLimiter(true)
-
-#if EFI_ANTILAG_SYSTEM
-	, ALSsoftSparkLimiter(false)
-#endif /* EFI_ANTILAG_SYSTEM */
-
-#endif // EFI_LAUNCH_CONTROL
-{
-	reset();
+Engine::Engine() {
+	// Everything else has default initializers setup in generated file
+	engineState.lua.fuelMult = 1;
+	ignitionState.luaTimingMult = 1;
 }
 
-int Engine::getGlobalConfigurationVersion(void) const {
+int Engine::getGlobalConfigurationVersion() const {
 	return globalConfigurationVersion;
 }
 
@@ -314,6 +315,8 @@ void Engine::resetLua() {
 	engineState.lua.fuelMult = 1;
 	engineState.lua.luaDisableEtb = false;
 	engineState.lua.luaIgnCut = false;
+	engineState.lua.luaFuelCut = false;
+	engineState.lua.disableDecelerationFuelCutOff = false;
 #if EFI_BOOST_CONTROL
 	module<BoostController>().unmock().resetLua();
 #endif // EFI_BOOST_CONTROL
@@ -334,15 +337,19 @@ void Engine::preCalculate() {
 	// we have a hack here - we rely on the fact that engineMake is the first of three relevant fields
 	engine->outputChannels.engineMakeCodeNameCrc16 = crc32(engineConfiguration->engineMake, 3 * VEHICLE_INFO_SIZE);
 
-	// we need and can empty warning message for CRC purposes
-	memset(config->warning_message, 0, sizeof(config->warning_message));
 	engine->outputChannels.tuneCrc16 = crc32(config, sizeof(persistent_config_s));
 #endif /* EFI_TUNER_STUDIO */
 }
 
 #if EFI_SHAFT_POSITION_INPUT
-void Engine::OnTriggerStateProperState(efitick_t nowNt) {
+void Engine::OnTriggerStateProperState(efitick_t nowNt, size_t triggerStateIndex) {
+	UNUSED(triggerStateIndex);
+
 	rpmCalculator.setSpinningUp(nowNt);
+}
+
+TriggerStateListener* Engine::nextListener() {
+  return secondListener;
 }
 
 void Engine::OnTriggerSynchronizationLost() {
@@ -372,7 +379,7 @@ void Engine::OnTriggerSynchronization(bool wasSynchronized, bool isDecodingError
 		if (isDecodingError) {
 #if EFI_PROD_CODE
 			if (engineConfiguration->verboseTriggerSynchDetails || (triggerCentral.triggerState.someSortOfTriggerError() && !engineConfiguration->silentTriggerError)) {
-				efiPrintf("error: synchronizationPoint @ index %d expected %d/%d got %d/%d",
+				efiPrintf("error: synchronizationPoint @ index %lu expected %d/%d got %d/%d",
 						triggerCentral.triggerState.currentCycle.current_index,
 						triggerCentral.triggerShape.getExpectedEventCount(TriggerWheel::T_PRIMARY),
 						triggerCentral.triggerShape.getExpectedEventCount(TriggerWheel::T_SECONDARY),
@@ -398,6 +405,9 @@ void Engine::injectEngineReferences() {
 }
 
 void Engine::setConfig() {
+#if !EFI_UNIT_TEST
+// huh should this be happy?  static_assert(config != nullptr);
+#endif
 	efi::clear(config);
 
 	injectEngineReferences();
@@ -407,26 +417,28 @@ void Engine::setConfig() {
  * This code asserts that we do not have unexpected gaps in time flow with the exception of internal flash burn.
  */
 static void assertTimeIsLinear() {
+#if ! EFI_UNIT_TEST
 	static efitimems_t mostRecentMs = 0;
 	efitimems_t msNow = getTimeNowMs();
 	if (engineConfiguration->watchOutForLinearTime && engine->configBurnTimer.hasElapsedSec(5)) {
-
 		if (mostRecentMs != 0) {
 			efitimems_t gapInMs = msNow - mostRecentMs;
 			// todo: lower gapInMs threshold?
 			if (gapInMs > 200) {
-				firmwareError(ObdCode::WATCH_DOG_SECONDS, "gap in time: mostRecentMs %dmS, now=%dmS, gap=%dmS",
+				firmwareError(ObdCode::RUNTIME_CRITICAL_WATCH_DOG_SECONDS, "gap in time: mostRecentMs %lumS, now=%lumS, gap=%lumS",
 					mostRecentMs, msNow, gapInMs);
 			}
 		}
 	}
 	mostRecentMs = msNow;
+#endif
 }
 
 void Engine::efiWatchdog() {
     assertTimeIsLinear();
-	if (isRunningPwmTest)
+	if (isRunningPwmTest) {
 		return;
+	}
 
 #if EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT
 	if (module<PrimeController>()->isPriming() || triggerCentral.engineMovedRecently()) {
@@ -506,7 +518,7 @@ bool Engine::isInShutdownMode() const {
 		const float vBattThresholdOff = 5.0f;
 		// start the shutdown process if the ignition voltage dropped low
 		if (Sensor::get(SensorType::BatteryVoltage).value_or(VBAT_FALLBACK_VALUE) <= vBattThresholdOff) {
-			scheduleStopEngine();
+			doScheduleStopEngine();
 		}
 	}
 
@@ -555,16 +567,19 @@ injection_mode_e getCurrentInjectionMode() {
 void Engine::periodicFastCallback() {
 	ScopePerf pc(PE::EnginePeriodicFastCallback);
 
-#if EFI_MAP_AVERAGING
-	refreshMapAveragingPreCalc();
-#endif
+	boardPeriodicFastCallback();
+	call_board_override(custom_board_periodicFastCallback);
+
 
 	engineState.periodicFastCallback();
 
-	tachUpdate();
 	speedoUpdate();
 
-	engine->engineModules.apply_all([](auto & m) { m.onFastCallback(); });
+	engineModules.apply_all([](auto & m) { m.onFastCallback(); });
+}
+
+void Engine::onEngineStopped() {
+	engineModules.apply_all([](auto& m) { m.onEngineStop(); });
 }
 
 EngineRotationState * getEngineRotationState() {
@@ -579,8 +594,8 @@ TunerStudioOutputChannels *getTunerStudioOutputChannels() {
 	return &engine->outputChannels;
 }
 
-ExecutorInterface *getExecutorInterface() {
-	return &engine->executor;
+Scheduler *getScheduler() {
+	return &engine->scheduler;
 }
 
 #if EFI_SHAFT_POSITION_INPUT

@@ -9,7 +9,10 @@
 #include "tcu_controller_generated.h"
 #include "fuel_computer.h"
 #include "antilag_system_state_generated.h"
+#include "closed_loop_idle_generated.h"
 #include "vvt_generated.h"
+#include "mc33810_state_generated.h"
+#include <livedata_board_extra.h>
 
 template<>
 const output_channels_s* getLiveData(size_t) {
@@ -24,7 +27,8 @@ const knock_controller_s* getLiveData(size_t) {
 template<>
 const tcu_controller_s* getLiveData(size_t) {
 #if EFI_TCU
-	return engine->gearController->transmissionController;
+  GearControllerBase *gearController = engine->gearController;
+	return gearController == nullptr ? nullptr : gearController->transmissionController;
 #else
 		return nullptr;
 #endif // EFI_TCU
@@ -43,6 +47,15 @@ template<>
 const launch_control_state_s* getLiveData(size_t) {
 #if EFI_LAUNCH_CONTROL
 	return &engine->launchController;
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const shift_torque_reduction_state_s* getLiveData(size_t) {
+#if EFI_LAUNCH_CONTROL
+	return &engine->shiftTorqueReductionController;
 #else
 	return nullptr;
 #endif
@@ -85,6 +98,7 @@ const fuel_computer_s* getLiveData(size_t) {
 #endif
 }
 
+#ifdef MODULE_FAN_CONTROL
 template<>
 const fan_control_s* getLiveData(size_t idx) {
 	switch (idx) {
@@ -93,11 +107,14 @@ const fan_control_s* getLiveData(size_t idx) {
 		default: return nullptr;
 	}
 }
+#endif
 
+#ifdef MODULE_FUEL_PUMP
 template<>
 const fuel_pump_control_s* getLiveData(size_t) {
 	return &engine->module<FuelPumpController>().unmock();
 }
+#endif
 
 template<>
 const main_relay_s* getLiveData(size_t) {
@@ -110,8 +127,22 @@ const engine_state_s* getLiveData(size_t) {
 }
 
 template<>
+const prime_injection_s* getLiveData(size_t) {
+	return &engine->module<PrimeController>().unmock();
+}
+
+template<>
 const tps_accel_state_s* getLiveData(size_t) {
-	return &engine->tpsAccelEnrichment;
+	return &engine->module<TpsAccelEnrichment>().unmock();
+}
+
+template<>
+const nitrous_control_state_s* getLiveData(size_t) {
+#if EFI_LAUNCH_CONTROL
+    return &engine->module<NitrousController>().unmock();
+#else
+    return nullptr;
+#endif // EFI_LAUNCH_CONTROL
 }
 
 template<>
@@ -140,6 +171,7 @@ const trigger_state_s* getLiveData(size_t idx) {
 		default: return nullptr;
 	}
 #else
+	UNUSED(idx);
 	return nullptr;
 #endif
 }
@@ -155,6 +187,7 @@ const vvt_s* getLiveData(size_t idx) {
 		default: return nullptr;
 	}
 #else
+	UNUSED(idx);
 	return nullptr;
 #endif
 }
@@ -193,7 +226,20 @@ const ignition_state_s* getLiveData(size_t) {
 
 template<>
 const sent_state_s* getLiveData(size_t) {
+#if EFI_SENT_SUPPORT
 	return &engine->sent_state;
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const closed_loop_idle_s* getLiveData(size_t) {
+#if EFI_IDLE_CONTROL
+	return &engine->m_ltit;
+#else
+	return nullptr;
+#endif
 }
 
 template<>
@@ -214,6 +260,20 @@ const lambda_monitor_s* getLiveData(size_t) {
 #endif
 }
 
+#ifndef BOARD_MC33810_COUNT
+	#define BOARD_MC33810_COUNT 0
+#endif
+
+template<>
+const mc33810_state_s* getLiveData(size_t idx) {
+#if (BOARD_MC33810_COUNT > 0)
+	return mc33810getLiveData(idx);
+#else
+	UNUSED(idx);
+	return nullptr;
+#endif
+}
+
 static const FragmentEntry fragments[] = {
 // This header is generated - do not edit by hand!
 #include "live_data_fragments.h"
@@ -221,4 +281,41 @@ static const FragmentEntry fragments[] = {
 
 FragmentList getLiveDataFragments() {
 	return { fragments, efi::size(fragments) };
+}
+
+template<>
+const long_term_fuel_trim_state_s* getLiveData(size_t) {
+#if EFI_LTFT_CONTROL
+	engine->module<LongTermFuelTrim>()->onLiveDataRead();
+	return &engine->module<LongTermFuelTrim>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const short_term_fuel_trim_state_s* getLiveData(size_t) {
+#if EFI_LTFT_CONTROL
+	return &engine->module<ShortTermFuelTrim>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const live_data_example_s* getLiveData(size_t) {
+#if EFI_LTFT_CONTROL
+	return &engine->module<ExampleModule>().unmock();
+#else
+	return nullptr;
+#endif
+}
+
+template<>
+const vvl_controller_state_s* getLiveData(size_t) {
+#if MODULE_VVL_CONTROLLER
+	return &engine->module<VvlController>().unmock();
+#else
+	return nullptr;
+#endif
 }

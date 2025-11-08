@@ -10,143 +10,75 @@
 
 #include "smart_gpio.h"
 
+using namespace rusefi::stringutil;
+
 #if EFI_GPIO_HARDWARE
 
-static ioportid_t ports[] = {GPIOA,
-		GPIOB,
-		GPIOC,
-		GPIOD,
+static const struct port_io {
+	const ioportid_t port;
+	const char *name;
+} ports[] = {
+	{ GPIOA, "PA" },
+	{ GPIOB, "PB" },
+	{ GPIOC, "PC" },
+	{ GPIOD, "PD" },
 #if STM32_HAS_GPIOE
-		GPIOE,
-#else
-		nullptr,
+	{ GPIOE, "PE" },
 #endif /* STM32_HAS_GPIOE */
 #if STM32_HAS_GPIOF
-		GPIOF,
-#else
-		nullptr,
+	{ GPIOF, "PF" },
 #endif /* STM32_HAS_GPIOF */
 #if STM32_HAS_GPIOG
-		GPIOG,
-#else
-		nullptr,
+	{ GPIOG, "PG" },
 #endif /* STM32_HAS_GPIOG */
 #if STM32_HAS_GPIOH
-		GPIOH,
-#else
-		nullptr,
+	{ GPIOH, "PH" },
 #endif /* STM32_HAS_GPIOH */
 #if STM32_HAS_GPIOI
-		GPIOI,
-#else
-		nullptr,
+	{ GPIOI, "PI" },
 #endif /* STM32_HAS_GPIOI */
 #if STM32_HAS_GPIOJ
-		GPIOJ,
-#else
-		nullptr,
+	{ GPIOJ, "PJ" },
 #endif /* STM32_HAS_GPIOJ */
 #if STM32_HAS_GPIOK
-		GPIOK,
-#else
-		nullptr,
+	{ GPIOK, "PK" },
 #endif /* STM32_HAS_GPIOK */
 };
-
-ioportid_t * getGpioPorts() {
-    return ports;
-}
 
 int getBrainPinIndex(brain_pin_e brainPin) {
 	return (brainPin - Gpio::A0) % PORT_SIZE;
 }
 
 ioportid_t getBrainPinPort(brain_pin_e brainPin) {
-	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
+	size_t idx = (brainPin - Gpio::A0) / PORT_SIZE;
+	if (idx < efi::size(ports)) {
+		return ports[idx].port;
+	}
+
+	return nullptr;
 }
 
-/**
- * @deprecated - use hwPortname() instead
- */
-const char *portname(ioportid_t GPIOx) {
-	if (GPIOx == GPIOA)
-		return "PA";
-	if (GPIOx == GPIOB)
-		return "PB";
-	if (GPIOx == GPIOC)
-		return "PC";
-	if (GPIOx == GPIOD)
-		return "PD";
-#if defined(GPIOF)
-	if (GPIOx == GPIOE)
-		return "PE";
-#endif /* GPIOE */
-#if defined(GPIOF)
-	if (GPIOx == GPIOF)
-		return "PF";
-#endif /* GPIOF */
-#if defined(GPIOG)
-	if (GPIOx == GPIOG)
-		return "PG";
-#endif /* GPIOG */
-#if defined(GPIOH)
-	if (GPIOx == GPIOH)
-		return "PH";
-#endif /* GPIOH */
-#if defined(GPIOI)
-	if (GPIOx == GPIOI)
-		return "PI";
-#endif /* GPIOI */
-#if defined(GPIOJ_BASE)
-	if (GPIOx == GPIOJ)
-		return "PJ";
-#endif /* GPIOJ_BASE */
-#if defined(GPIOK_BASE)
-	if (GPIOx == GPIOK)
-		return "PK";
-#endif /* GPIOK_BASE */
+const char *portname(ioportid_t port) {
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, port != NULL, "null port", nullptr);
+	for (size_t idx = 0; idx < efi::size(ports); idx++) {
+		if (ports[idx].port == port) {
+			return ports[idx].name;
+		}
+	}
 	return "unknown";
 }
 
 static int getPortIndex(ioportid_t port) {
-	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, port != NULL, "null port", -1);
-	if (port == GPIOA)
-		return 0;
-	if (port == GPIOB)
-		return 1;
-	if (port == GPIOC)
-		return 2;
-	if (port == GPIOD)
-		return 3;
-#if defined(GPIOF)
-	if (port == GPIOE)
-		return 4;
-#endif /* GPIOE */
-#if defined(GPIOF)
-	if (port == GPIOF)
-		return 5;
-#endif /* GPIOF */
-#if defined(GPIOG)
-	if (port == GPIOG)
-		return 6;
-#endif /* GPIOG */
-#if defined(GPIOH)
-	if (port == GPIOH)
-		return 7;
-#endif /* GPIOH */
-#if defined(GPIOI)
-	if (port == GPIOI)
-		return 8;
-#endif /* STM32_HAS_GPIOI */
-#if defined(GPIOJ_BASE)
-	if (port == GPIOJ)
-		return 9;
-#endif /* GPIOJ_BASE */
-#if defined(GPIOK_BASE)
-	if (port == GPIOK)
-		return 10;
-#endif /* GPIOK_BASE */
+	for (size_t idx = 0; idx < efi::size(ports); idx++) {
+		if (ports[idx].port == port) {
+			return idx;
+		}
+	}
+
+#ifndef EFI_BOOTLOADER
 	firmwareError(ObdCode::CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
+#endif
+
 	return -1;
 }
 
@@ -163,9 +95,18 @@ ioportid_t getHwPort(const char *msg, brain_pin_e brainPin) {
  *  https://github.com/dron0gus please help
 		firmwareError(ObdCode::CUSTOM_ERR_INVALID_PIN, "%s: Invalid Gpio: %d", msg, brainPin);
  */
-		return GPIO_NULL;
+ 		return nullptr;
 	}
-	return getGpioPorts()[(brainPin - Gpio::A0) / PORT_SIZE];
+	size_t idx = (brainPin - Gpio::A0) / PORT_SIZE;
+	if (idx < efi::size(ports)) {
+		return ports[idx].port;
+	}
+
+#ifndef EFI_BOOTLOADER
+	firmwareError(ObdCode::CUSTOM_ERR_UNKNOWN_PORT, "unknown port");
+#endif
+
+	return nullptr;
 }
 
 /**
@@ -180,8 +121,8 @@ ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin) {
 
 
 // huh why conditional on EFI_BOOTLOADER? some weird technical debt while does it fail only with debug options?
-#if ! EFI_BOOTLOADER
-	criticalError("%s: Invalid on-chip Gpio: %d", msg, brainPin);
+#ifndef EFI_BOOTLOADER
+	criticalError("%s: Invalid on-chip Gpio: %d", msg, (int)brainPin);
 #endif // EFI_BOOTLOADER
 	return EFI_ERROR_CODE;
 }
@@ -214,6 +155,47 @@ brain_pin_e parseBrainPin(const char *str) {
 
 unsigned int getBrainPinOnchipNum(void) {
 	return BRAIN_PIN_ONCHIP_PINS;
+}
+
+static const char *od_names[2] = { "Push-Pull", "Open-Drain" };
+static const char *speed_names[4] = { "Low", "Medium", "High", "Very High" };
+static const char *pull_names[4] = { "No pull", "Pull-up", "Pull-down", "Reserved" };
+
+void debugBrainPin(char *buffer, size_t size, brain_pin_e brainPin) {
+	ioportid_t port = getBrainPinPort(brainPin);
+	int pin = getBrainPinIndex(brainPin);
+
+	if (port == nullptr) {
+		buffer[0] = '\0';
+		return;
+	}
+
+	uint32_t mode = (port->MODER >> (pin * 2)) & 0x03;
+
+	if (mode == 0) {
+		chsnprintf(buffer, size, "Input %s IN %d",
+				pull_names[(port->PUPDR >> (pin * 2)) & 0x03],
+				(port->IDR >> pin) & 0x01);
+	} else if (mode == 1) {
+		chsnprintf(buffer, size, "GP out %s %s Speed %s OUT %d IN %d",
+				od_names[(port->OTYPER >> pin) & 0x01],
+				pull_names[(port->PUPDR >> (pin * 2)) & 0x03],
+				speed_names[(port->OSPEEDR >> (pin * 2)) & 0x03],
+				(port->ODR >> pin) & 0x01,
+				(port->IDR >> pin) & 0x01);		
+	} else if (mode == 2) {
+		uint32_t af = (pin < 8) ? port->AFRL : port->AFRH;
+		af = (af >> (4 * (pin & 0x07))) & 0x0f;
+		chsnprintf(buffer, size, "Mode AF%d %s %s Speed %s IN %d OUT %d",
+				af,
+				od_names[(port->OTYPER >> pin) & 0x01],
+				pull_names[(port->PUPDR >> (pin * 2)) & 0x03],
+				speed_names[(port->OSPEEDR >> (pin * 2)) & 0x03],
+				(port->IDR >> pin) & 0x01,
+				(port->ODR >> pin) & 0x01);
+	} else if (mode == 3) {
+		chsnprintf(buffer, size, "Mode Analog");
+	}
 }
 
 #endif /* EFI_GPIO_HARDWARE */

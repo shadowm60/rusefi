@@ -3,29 +3,48 @@
  * http://www.chibios.com/forum/viewtopic.php?f=8&t=820
  * https://github.com/tegesoft/flash-stm32f407
  *
- * @file    flash_int.c
+ * @file    flash_int.cpp
  * @brief	Lower-level code related to internal flash memory
  */
 
 #include "pch.h"
 
-#if EFI_STORAGE_INT_FLASH
+#ifndef EFI_STORAGE_INT_FLASH_DRIVER
+#define EFI_STORAGE_INT_FLASH_DRIVER TRUE
+#endif
+
+#if defined(EFI_BOOTLOADER) || EFI_STORAGE_INT_FLASH_DRIVER
 
 #include "flash_int.h"
 #include <string.h>
 
 #ifdef STM32H7XX
-	// Use bank 2 on H7
-	#define FLASH_CR FLASH->CR2
-	#define FLASH_SR FLASH->SR2
-	#define FLASH_KEYR FLASH->KEYR2
+	#undef FLASH_BASE
+
+	#ifdef STM32H743xx
+		// Use bank 2 on H743
+		#define FLASH_CR FLASH->CR2
+		#define FLASH_SR FLASH->SR2
+		#define FLASH_KEYR FLASH->KEYR2
+		#define FLASH_CCR FLASH->CCR2
+
+		// This is the start of the second bank, since H7 sector numbers are bank relative
+		#define FLASH_BASE 0x08100000
+	#endif
+
+	#ifdef STM32H723xx
+		// H723 is single banked
+		#define FLASH_CR FLASH->CR1
+		#define FLASH_SR FLASH->SR1
+		#define FLASH_KEYR FLASH->KEYR1
+		#define FLASH_CCR FLASH->CCR1
+
+		// This is the start of the bank, since H7 sector numbers are bank relative
+		#define FLASH_BASE 0x08000000
+	#endif
 
 	// I have no idea why ST changed the register name from STRT -> START
 	#define FLASH_CR_STRT FLASH_CR_START
-
-	#undef FLASH_BASE
-	// This is the start of the second bank, since H7 sector numbers are bank relative
-	#define FLASH_BASE 0x08100000
 
 	// QW bit supercedes the older BSY bit
 	#define intFlashWaitWhileBusy() do { __DSB(); } while (FLASH_SR & FLASH_SR_QW);
@@ -58,17 +77,16 @@ flashsector_t intFlashSectorAt(flashaddr_t address) {
 	return sector;
 }
 
-static void intFlashClearErrors(void)
-{
+static void intFlashClearErrors() {
 #ifdef STM32H7XX
-	FLASH->CCR2 = 0xffffffff;
+	FLASH_CCR = 0xffffffff;
 #else
 	FLASH_SR = 0x0000ffff;
 #endif
+	__DSB();
 }
 
-static int intFlashCheckErrors(void)
-{
+static int intFlashCheckErrors() {
 	uint32_t sr = FLASH_SR;
 
 #ifdef FLASH_SR_OPERR
@@ -92,6 +110,22 @@ static int intFlashCheckErrors(void)
 #ifdef FLASH_SR_PGSERR
 	if (sr & FLASH_SR_PGSERR)
 		return FLASH_RETURN_PSEQERROR;
+#endif
+#ifdef FLASH_SR_RDSERR
+	if (sr & FLASH_SR_RDSERR)
+		return FLASH_RETURN_SECURITYERROR;
+#endif
+#ifdef FLASH_SR_RDPERR
+	if (sr & FLASH_SR_RDPERR)
+		return FLASH_RETURN_SECURITYERROR;
+#endif
+#ifdef FLASH_SR_WRPERR
+	if (sr & FLASH_SR_WRPERR)
+		return FLASH_RETURN_SECURITYERROR;
+#endif
+#ifdef FLASH_SR_CRCRDERR
+	if (sr & FLASH_SR_CRCRDERR)
+		return FLASH_RETURN_CRCERROR;
 #endif
 
 	return FLASH_RETURN_SUCCESS;
@@ -124,12 +158,26 @@ static bool intFlashUnlock(void) {
 
 #ifdef STM32F7XX
 static bool isDualBank(void) {
+#ifdef FLASH_OPTCR_nDBANK
 	// cleared bit indicates dual bank
 	return (FLASH->OPTCR & FLASH_OPTCR_nDBANK) == 0;
+#else
+	return 0;
+#endif
 }
 #endif
 
-int intFlashSectorErase(flashsector_t sector) {
+/**
+ * @brief Erase the flash @p sector.
+ * @details The sector is checked for errors after erase.
+ * @note The sector is deleted regardless of its current state.
+ *
+ * @param sector Sector which is going to be erased.
+ * @return FLASH_RETURN_SUCCESS         No error erasing the sector.
+ * @return FLASH_RETURN_BAD_FLASH       Flash cell error.
+ * @return FLASH_RETURN_NO_PERMISSION   Access denied.
+ */
+static int intFlashSectorErase(flashsector_t sector) {
 	int ret;
 	uint8_t sectorRegIdx = sector;
 #ifdef STM32F7XX
@@ -200,16 +248,13 @@ int intFlashSectorErase(flashsector_t sector) {
 }
 
 int intFlashErase(flashaddr_t address, size_t size) {
-	while (size > 0) {
+	flashaddr_t endAddress = address + size - 1;
+	while (address <= endAddress) {
 		flashsector_t sector = intFlashSectorAt(address);
 		int err = intFlashSectorErase(sector);
 		if (err != FLASH_RETURN_SUCCESS)
 			return err;
 		address = intFlashSectorEnd(sector);
-		size_t sector_size = flashSectorSize(sector);
-		if (sector_size >= size)
-			break;
-		size -= sector_size;
 	}
 
 	return FLASH_RETURN_SUCCESS;
@@ -218,7 +263,7 @@ int intFlashErase(flashaddr_t address, size_t size) {
 bool intFlashIsErased(flashaddr_t address, size_t size) {
 #if CORTEX_MODEL == 7
 	// If we have a cache, invalidate the relevant cache lines.
-	// They may still contain old data, leading us to believe that the 
+	// They may still contain old data, leading us to believe that the
 	// flash erase failed.
 	SCB_InvalidateDCache_by_Addr((uint32_t*)address, size);
 #endif
@@ -302,11 +347,13 @@ int intFlashWrite(flashaddr_t address, const char* buffer, size_t size) {
 		__ISB();
 		__DSB();
 
-		// Write 32 bytes
+		static_assert(sizeof(*pWrite) == 4, "Driver supports only 32bit PSIZE");
+
+		// Write 32 bytes/256bits
 		for (size_t i = 0; i < 8; i++) {
 			*pWrite++ = *pRead++;
 		}
-		
+
 		// Flush pipelines
 		__ISB();
 		__DSB();

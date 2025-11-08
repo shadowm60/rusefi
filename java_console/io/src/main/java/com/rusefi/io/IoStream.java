@@ -41,17 +41,16 @@ public interface IoStream extends WriteStream, Closeable, StreamStatistics {
 
     long latestActivityTime();
 
+    void addCloseListener(Runnable listener);
+
+    Object getIoLock();
+
     void onActivity();
 
     default void sendPacket(byte[] plainPacket) throws IOException {
         if (plainPacket.length == 0)
             throw new IllegalArgumentException("Empty packets are not valid.");
-        byte[] packet;
-        if (BinaryProtocol.PLAIN_PROTOCOL) {
-            packet = plainPacket;
-        } else {
-            packet = IoHelper.makeCrc32Packet(plainPacket);
-        }
+        byte[] packet = IoHelper.makeCrc32Packet(plainPacket);
         // todo: verbose mode printHexBinary(plainPacket))
         //log.debug(getLoggingPrefix() + "Sending packet " + BinaryProtocol.findCommand(plainPacket[0]) + " length=" + plainPacket.length);
         write(packet);

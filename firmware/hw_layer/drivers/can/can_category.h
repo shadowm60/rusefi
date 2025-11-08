@@ -13,4 +13,6 @@ enum class CanCategory : uint16_t {
 	WBO_SERVICE = 5,
 	OBD = 6,
 	BENCH_TEST = 7,
+	CAN_IOBOX = 8,
+	GDI = 9,
 };

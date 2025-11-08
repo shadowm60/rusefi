@@ -9,6 +9,9 @@
 #include "pch.h"
 #include "defaults.h"
 #include "hellen_meta.h"
+#include "hellen_leds_100.cpp"
+#include "board_overrides.h"
+#include "connectors/generated_board_pin_names.h"
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::MM100_INJ1;
@@ -31,13 +34,11 @@ static void setIgnitionPins() {
 static void setupDefaultSensorInputs() {
 	engineConfiguration->tps1_1AdcChannel = MM100_IN_TPS_ANALOG;
 	engineConfiguration->tps1_2AdcChannel = MM100_IN_AUX1_ANALOG;
-	engineConfiguration->map.sensor.hwChannel = MM100_IN_MAP1_ANALOG;
+	engineConfiguration->map.sensor.hwChannel = PIN_D9;
 
 	setPPSInputs(MM100_IN_PPS_ANALOG, MM100_IN_AUX2_ANALOG);
-	engineConfiguration->enableAemXSeries = true;
 
 	engineConfiguration->clt.adcChannel = MM100_IN_CLT_ANALOG;
-
 	engineConfiguration->iat.adcChannel = MM100_IN_IAT_ANALOG;
 
 	engineConfiguration->triggerInputPins[0] = Gpio::MM100_UART8_TX; // VR2 max9924 is the safer default
@@ -47,14 +48,11 @@ static void setupDefaultSensorInputs() {
   engineConfiguration->vehicleSpeedSensorInputPin = Gpio::MM100_IN_D3;
 }
 
-#include "hellen_leds_100.cpp"
-
-void setBoardConfigOverrides() {
+static void uaefi_boardConfigOverrides() {
 	setHellenMegaEnPin();
 	setHellenVbatt();
 
-	setHellenSdCardSpi1();
-	hellenMegaAccelerometerPreInitCS2Pin();
+	hellenMegaSdWithAccelerometer();
 
   engineConfiguration->vrThreshold[0].pin = Gpio::MM100_OUT_PWM6;
 
@@ -64,48 +62,63 @@ void setBoardConfigOverrides() {
 
 }
 
-static void setDefaultETBPins() {
-  // users would want to override those if using H-bridges for stepper idle control
+bool validateBoardConfig() {
+#ifndef HW_HELLEN_UAEFI121
+  // this same file is used for both uaefi and uaefi121
+  if (engineConfiguration->can2RxPin != Gpio::B12) {
+	  setHellenCan2();
+  }
+#endif
+  return true;
+}
 
-    // PWM pin
-    engineConfiguration->etbIo[0].controlPin = Gpio::MM100_OUT_PWM3;
-    // DIR pin
-	engineConfiguration->etbIo[0].directionPin1 = Gpio::MM100_OUT_PWM4;
-   	// Disable pin
-   	engineConfiguration->etbIo[0].disablePin = Gpio::MM100_SPI2_MISO;
-    // PWM pin
-    engineConfiguration->etbIo[1].controlPin = Gpio::MM100_OUT_PWM5;
-    // DIR pin
-	engineConfiguration->etbIo[1].directionPin1 = Gpio::MM100_SPI2_MOSI;
-   	// Disable pin
-   	engineConfiguration->etbIo[1].disablePin = Gpio::MM100_USB1ID;
+void setUaefiDefaultETBPins() {
+  // users would want to override those if using H-bridges for stepper idle control
+  setupTLE9201IncludingStepper(/*PWM controlPin*/Gpio::MM100_OUT_PWM3, Gpio::MM100_OUT_PWM4, Gpio::MM100_SPI2_MISO);
+  setupTLE9201IncludingStepper(/*PWM controlPin*/Gpio::MM100_OUT_PWM5, Gpio::MM100_SPI2_MOSI, Gpio::MM100_USB1ID, 1);
 }
 
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
  */
-void setBoardDefaultConfiguration() {
+static void uaefi_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-	setDefaultETBPins();
+	setUaefiDefaultETBPins();
 
   setHellenMMbaro();
 
 	engineConfiguration->displayLogicLevelsInEngineSniffer = true;
-
-	engineConfiguration->globalTriggerAngleOffset = 0;
+	engineConfiguration->isSdCardEnabled = true;
 
 	engineConfiguration->enableSoftwareKnock = true;
 
 	engineConfiguration->canTxPin = Gpio::MM100_CAN_TX;
 	engineConfiguration->canRxPin = Gpio::MM100_CAN_RX;
+#ifndef HW_HELLEN_UAEFI121
+  // this same file is used for both uaefi and uaefi121
+	setHellenCan2();
+#endif
+
+#if (EFI_CAN_BUS_COUNT >= 3)
+	engineConfiguration->can3TxPin = Gpio::MM100_CAN3_TX;
+	engineConfiguration->can3RxPin = Gpio::MM100_CAN3_RX;
+#endif
 
   engineConfiguration->mainRelayPin = Gpio::MM100_IGN7;
  	engineConfiguration->fanPin = Gpio::MM100_IGN8;
 	engineConfiguration->fuelPumpPin = Gpio::MM100_OUT_PWM2;
+
+	// SPI3 for on-board EGT
+	engineConfiguration->is_enabled_spi_3 = true;
+	// MOSI not needed, we have one-way communication here
+	engineConfiguration->spi3misoPin = Gpio::C11;
+	engineConfiguration->spi3sckPin = Gpio::C10;
+	engineConfiguration->max31855_cs[0] = Gpio::A15;
+	engineConfiguration->max31855spiDevice = SPI_DEVICE_3;
 
 	// "required" hardware is done - set some reasonable defaults
 	setupDefaultSensorInputs();
@@ -116,12 +129,14 @@ void setBoardDefaultConfiguration() {
 	// Some sensible defaults for other options
 	setCrankOperationMode();
 
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
 	engineConfiguration->injectorCompensationMode = ICM_FixedRailPressure;
 
+#ifndef EFI_BOOTLOADER
 	setCommonNTCSensor(&engineConfiguration->clt, HELLEN_DEFAULT_AT_PULLUP);
 	setCommonNTCSensor(&engineConfiguration->iat, HELLEN_DEFAULT_AT_PULLUP);
+#endif // EFI_BOOTLOADER
 
     setTPS1Calibration(100, 650);
 	hellenWbo();
@@ -162,5 +177,44 @@ Gpio* getBoardMetaOutputs() {
 }
 
 int getBoardMetaDcOutputsCount() {
+    if (engineConfiguration->engineType == engine_type_e::HONDA_OBD1 ||
+      engineConfiguration->engineType == engine_type_e::MAZDA_MIATA_NA6 ||
+      engineConfiguration->engineType == engine_type_e::MAZDA_MIATA_NA94 ||
+      engineConfiguration->engineType == engine_type_e::MAZDA_MIATA_NA96 ||
+      engineConfiguration->engineType == engine_type_e::MAZDA_MIATA_NB1 ||
+      engineConfiguration->engineType == engine_type_e::MAZDA_MIATA_NB2) {
+        return 0;
+    }
     return 2;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = uaefi_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = uaefi_boardConfigOverrides;
+}
+
+int boardGetAnalogInputDiagnostic(adc_channel_e hwChannel, float voltage) {
+	/* we do not check voltage for valid ragne yet */
+	(void)voltage;
+
+	switch (hwChannel) {
+		/* inputs that may be affected by incorrect reference voltage */
+		case MM100_IN_TPS_ANALOG:
+		case MM100_IN_PPS_ANALOG:
+		case MM100_IN_IAT_ANALOG:
+		case MM100_IN_CLT_ANALOG:
+		case MM100_IN_O2S_ANALOG:
+		case MM100_IN_O2S2_ANALOG:
+		case MM100_IN_MAP1_ANALOG:
+		case MM100_IN_AUX1_ANALOG:
+		case MM100_IN_AUX2_ANALOG:
+		case MM100_IN_AUX4_ANALOG:
+			/* TODO: more? */
+			return (boardGetAnalogDiagnostic() == ObdCode::None) ? 0 : -1;
+		/* all other inputs should not rely on output 5V */
+		default:
+			return 0;
+	}
+
+	return 0;
 }

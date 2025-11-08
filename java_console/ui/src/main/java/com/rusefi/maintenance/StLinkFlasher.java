@@ -3,10 +3,9 @@ package com.rusefi.maintenance;
 import com.rusefi.Launcher;
 import com.rusefi.core.io.BundleUtil;
 import com.rusefi.io.UpdateOperationCallbacks;
-import com.rusefi.ui.StatusWindow;
+import com.rusefi.maintenance.jobs.JobHelper;
 import org.jetbrains.annotations.NotNull;
 
-import javax.swing.*;
 import java.io.File;
 import java.io.FileNotFoundException;
 
@@ -31,25 +30,11 @@ public class StLinkFlasher {
     public static final String DONE = "DONE!";
     private static final String WMIC_STLINK_QUERY_COMMAND = "wmic path win32_pnpentity where \"Caption like '%STLink%'\" get Caption,ConfigManagerErrorCode /format:list";
 
-    private final JButton button;
-
-    public StLinkFlasher(String fileName, String buttonTest, String tooltip) {
-        button = new JButton(buttonTest);
-        button.setToolTipText(tooltip);
-        button.addActionListener(event -> doUpdateFirmware(fileName, button));
-    }
-
-    public static void doUpdateFirmware(String fileName, JComponent parent) {
-        StatusWindow wnd = new StatusWindow();
-        int dialogResult = JOptionPane.showConfirmDialog(parent, "Do you really want to update firmware? Please disconnect vehicle battery before erasing.",
-                "Please disconnect from vehicle", JOptionPane.YES_NO_OPTION);
-        if (dialogResult != JOptionPane.YES_OPTION)
-            return;
-
-        wnd.getFrame().setLocationRelativeTo(parent);
-        wnd.showFrame(TITLE);
-
-        ExecHelper.submitAction(() -> doFlashFirmware(wnd, fileName), StLinkFlasher.class + " extProcessThread");
+    public static void doUpdateFirmware(String fileName, UpdateOperationCallbacks callbacks, final Runnable onJobFinished) {
+        ExecHelper.submitAction(
+            () -> JobHelper.doJob(() -> doFlashFirmware(callbacks, fileName), onJobFinished),
+            StLinkFlasher.class + " extProcessThread"
+        );
     }
 
     public static String getOpenocdCommand() {
@@ -63,45 +48,38 @@ public class StLinkFlasher {
                 OPENOCD_EXE, wnd);
     }
 
-    private static void doFlashFirmware(StatusWindow wnd, String fileName) {
+    private static void doFlashFirmware(UpdateOperationCallbacks wnd, String fileName) {
         if (!new File(fileName).exists()) {
-            wnd.append(fileName + " not found, cannot proceed !!!");
-            wnd.setStatus("ERROR");
+            wnd.logLine(fileName + " not found, cannot proceed !!!");
+            wnd.error();
             return;
         }
-        StatusAnimation sa = new StatusAnimation(wnd);
-      String error = null;
+      String error;
       try {
         error = executeOpenOCDCommand(getOpenocdCommand() + " -c \"program " +
                 fileName +
                 " verify reset exit 0x08000000\"", wnd);
       } catch (FileNotFoundException e) {
-        wnd.append(e.toString());
+        wnd.logLine(e.toString());
         wnd.error();
         return;
       }
       if (error.contains(SUCCESS_MESSAGE_TAG) && !error.toLowerCase().contains(FAILED_MESSAGE_TAG)) {
-            wnd.append("Flashing looks good!");
-            sa.stop();
-            wnd.setStatus(DONE);
-            wnd.setSuccessState();
+            wnd.logLine("Flashing looks good!");
+            wnd.done();
         } else {
-            wnd.setErrorState();
-            wnd.append("!!! FIRMWARE FLASH: DOES NOT LOOK RIGHT !!!");
+            wnd.error();
+            wnd.logLine("!!! FIRMWARE FLASH: DOES NOT LOOK RIGHT !!!");
         }
     }
 
     public static boolean detectStLink(UpdateOperationCallbacks wnd) {
-        return MaintenanceUtil.detectDevice(wnd, WMIC_STLINK_QUERY_COMMAND, "STLink");
-    }
-
-    public JButton getButton() {
-        return button;
+        return MaintenanceUtil.detectDevice(wnd, WMIC_STLINK_QUERY_COMMAND, "STLink", false);
     }
 
     @NotNull
     public static HwPlatform getHardwareKind() {
-        String bundle = BundleUtil.readBundleFullNameNotNull();
+        String bundle = BundleUtil.readBundleFullNameNotNull().getTarget();
         if (bundle.contains("h7"))
             return HwPlatform.H7;
         if (bundle.contains("f7"))

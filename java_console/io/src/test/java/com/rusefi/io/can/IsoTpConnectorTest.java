@@ -1,9 +1,8 @@
 package com.rusefi.io.can;
 
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.VariableRegistryValues;
 import com.rusefi.io.can.isotp.IsoTpConnector;
 import com.rusefi.util.HexBinary;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,7 +18,7 @@ public class IsoTpConnectorTest {
 
         List<String> packets = new ArrayList<>();
 
-        IsoTpConnector testConnector = new IsoTpConnector(Fields.CAN_ECU_SERIAL_RX_ID) {
+        IsoTpConnector testConnector = new IsoTpConnector(VariableRegistryValues.CAN_ECU_SERIAL_RX_ID) {
             @Override
             public void sendCanData(byte[] total) {
                 String packetAsString = HexBinary.printHexBinary(total);

@@ -2,11 +2,8 @@
 
 /**
  * @brief Board-specific initialization code.
- * @todo  Add your board-specific code, if any.
  */
-void boardInit(void)
-{
-	/* NOP */
+void boardInit(void) {
 }
 
 Gpio getWarningLedPin() {
@@ -21,4 +18,7 @@ Gpio getCommsLedPin() {
 Gpio getRunningLedPin() {
 	// LD3 - green
 	return Gpio::G13;
+}
+
+void setup_custom_board_overrides() {
 }

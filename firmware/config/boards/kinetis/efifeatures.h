@@ -67,7 +67,7 @@
  */
 #define EFI_TUNER_STUDIO_VERBOSE FALSE
 
-#define EFI_DEFAILED_LOGGING FALSE
+#define EFI_DETAILED_LOGGING FALSE
 
 /**
  * Dev console support.
@@ -118,14 +118,6 @@
 
 #define EFI_MCP_3208 FALSE
 
-#ifndef EFI_HIP_9011
-#define EFI_HIP_9011 FALSE
-#endif
-
-#ifndef EFI_CJ125
-#define EFI_CJ125 FALSE
-#endif
-
 #if !defined(EFI_ONBOARD_MEMS) || defined(__DOXYGEN__)
  #define EFI_ONBOARD_MEMS FALSE
 #endif
@@ -141,9 +133,6 @@
 #ifndef EFI_CAN_SUPPORT
 #define EFI_CAN_SUPPORT FALSE
 #endif
-
-#define EFI_HD44780_LCD FALSE
-#define EFI_LCD FALSE
 
 #ifndef EFI_IDLE_CONTROL
 #define EFI_IDLE_CONTROL FALSE
@@ -188,7 +177,6 @@
 #endif
 
 #define EFI_HISTOGRAMS FALSE
-#define EFI_SENSOR_CHART FALSE
 
 #define EFI_PERF_METRICS FALSE
 
@@ -326,18 +314,10 @@
 #define EFI_PRINTF_FUEL_DETAILS FALSE
 #define ENABLE_PERF_TRACE FALSE
 
-#define RAM_UNUSED_SIZE 1
-#define CCM_UNUSED_SIZE 1
-
 #define EFI_BACKUP_SRAM FALSE
-
-#define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
-// #define EFI_PRINT_MESSAGES_TO_TERMINAL TRUE
 
 #undef EFI_ACTIVE_CONFIGURATION_IN_FLASH
 #define EFI_ACTIVE_CONFIGURATION_IN_FLASH TRUE
-
-//#define PWM_PHASE_MAX_COUNT 122
 
 //!!!!!!!!!!!!!!!!!!!!!!
 #define debugLog(fmt,...) { \

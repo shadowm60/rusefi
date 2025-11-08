@@ -6,13 +6,14 @@
  */
 
 #include "pch.h"
+#include "util/injection_crank_helper.h"
 
 TEST(engine, testPlainCrankingWithoutAdvancedFeatures) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 	setTable(config->injectionPhase, -180.0f);
 	engineConfiguration->isFasterEngineSpinUpEnabled = false;
 	engine->tdcMarkEnabled = false;
-	engineConfiguration->cranking.baseFuel = 12;
+	setTestFuelCrankingTable(12);
 
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth);
 	ASSERT_EQ( 0,  Sensor::getOrZero(SensorType::Rpm)) << "RPM=0";
@@ -23,13 +24,16 @@ TEST(engine, testPlainCrankingWithoutAdvancedFeatures) {
 
 
 	eth.fireRise(/* delayMs */ 200);
-	eth.assertRpm(300, "RPM#2");
+	ASSERT_EQ(300, Sensor::getOrZero(SensorType::Rpm));
 	// two simultaneous injections
-	ASSERT_EQ( 4,  engine->executor.size()) << "plain#2";
+	ASSERT_EQ( 4,  engine->scheduler.size()) << "plain#2";
 
-	eth.assertEvent5("sim start", 0, (void*)startSimultaneousInjection, 100000 - 1625);
+	auto const startSimultaneousInjectionAction{ action_s::make<startSimultaneousInjection>() };
+	auto const endSimultaneousInjectionAction{ action_s::make<endSimultaneousInjection>((InjectionEvent*){})};
+
+	eth.assertEvent5("sim start", 0, startSimultaneousInjectionAction, 100000 - 1625);
 	// -1 because ugh floating point math
-	eth.assertEvent5("sim end", 1, (void*)endSimultaneousInjection, 100000 - 1);
+	eth.assertEvent5("sim end", 1, endSimultaneousInjectionAction, 100000 - 1);
 }
 
 
@@ -41,7 +45,7 @@ TEST(priming, startScheduling) {
 	// Turn on the ignition switch!
 	engine->module<PrimeController>()->onIgnitionStateChanged(true);
 
-	ASSERT_EQ(1, engine->executor.size()) << "prime fuel";
+	ASSERT_EQ(1, engine->scheduler.size()) << "prime fuel";
 }
 
 TEST(priming, duration) {

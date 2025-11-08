@@ -1,10 +1,10 @@
 package com.rusefi.autotest;
 
-import com.rusefi.FileLog;
+import com.rusefi.AutotestLogging;
 import com.rusefi.IoUtil;
 import com.rusefi.TestingUtils;
 import com.rusefi.autodetect.PortDetector;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.EngineState;
 import com.rusefi.io.LinkManager;
 import org.jetbrains.annotations.NotNull;
@@ -22,7 +22,7 @@ public class ControllerConnectorState {
             return linkManager;
 
         LinkManager linkManager = new LinkManager().setCompositeLogicEnabled(false);
-        linkManager.getEngineState().registerStringValueAction(Fields.PROTOCOL_VERSION_TAG, new EngineState.ValueCallback<String>() {
+        linkManager.getEngineState().registerStringValueAction(Integration.PROTOCOL_VERSION_TAG, new EngineState.ValueCallback<String>() {
             @Override
             public void onUpdate(String firmwareVersion1) {
                 firmwareVersion = firmwareVersion1;
@@ -34,7 +34,7 @@ public class ControllerConnectorState {
          * test exact numbers yet
          */
         TestingUtils.isRealHardware = true;
-        FileLog.MAIN.start();
+        AutotestLogging.INSTANCE.start();
 
         String port = System.getenv("HARDWARE_CI_SERIAL_DEVICE");
         if (port == null) {

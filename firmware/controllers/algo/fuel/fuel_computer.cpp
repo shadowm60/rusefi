@@ -10,9 +10,9 @@
 
 #if EFI_ENGINE_CONTROL
 
-mass_t FuelComputerBase::getCycleFuel(mass_t airmass, int rpm, float load) {
+mass_t FuelComputerBase::getCycleFuel(mass_t airmass, float rpm, float load) {
 	load = getTargetLambdaLoadAxis(load);
-	
+
 	float stoich = getStoichiometricRatio();
 	float lambda = getTargetLambda(rpm, load);
 	float afr = stoich * lambda;
@@ -28,11 +28,11 @@ mass_t FuelComputerBase::getCycleFuel(mass_t airmass, int rpm, float load) {
 float FuelComputer::getStoichiometricRatio() const {
 	float primary = engineConfiguration->stoichRatioPrimary;
 
-	// Config compatibility: this field may be zero on ECUs with old defaults
+
 	if (primary < 5) {
-		// todo: fatal in July of 2023
-		// 14.7 = E0 gasoline AFR
-		engineConfiguration->stoichRatioPrimary = primary = STOICH_RATIO;
+   	// Config compatibility: this field may be zero on ECUs with very old defaults
+		criticalError("Please set stoichRatioPrimary");
+		return 0;
 	}
 
 	// Without an ethanol/flex sensor, return primary configured stoich ratio
@@ -42,11 +42,10 @@ float FuelComputer::getStoichiometricRatio() const {
 
 	float secondary = engineConfiguration->stoichRatioSecondary;
 
-	// Config compatibility: this field may be zero on ECUs with old defaults
 	if (secondary < 5) {
-		// 9.0 = E100 ethanol AFR
-		// todo: fatal in July of 2023
-		engineConfiguration->stoichRatioSecondary = secondary = 9.0f;
+	  // Config compatibility: this field may be zero on ECUs with very old defaults
+		criticalError("Please set stoichRatioSecondary");
+		return 0;
 	}
 
 	auto flex = Sensor::get(SensorType::FuelEthanolPercent);
@@ -58,12 +57,26 @@ float FuelComputer::getStoichiometricRatio() const {
 }
 
 
-float FuelComputer::getTargetLambda(int rpm, float load) const {
-	return interpolate3d(
+float FuelComputer::getTargetLambda(float rpm, float load) const {
+	float target = interpolate3d(
 		config->lambdaTable,
 		config->lambdaLoadBins, load,
 		config->lambdaRpmBins, rpm
 	);
+
+	// Add any blends if configured
+	for (size_t i = 0; i < efi::size(config->targetAfrBlends); i++) {
+		auto result = calculateBlend(config->targetAfrBlends[i], rpm, load);
+
+		engine->outputChannels.targetAfrBlendParameter[i] = result.BlendParameter;
+		engine->outputChannels.targetAfrBlendBias[i] = result.Bias;
+		engine->outputChannels.targetAfrBlendOutput[i] = result.Value;
+		engine->outputChannels.targetAfrBlendYAxis[i] = result.TableYAxis;
+
+		target += result.Value;
+	}
+
+    return target;
 }
 
 float FuelComputer::getTargetLambdaLoadAxis(float defaultLoad) const {

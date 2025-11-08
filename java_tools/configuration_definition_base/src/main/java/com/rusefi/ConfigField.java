@@ -3,6 +3,9 @@ package com.rusefi;
 import com.rusefi.core.Pair;
 import com.rusefi.output.ConfigStructure;
 
+import static com.rusefi.output.ConfigStructureImpl.ALIGNMENT_FILL_AT;
+import static com.rusefi.output.DataLogConsumer.UNUSED;
+
 public interface ConfigField {
     ConfigField VOID = new ConfigField() {
         @Override
@@ -11,7 +14,7 @@ public interface ConfigField {
         }
 
         @Override
-        public ConfigStructure getParent() {
+        public ConfigStructure getParentStructureType() {
             return null;
         }
 
@@ -66,7 +69,7 @@ public interface ConfigField {
         }
 
         @Override
-        public String getType() {
+        public String getTypeName() {
             return null;
         }
 
@@ -153,9 +156,17 @@ public interface ConfigField {
         public String getCommentTemplated() {
             return null;
         }
+        @Override
+        public void setTsInfo(String newtsInfo) {
+        }
     };
 
+    default boolean isUnusedField() {
+        return getName().contains(UNUSED) || getName().contains(ALIGNMENT_FILL_AT);
+    }
+
     default String getOriginalArrayName() {
+    // FIXME: this method fails in case of a array of structs with a array inside (ie only GPPWM at the moment)
         if (isFromIterate()) {
             return getIterateOriginalName() + "[" + (getIterateIndex() - 1) + "]";
         } else {
@@ -163,7 +174,9 @@ public interface ConfigField {
         }
     }
 
-    ConfigStructure getParent();
+    ConfigStructure getParentStructureType();
+
+    String getTypeName();
 
     ConfigStructure getStructureType();
 
@@ -187,7 +200,6 @@ public interface ConfigField {
 
     String getName();
 
-    String getType();
 
     int getElementSize();
 
@@ -218,7 +230,12 @@ public interface ConfigField {
 
     int getIterateIndex();
 
+    /**
+     * this is about array syntax: sometimes we handle those as arrays and sometimes we expand into field1, field2, field3
+     */
     boolean isFromIterate();
 
     String getCommentTemplated();
+
+    void setTsInfo(String tsInfo);
 }

@@ -22,25 +22,29 @@ TEST(issues, issueOneCylinderSpecialCase968) {
 
 	eth.setTriggerType(trigger_type_e::TT_HALF_MOON);
 
-	ASSERT_EQ( 0,  engine->executor.size()) << "start";
+	ASSERT_EQ( 0,  engine->scheduler.size()) << "start";
 
 	eth.fireTriggerEvents2(/* count */ 2, 50 /* ms */);
-	eth.assertRpm(0);
-	ASSERT_EQ( 0,  engine->executor.size()) << "first revolution(s)";
+	ASSERT_EQ(0, Sensor::getOrZero(SensorType::Rpm));
+	ASSERT_EQ( 0,  engine->scheduler.size()) << "first revolution(s)";
 
 	eth.fireTriggerEvents2(/* count */ 1, 50 /* ms */);
-	eth.assertRpm(600, "RPM");
+	ASSERT_EQ(600, Sensor::getOrZero(SensorType::Rpm));
 	ASSERT_EQ(engine->triggerCentral.currentEngineDecodedPhase, 90 + Gy6139_globalTriggerAngleOffset);
 	ASSERT_EQ(engine->engineState.timingAdvance[0], timing);
 
   angle_t expectedAngle = 180 - Gy6139_globalTriggerAngleOffset + timing;
   int expectedDeltaTimeUs = eth.angleToTimeUs(expectedAngle);
 
-	ASSERT_EQ( 2,  engine->executor.size()) << "first revolution(s)";
-	eth.assertEvent5("spark up#0", 0, (void*)turnSparkPinHigh, -expectedDeltaTimeUs - MS2US(DEFAULT_CRANKING_DWELL_MS));
-	eth.assertEvent5("spark down#0", 1, (void*)fireSparkAndPrepareNextSchedule, -expectedDeltaTimeUs);
+	ASSERT_EQ( 2,  engine->scheduler.size()) << "first revolution(s)";
+
+	auto const turnSparkPinHighStartChargingAction{ action_s::make<turnSparkPinHighStartCharging>((IgnitionEvent*){}) };
+	auto const fireSparkAndPrepareNextScheduleAction{ action_s::make<fireSparkAndPrepareNextSchedule>((IgnitionEvent*){}) };
+
+	eth.assertEvent5("spark up#0", 0, turnSparkPinHighStartChargingAction, -expectedDeltaTimeUs - MS2US(DEFAULT_CRANKING_DWELL_MS));
+	eth.assertEvent5("spark down#0", 1, fireSparkAndPrepareNextScheduleAction, -expectedDeltaTimeUs);
 
 
 	eth.fireTriggerEvents2(/* count */ 1, 50 /* ms */);
-	ASSERT_EQ( 4,  engine->executor.size()) << "first revolution(s)";
+	ASSERT_EQ( 4,  engine->scheduler.size()) << "first revolution(s)";
 }

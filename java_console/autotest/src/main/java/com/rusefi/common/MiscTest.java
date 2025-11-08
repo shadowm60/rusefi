@@ -6,17 +6,24 @@ import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import org.junit.Test;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import static com.devexperts.util.TimeUtil.SECOND;
 import static com.rusefi.IoUtil.sleepSeconds;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class MiscTest extends RusefiTestBase {
+
     @Test
-    public void burn() {
-        BinaryProtocol bp = ecu.getLinkManager().getCurrentStreamState();
-        // let's make sure 'burn' command works since sometimes it does not
-        bp.burn();
+    public void testGetAllOutputs() throws InterruptedException {
+        CountDownLatch responseLatch = new CountDownLatch(1);
+        ecu.getLinkManager().execute(() -> {
+            boolean result = ecu.getLinkManager().getBinaryProtocol().requestOutputChannels();
+            System.out.println("requestOutputChannels=" + result);
+            responseLatch.countDown();
+        });
+        responseLatch.await(1, TimeUnit.MINUTES);
     }
 
     @Test
@@ -25,7 +32,7 @@ public class MiscTest extends RusefiTestBase {
         long start = System.currentTimeMillis();
         while (Double.isNaN(mcuTemp) && (System.currentTimeMillis() - start) < 5 * SECOND) {
             Thread.sleep(100);
-            mcuTemp = SensorCentral.getInstance().getValue(Sensor.INT_TEMP);
+            mcuTemp = SensorCentral.getInstance().getValue(Sensor.INTERNALMCUTEMPERATURE);
         }
 
         System.out.println("MCU temperature is " + mcuTemp + " deg C");

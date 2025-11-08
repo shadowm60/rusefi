@@ -19,12 +19,21 @@ struct CanFrameData {
 	CANRxFrame Frame;
 };
 
-static constexpr size_t canFrameCount = 32;
-static CanFrameData canFrames[canFrameCount];
+#ifndef LUA_canFrameCount
+#if defined(STM32F7) || defined(STM32H7)
+#define LUA_canFrameCount 256
+#else
+#define LUA_canFrameCount 32
+#endif
+#endif
+
+static CanFrameData canFrames[LUA_canFrameCount];
 // CAN frame buffers that are not in use
-static chibios_rt::Mailbox<CanFrameData*, canFrameCount> freeBuffers;
+static chibios_rt::Mailbox<CanFrameData*, LUA_canFrameCount> freeBuffers;
 // CAN frame buffers that are waiting to be processed by the lua thread
-static chibios_rt::Mailbox<CanFrameData*, canFrameCount> filledBuffers;
+static chibios_rt::Mailbox<CanFrameData*, LUA_canFrameCount> filledBuffers;
+
+static size_t dropRxCount = 0;
 
 void processLuaCan(const size_t busIndex, const CANRxFrame& frame) {
 	auto filter = getFilterForId(busIndex, CAN_ID(frame));
@@ -45,7 +54,7 @@ void processLuaCan(const size_t busIndex, const CANRxFrame& frame) {
 
 	if (msg != MSG_OK) {
 		// all buffers are already in use, this frame will be dropped!
-		// TODO: warn the user
+		dropRxCount++;
 		return;
 	}
 
@@ -61,12 +70,12 @@ void processLuaCan(const size_t busIndex, const CANRxFrame& frame) {
 	}
 }
 
-// From lapi.c:756, modified slightly
+// From lapi.c:762 lua_createtable, modified slightly
 static void lua_createtable_noGC(lua_State *L, int narray) {
 	Table *t;
 	lua_lock(L);
 	t = luaH_new(L);
-	sethvalue2s(L, L->top, t);
+	sethvalue2s(L, L->top.p, t);
 	api_incr_top(L);
 	luaH_resize(L, t, narray, 0);
 
@@ -87,9 +96,11 @@ static void handleCanFrame(LuaHandle& ls, CanFrameData* data) {
 		lua_rawgeti(ls, LUA_REGISTRYINDEX, data->Callback);
 	}
 
+  auto frameCanId = CAN_ID(data->Frame);
+
 	if (lua_isnil(ls, -1)) {
 		// no rx function, ignore
-		efiPrintf("LUA CAN rx missing function onCanRx");
+		efiPrintf("LUA CAN rx missing function onCanRx ID=%ld", frameCanId);
 		lua_settop(ls, 0);
 		return;
 	}
@@ -97,13 +108,15 @@ static void handleCanFrame(LuaHandle& ls, CanFrameData* data) {
 	auto dlc = data->Frame.DLC;
 
 	// Push bus, ID and DLC
-	lua_pushinteger(ls, data->BusIndex);
-	lua_pushinteger(ls, CAN_ID(data->Frame));
+	lua_pushinteger(ls, HUMAN_OFFSET + data->BusIndex);
+	lua_pushinteger(ls, frameCanId);
 	lua_pushinteger(ls, dlc);
 
   if (engineConfiguration->luaCanRxWorkaround) {
     // todo: https://github.com/rusefi/rusefi/issues/6041
-    lua_getglobal(ls, "global_can_data");
+    if (lua_getglobal(ls, "global_can_data") != LUA_TTABLE) {
+      criticalError("luaCanRxWorkaround without global_can_data");
+    }
   } else {
   	// Build table for data, custom implementation without explicit GC but still garbage
 	  lua_createtable_noGC(ls, dlc);
@@ -168,9 +181,13 @@ int doLuaCanRx(LuaHandle& ls) {
 
 void initLuaCanRx() {
 	// Push all CAN frames in to the free buffer
-	for (size_t i = 0; i < canFrameCount; i++) {
+	for (size_t i = 0; i < LUA_canFrameCount; i++) {
 		freeBuffers.post(&canFrames[i], TIME_INFINITE);
 	}
+}
+
+size_t getLuaCanRxDropped() {
+	return dropRxCount;
 }
 
 #endif // EFI_CAN_SUPPORT

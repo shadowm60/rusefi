@@ -12,6 +12,7 @@
 #include "hellen_meta.h"
 #include "gm_ls_4.h"
 #include "defaults.h"
+#include "board_overrides.h"
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::H144_LS_1;
@@ -62,7 +63,7 @@ static void setupDefaultSensorInputs() {
 
 
 
-void setBoardConfigOverrides() {
+static void hellen_gm_e67_boardConfigOverrides() {
 	setHellenVbatt();
 
 	setHellenSdCardSpi2();
@@ -70,29 +71,17 @@ void setBoardConfigOverrides() {
 
 	setHellenCan();
 
-	// TLE9201 driver
-    // This chip has three control pins:
-    // DIR - sets direction of the motor
-    // PWM - pwm control (enable high, coast low)
-    // DIS - disables motor (enable low)
-
-    //ETB1
-    // PWM pin
-    engineConfiguration->etbIo[0].controlPin = Gpio::H144_OUT_PWM8;
-    // DIR pin
-	engineConfiguration->etbIo[0].directionPin1 = Gpio::H144_OUT_IO13;
-   	// Disable pin
-   	engineConfiguration->etbIo[0].disablePin = Gpio::H144_OUT_IO4;
+	setupTLE9201(/*controlPin*/Gpio::H144_OUT_PWM8, Gpio::H144_OUT_IO13, Gpio::H144_OUT_IO4);
 }
 
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
 
  */
-void setBoardDefaultConfiguration() {
+static void hellen_gm_e67_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
@@ -130,4 +119,9 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 // ?	engineConfiguration->malfunctionIndicatorPin = Gpio::G4; //1E - Check Engine Light
 
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = hellen_gm_e67_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = hellen_gm_e67_boardConfigOverrides;
 }

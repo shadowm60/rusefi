@@ -1,7 +1,7 @@
 package com.rusefi;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.enum_reader.Value;
-import com.rusefi.util.SystemOut;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -15,6 +15,7 @@ import java.util.Map;
  * produces java enum class from an enum defined in a C/C++ header
  */
 public class ToJavaEnum {
+    private final static Logging log = Logging.getLogging(ToJavaEnum.class);
     static private boolean enumWithValues = false;
 
     public static void main(String[] args) throws IOException {
@@ -28,14 +29,16 @@ public class ToJavaEnum {
 
         VariableRegistry registry = new VariableRegistry();
         for (String fileName : invokeReader.getDefinitionInputFiles())
-            registry.readPrependValues(fileName);
+            registry.readPrependValues(fileName, true);
 
         StringBuilder sb = new StringBuilder();
 
         for (String inputFile : invokeReader.getInputFiles()) {
             File f = new File(invokeReader.getInputPath() + File.separator + inputFile);
-            SystemOut.println("Reading enums from " + f);
-            sb.append("// based on ").append(f).append("\n");
+            log.info("Reading enums from " + f);
+            // print unix-style path on windows
+            String fname = f.toString().replace("\\", "/");
+            sb.append("// based on ").append(fname).append("\n");
 
             enumsReader.read(new FileReader(f), registry, enumWithValues);
         }

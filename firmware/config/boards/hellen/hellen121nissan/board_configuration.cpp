@@ -14,6 +14,7 @@
 #include "pch.h"
 #include "defaults.h"
 #include "hellen_meta.h"
+#include "board_overrides.h"
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = Gpio::H144_LS_1;
@@ -41,9 +42,9 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->camInputs[0] = Gpio::H144_IN_CAM;
 	// todo: remove from default since 4 cylinder does not use it
 	// todo: this requires unit test change
-	engineConfiguration->camInputs[1 * CAMS_PER_BANK] = Gpio::H144_IN_D_AUX4;
+	engineConfiguration->camInputs[1 * CAMS_PER_BANK] = Gpio::H144_ORIGINAL_MCU_IN_D_AUX4;
 
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG);
 
 	setPPSInputs(H144_IN_PPS, EFI_ADC_14);
 	engineConfiguration->mafAdcChannel = H144_IN_O2S;
@@ -54,7 +55,7 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
-void setBoardConfigOverrides() {
+static void hellen121_nissan_boardConfigOverrides() {
 	setHellenVbatt();
 	setHellenSdCardSpi3();
 
@@ -69,11 +70,11 @@ void setBoardConfigOverrides() {
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
 
  */
-void setBoardDefaultConfiguration() {
+static void hellen121_nissan_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
@@ -96,9 +97,9 @@ void setBoardDefaultConfiguration() {
 	// Some sensible defaults for other options
 	setCrankOperationMode();
 
-//	setAlgorithm(LM_SPEED_DENSITY);
+//	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
     // at least this starts
-	engineConfiguration->fuelAlgorithm = LM_ALPHA_N;
+	engineConfiguration->fuelAlgorithm = engine_load_mode_e::LM_ALPHA_N;
 
 	engineConfiguration->cranking.rpm = 400;
 	engineConfiguration->fanOnTemperature = 85;
@@ -133,4 +134,34 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->tps1SecondaryMin = 891;
 	engineConfiguration->tps1SecondaryMax = 102;
 	hellenWbo();
+}
+
+static Gpio OUTPUTS[] = {
+	Gpio::G14, // 111 Main Relay
+	Gpio::D12, // 113 Fuel Pump Relay
+	Gpio::D9, // 21 - INJ_5
+	Gpio::D11, // 22 - INJ_3
+	Gpio::G7, // 23 - INJ_1
+	Gpio::F12, // 40 - INJ_6
+	Gpio::D10, // 41 - INJ_4
+	Gpio::G8, // 42 - INJ_2
+	Gpio::F13, // 10 - VTC Left
+	Gpio::F14, // 11 - VTC Right
+};
+
+int getBoardMetaOutputsCount() {
+    return efi::size(OUTPUTS);
+}
+
+Gpio* getBoardMetaOutputs() {
+    return OUTPUTS;
+}
+
+int getBoardMetaDcOutputsCount() {
+    return 1;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = hellen121_nissan_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = hellen121_nissan_boardConfigOverrides;
 }

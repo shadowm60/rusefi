@@ -10,7 +10,7 @@ ifeq ($(USE_VERBOSE_COMPILE),yes)
 	@echo
 	$(CPPC) -c $(CPPFLAGS) $(AOPT) -I. $(IINCDIR) $< -o $@
 else
-	@echo Compiling $(<F)
+	@echo Compiling PCH $(<F)
 	@$(CPPC) -c $(CPPFLAGS) $(AOPT) -I. $(IINCDIR) $< -o $@
 endif
 
@@ -19,8 +19,9 @@ endif
 #  the deps for that .o file in the same GCC call, so if the .deps aren't already
 #  in the correct state, things can fail to build because Make doesn't know it needs
 #  to build the prerequisites (in this case PCHOBJ) for those files ahead of time.
-$(TCPPOBJS) : $(PCHOBJ)
-$(ACPPOBJS) : $(PCHOBJ)
+$(TCPPOBJS): $(PCHOBJ)
+$(ACPPOBJS): $(PCHOBJ)
+$(CPPOBJS): $(PCHOBJ)
 
 # Delete PCH output on clean
 CLEAN_PCH_HOOK:

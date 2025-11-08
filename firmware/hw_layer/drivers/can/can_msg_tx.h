@@ -15,6 +15,11 @@
 #include "can_category.h"
 #include "can.h"
 
+#if EFI_SIMULATOR || EFI_UNIT_TEST
+#include "fifo_buffer.h"
+extern fifo_buffer<CANTxFrame, 1024> txCanBuffer;
+#endif // EFI_SIMULATOR
+
 /**
  * Represent a message to be transmitted over CAN.
  *
@@ -42,7 +47,7 @@ public:
 	/**
 	 * Configures the device for all messages to transmit from.
 	 */
-	static void setDevice(CANDriver* device1, CANDriver* device2);
+	static void setDevice(size_t idx, CANDriver* device);
 #endif // EFI_CAN_SUPPORT
 
 	size_t busIndex = 0;
@@ -53,11 +58,14 @@ public:
 	uint8_t& operator[](size_t);
 
 	/**
-	 * @brief Write a 16-bit short value to the buffer. Note: this writes in little endian byte order.
+	 * @brief Write a 16-bit short value to the buffer. Note: this writes in Intel little endian byte order.
 	 */
 	void setShortValue(uint16_t value, size_t offset);
 
-	// Same as above but big endian
+	/**
+	 Same as above but big endian Motorola
+	 * for instance DBC 8|16@0
+	 */
 	void setShortValueMsb(uint16_t value, size_t offset);
 
 	/**
@@ -73,6 +81,18 @@ public:
 	const CANTxFrame *getFrame() const {
 		return &m_frame;
 	}
+
+    void setArray(const uint8_t *data, size_t len) {
+        for (size_t i = 0; i < std::min(len, size_t(8)); i++) {
+            m_frame.data8[i] = data[i];
+        }
+    }
+
+    template<size_t N>
+    void setArray(const uint8_t (&data)[N]) {
+        setArray(data, N);
+    }
+
 #endif // HAL_USE_CAN || EFI_UNIT_TEST
 
 protected:
@@ -82,7 +102,7 @@ protected:
 
 private:
 #if EFI_CAN_SUPPORT
-	static CANDriver* s_devices[2];
+	static CANDriver* s_devices[EFI_CAN_BUS_COUNT];
 #endif // EFI_CAN_SUPPORT
 };
 

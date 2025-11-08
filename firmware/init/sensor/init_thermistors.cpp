@@ -2,18 +2,13 @@
 
 #include "adc_subscription.h"
 #include "functional_sensor.h"
-#include "func_chain.h"
 #include "linear_func.h"
-#include "resistance_func.h"
 #include "thermistor_func.h"
-
-using resist = ResistanceFunc;
-using therm = ThermistorFunc;
 
 // Each one could be either linear or thermistor
 struct FuncPair {
 	LinearFunc linear;
-	FuncChain<resist, therm> thermistor;
+	thermistor_t thermistor;
 };
 
 static CCM_OPTIONAL FunctionalSensor clt(SensorType::Clt, MS2NT(10));
@@ -33,9 +28,9 @@ static void validateThermistorConfig(const char *msg, thermistor_conf_s& cfg) {
 		cfg.tempC_2 >= cfg.tempC_3) {
 		firmwareError(ObdCode::OBD_ThermistorConfig, "Invalid thermistor %s configuration: please check that temperatures are in the ascending order %f %f %f",
 				msg,
-				cfg.tempC_1,
-				cfg.tempC_2,
-				cfg.tempC_3);
+				(float)cfg.tempC_1,
+				(float)cfg.tempC_2,
+				(float)cfg.tempC_3);
 	}
 }
 

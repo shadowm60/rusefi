@@ -10,13 +10,15 @@ import com.rusefi.NamedThreadFactory;
 import com.rusefi.binaryprotocol.IncomingDataBuffer;
 import com.rusefi.binaryprotocol.test.Bug3923;
 import com.rusefi.io.IoStream;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.util.Objects;
 
 import static com.devexperts.logging.Logging.getLogging;
 
-public class SerialIoStream extends AbstractIoStream {
+public abstract class SerialIoStream extends AbstractIoStream {
     static final Logging log = getLogging(SerialIoStream.class);
 
     @Nullable // null in case of port open error, for instance lack of permissions on Unix
@@ -30,23 +32,16 @@ public class SerialIoStream extends AbstractIoStream {
         SerialPortThreadFactory.set(new NamedThreadFactory("ECU SerialIoStream jSerialComm"));
     }
 
-    public SerialIoStream(@Nullable SerialPort sp, String port) {
+    public SerialIoStream(@NotNull SerialPort sp, String port) {
         this.sp = sp;
-        this.port = port;
-    }
-
-    public static IoStream openPort(String port) {
-        log.info("[SerialIoStream] openPort " + port);
-        SerialPort serialPort = openSerial(port);
-//        FileLog.LOGGER.info("[SerialIoStreamJSerialComm] opened " + port);
-        return new SerialIoStream(serialPort, port);
+        this.port = Objects.requireNonNull(port);
     }
 
     @Nullable
     protected static SerialPort openSerial(String port) {
         SerialPort serialPort = SerialPort.getCommPort(port);
         serialPort.setBaudRate(BaudRateHolder.INSTANCE.baudRate);
-        boolean openedOk = serialPort.openPort(0);
+        boolean openedOk = serialPort.openPort();
         if (!openedOk) {
             log.error("Error opening " + port + " maybe no permissions?");
             // todo: leverage jSerialComm method once we start using version 2.9+
@@ -56,16 +51,12 @@ public class SerialIoStream extends AbstractIoStream {
     }
 
     @Override
-    public IncomingDataBuffer getDataBuffer() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public void close() {
+        if (isClosed())
+            return;
         log.info(port + ": Closing port...");
         super.close();
-        if (sp != null)
-            sp.closePort();
+        sp.closePort();
         log.info(port + ": Closed port.");
     }
 
@@ -82,6 +73,11 @@ public class SerialIoStream extends AbstractIoStream {
         if (written != bytes.length) {
             throw new IOException("write failed: wrote " + written + " but expected " + bytes.length);
         }
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getName() + "@" + port;
     }
 
     @Override

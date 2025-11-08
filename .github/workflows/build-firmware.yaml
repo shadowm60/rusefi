@@ -1,10 +1,28 @@
 name: Firmware at GHA
 
+#
+# this github action uses generate_matrix.sh to scan the file system and automatically produce build matrix!
+#
+# this github action is the heaviest one we've got, with each run taking around 10 minutes and the matrix which has a few dozens of these runs
+#
+# statement zero: with great powers of github action matrix here we produce two dozens of runs
+# statement one: github actions are technically not free
+# statement three: on top of dollar cost, actions get queued meaning other collaborators have to wait
+# statement three: in case of bad commit/bad PR more than one annoying email is sent
+# in light of above we have two mechanisms to reduce github action runner consumption:
+# * 'only' syntax allow to build only specified configuration, for example 'only:uaefi' line in the commit message would only build 'uaefi' firmware configuration
+# *        for random commits we can build zero firmware jobs if we do 'only:docs' or anything similar
+# * 'skip_rate' ratio in meta-info.env files allows to skip some builds with specific skip percentage
+#
+
 on:
   push:
   pull_request:
   schedule:
-    - cron: '0 0 * * *'
+    # this produces GitHub nightly releases https://github.com/rusefi/rusefi/releases
+    # by the way GitHub actions use UTC https://www.utctime.net/ which matches GMT time
+    # See https://github.com/rusefi/rusefi/issues/6286 for notes on scopes enabled on NIGHTLY_RELEASE_ACCESS_TOKEN
+    - cron: '27 0 * * *'
   workflow_dispatch:
     inputs:
       lts:
@@ -16,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -43,7 +61,7 @@ jobs:
           cp ./firmware/ext/openblt/Host/libopenblt.so deliver/
           cp ./misc/libopenblt_jni/build/libopenblt_jni.so deliver/
 
-#      - uses: actions/upload-artifact@v4
+#      - uses: actions/upload-artifact@v5
 #        if: 0
 #        name: libopenblt-linux
 #        path: |
@@ -59,7 +77,8 @@ jobs:
         GITHUB_CONTEXT: ${{ toJson(github) }}
       run: echo "$GITHUB_CONTEXT"
 
-    - name: Set run condition variables
+    - name: Set run condition variables 1
+      # at this point 'full' means 'release' or 'server'
       run: |
         if [ "${{github.event_name}}" = "schedule" ] && [ "${{github.repository}}" = "rusefi/rusefi" ]; then
           echo "full=true" >> $GITHUB_ENV
@@ -73,23 +92,23 @@ jobs:
         tag: ${{ env.date }}
 
     - name: Create Release Tag
-      if: ${{ env.full == 'true' && env.upload == 'release' && steps.checkTag.outputs.exists == 'false' }}
+      if: ${{ env.upload == 'release' && steps.checkTag.outputs.exists == 'false' }}
       id: tag
-      uses: mathieudutour/github-tag-action@v6.1
+      uses: mathieudutour/github-tag-action@v6.2
       with:
-        github_token: ${{ secrets.ACCESS_TOKEN }}
+        github_token: ${{ secrets.NIGHTLY_RELEASE_ACCESS_TOKEN }}
         custom_tag: ${{ env.date }}
         tag_prefix: ''
 
     - name: Create Release
-      if: ${{ env.full == 'true' && env.upload == 'release' }}
-      uses: ncipollo/release-action@v1.14.0
+      if: ${{ env.upload == 'release' }}
+      uses: ncipollo/release-action@v1.19.1
       with:
         tag: ${{ env.date }}
         name: "Nightly ${{ env.date }}"
         artifacts: "artifacts/rusefi_bundle_*.zip"
         replacesArtifacts: false
-        token: ${{ secrets.ACCESS_TOKEN }}
+        token: ${{ secrets.NIGHTLY_RELEASE_ACCESS_TOKEN }}
         allowUpdates: true
         prerelease: true
 
@@ -100,12 +119,30 @@ jobs:
         cp ./firmware/ext/openblt/Host/libopenblt.dylib deliver/
         cp ./misc/libopenblt_jni/build/libopenblt_jni.dylib deliver/
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: bootcommander-linux
-        path: |
-          ./deliver/libopenblt.dylib
-          ./deliver/libopenblt_jni.dylib
+#    - uses: actions/upload-artifact@v5
+#      with:
+#        name: bootcommander-linux
+#        path: |
+#          ./deliver/libopenblt.dylib
+#          ./deliver/libopenblt_jni.dylib
+
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set matrix
+      id: set-matrix
+      run: |
+        export EVENT_NAME="${{github.event_name}}"
+        export RUN_ATTEMPT="${{github.run_attempt}}"
+        read -d '' COMMIT_MESSAGE << EOM || true
+        ${{ github.event.head_commit.message }}
+        EOM
+        export COMMIT_MESSAGE
+        echo "matrix=$(bash firmware/bin/generate_matrix.sh)" >> $GITHUB_OUTPUT
 
   build-firmware:
     runs-on: ubuntu-latest
@@ -113,383 +150,84 @@ jobs:
              # todo proper build of build-libopenblt #5866
       #build-libopenblt-linux,
       #build-libopenblt-macos,
-            release]
-
+            release,
+            generate-matrix]
+    if: ${{ ! contains(needs.generate-matrix.outputs.matrix, '[]') }}
     strategy:
       # Let all builds finish even if one fails early
       fail-fast: false
-      matrix:
-        # What boards should we build for? In the 'include' section below,
-        # set up what each of these boards needs to build.
-        #
-        # see also gen_config where we have a similar list for all boards!
-        # see also build-primary-bundle where default/primary bundle is build separately
-        #
-        build-target: [
-            alphax-2chan,
-            alphax-4chan,
-            alphax-4chan_f7,
-            alphax-8chan,
-            alphax-8chan_debug,
-# todo            alphax-8chan-revA,
-            m74_9,
-            s105,
-            t-b-g,
-            hellen72,
-            hellen81,
-            hellen88bmw,
-            hellen88bmw_avr,
-            hellen-nb1,
-            hellen-gm-e67,
-            hellenNA8_96,
-            hellenNA6,
-            hellen128,
-            hellen121vag,
-            hellen-honda-k,
-            hellen121nissan,
-            cypress,
-            frankenso_na6,
-            kinetis,
-            mre_f4,
-            mre_f7,
-            prometheus_405,
-            prometheus_469,
-            proteus_f4,
-            proteus_f7,
-            proteus_h7,
-            stm32f429_nucleo,
-            stm32f767_nucleo,
-            stm32f767_nucleo_debug,
-            stm32h743_nucleo,
-            subaru_eg33_f7,
-            subaru_eg33_f7_no_bl,
-            f407-discovery,
-            f429-discovery,
-            atlas,
-            tdg-pdm8,
-            at_start_f435,
-        ]
-
-        include:
-          # Board configurations
-          # 'target' should match corresponding SHORT_BOARD_NAME
-          - build-target: hellen72
-            folder: config/boards/hellen/hellen72
-            skip-rate: 90
-
-          - build-target: hellen81
-            folder: config/boards/hellen/hellen81
-            skip-rate: 90
-
-          - build-target: alphax-2chan
-            folder: config/boards/hellen/alphax-2chan
-            skip-rate: 0
-
-          - build-target: alphax-4chan
-            folder: config/boards/hellen/alphax-4chan
-
-          - build-target: alphax-4chan_f7
-            folder: config/boards/hellen/alphax-4chan
-
-          - build-target: alphax-8chan
-            folder: config/boards/hellen/alphax-8chan
-            skip-rate: 0
-
-          - build-target: alphax-8chan_debug
-            folder: config/boards/hellen/alphax-8chan
-            skip-rate: 95
-
-          - build-target: alphax-8chan_f7
-            folder: config/boards/hellen/alphax-8chan
-            skip-rate: 0
-
-#          - build-target: alphax-8chan-revA
-#            folder: config/boards/hellen/alphax-8chan-revA
-#            skip-rate: 30
-
-          - build-target: s105
-            folder: config/boards/s105
-            skip-rate: 90
-
-          - build-target: t-b-g
-            folder: config/boards/test-build-guards
-            skip-rate: 90
-
-          - build-target: m74_9
-            folder: config/boards/m74_9
-            skip-rate: 50
-
-          - build-target: small-can-board
-            folder: config/boards/hellen/small-can-board
-            skip-rate: 50
-
-          - build-target: uaefi
-            folder: config/boards/hellen/uaefi
-
-          - build-target: small-can-board_debug
-            folder: config/boards/hellen/small-can-board
-            skip-rate: 00
-
-          - build-target: hellen88bmw
-            folder: config/boards/hellen/hellen88bmw
-            skip-rate: 99
-
-          - build-target: hellen88bmw_avr
-            folder: config/boards/hellen/hellen88bmw
-            skip-rate: 99
-
-          - build-target: hellen-nb1
-            folder: config/boards/hellen/hellen-nb1
-            skip-rate: 99
-
-          - build-target: hellen-112-17
-            folder: config/boards/hellen/hellen-112-17
-            skip-rate: 50
-
-          - build-target: hellen-112-17_debug
-            folder: config/boards/hellen/hellen-112-17
-            skip-rate: 50
-
-          - build-target: hellen-gm-e67
-            folder: config/boards/hellen/hellen-gm-e67
-            skip-rate: 99
-
-          - build-target: hellenNA8_96
-            folder: config/boards/hellen/hellenNA8_96
-            skip-rate: 99
-
-          - build-target: hellenNA6
-            folder: config/boards/hellen/hellen64_miataNA6_94
-            skip-rate: 90
-
-          - build-target: hellen128
-            folder: config/boards/hellen/hellen128
-            skip-rate: 50
-
-          - build-target: hellen121vag
-            folder: config/boards/hellen/hellen121vag
-            skip-rate: 99
-
-          - build-target: hellen121nissan
-            folder: config/boards/hellen/hellen121nissan
-            skip-rate: 50
-
-          - build-target: hellen-honda-k
-            folder: config/boards/hellen/hellen-honda-k
-
-          - build-target: hellen-honda-k_debug
-            folder: config/boards/hellen/hellen-honda-k
-            skip-rate: 50
-
-          - build-target: hellen154hyundai
-            folder: config/boards/hellen/hellen154hyundai
-            skip-rate: 0
-
-          - build-target: hellen154hyundai_f7
-            folder: config/boards/hellen/hellen154hyundai
-            skip-rate: 90
-
-          - build-target: cypress
-            folder: config/boards/cypress
-
-          - build-target: frankenso_na6
-            folder: config/boards/frankenso_na6
-            skip-rate: 90
-
-          - build-target: kinetis
-            folder: config/boards/kinetis
-            skip-rate: 0
-
-          - build-target: mre_f4
-            folder: config/boards/microrusefi
-
-          - build-target: mre_f7
-            folder: config/boards/microrusefi
-            skip-rate: 90
-
-          - build-target: prometheus_405
-            folder: config/boards/prometheus/f405
-            skip-rate: 90
-
-          - build-target: prometheus_469
-            folder: config/boards/prometheus/f469
-            skip-rate: 90
-
-          - build-target: proteus_f4
-            folder: config/boards/proteus
-
-          - build-target: proteus_f4_debug
-            folder: config/boards/proteus
-            skip-rate: 80
-
-          - build-target: proteus_f7
-            folder: config/boards/proteus
-
-#          - build-target: proteus_f7_debug
-#            folder: config/boards/proteus
-#            skip-rate: 80
-
-          - build-target: proteus_h7
-            folder: config/boards/proteus
-            skip-rate: 90
-
-          - build-target: stm32f429_nucleo
-            folder: config/boards/nucleo_f429
-            skip-rate: 50
-
-          - build-target: stm32f767_nucleo
-            folder: config/boards/nucleo_f767
-            skip-rate: 50
-
-          - build-target: stm32f767_nucleo_debug
-            folder: config/boards/nucleo_f767
-            skip-rate: 50
-
-          - build-target: stm32h743_nucleo
-            folder: config/boards/nucleo_h743
-            skip-rate: 95
-
-          - build-target: subaru_eg33_f7
-            folder: config/boards/subaru_eg33
-            skip-rate: 50
-
-          - build-target: subaru_eg33_f7_no_bl
-            folder: config/boards/subaru_eg33
-            skip-rate: 50
-
-          - build-target: f407-discovery
-            folder: config/boards/f407-discovery
-            skip-rate: 0
-
-          - build-target: f407-discovery_debug
-            folder: config/boards/f407-discovery
-            skip-rate: 0
-
-          - build-target: f429-discovery
-            folder: config/boards/f429-discovery
-            skip-rate: 95
-
-          - build-target: atlas
-            folder: config/boards/atlas
-            skip-rate: 95
-
-          - build-target: tdg-pdm8
-            folder: config/boards/tdg-pdm8
-            skip-rate: 95
-
-          - build-target: at_start_f435
-            folder: config/boards/at_start_f435
-            skip-rate: 0
+      matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
 
     steps:
-    - name: Check branch name
-      if: ${{ contains(github.ref_name, '.') }}
-      run: echo '::error::Branch names must not contain ".", this breaks firmware autoupdates.' && exit 1
+#    - name: Check branch name
+#      if: ${{ contains(github.ref_name, '.') }}
+#      run: echo '::error::Branch names must not contain ".", this breaks firmware autoupdates. Branch name is "${{ github.ref_name }}".' && exit 1
 
-    - name: Execution throttle early exit
-      # Don't skip any jobs if this workflow was run manually,
-      # or if the commit contains `only:`, signifying that only one bundle should be built.
-      if: ${{ matrix.skip-rate && github.event_name != 'workflow_dispatch' && github.event_name != 'schedule' && github.event_name != 'pull_request' && github.run_attempt == 1 || contains(github.event.head_commit.message, 'only:') }}
-      run: |
-        # if the commit message contains `only:`, get the part after the semicolon and check if it matches the build target.
-        read -d '' MSG << EOM || true
-        ${{ github.event.head_commit.message }}
-        EOM
-        if echo $MSG | grep "only:"; then
-          if [ "$(echo $MSG | grep -Po '(?<=only:)[^\s]*')" = "${{ matrix.build-target }}" ]; then
-            exit 0
-          else
-            # if it doesn't match, skip this job.
-            echo "skip=true" >> $GITHUB_ENV
-            exit 0
-          fi
-        fi
-        if (($(($RANDOM % 100)) < ${{ matrix.skip-rate }})); then echo "skip=true" >> $GITHUB_ENV; fi
+    - name: Get current date
+      id: date
+      run: echo "BUNDLE_DATE=$(date +'%Y-%m-%d')">> $GITHUB_ENV
 
-    - name: Set run condition variables
+    - name: Set run condition variables 2
       run: |
         if [ "${{github.event_name}}" = "schedule" ] && [ "${{github.repository}}" = "rusefi/rusefi" ]; then
-          echo "Scheduled mode"
+          echo "Creating nightly build"
           echo "full=true" >> $GITHUB_ENV
           echo "upload=release" >> $GITHUB_ENV
           echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
         elif [ "${{github.event_name}}" = "push" ]\
         && [ "${{github.ref}}" = "refs/heads/master" ]\
-        && [ "${{env.skip}}" != "true" ]\
         || [ "${{toJSON(inputs.lts)}}" = "true" ]; then
-          echo "Full mode"
+          echo "Server upload mode"
           echo "full=true" >> $GITHUB_ENV
           echo "upload=server" >> $GITHUB_ENV
-        elif [ "${{env.skip}}" != "true" ]; then
-          echo "Partial mode"
-          echo "partial=true" >> $GITHUB_ENV
+        else
+          echo "GHA artifact mode"
+          echo "upload=gha_artifact" >> $GITHUB_ENV
         fi
 
-    - uses: actions/checkout@v4
-      if: ${{ env.skip != 'true' }}
+    - uses: actions/checkout@v5
 
     - name: Checkout Submodules
-      if: ${{ env.skip != 'true' }}
       run: |
-        git submodule update --init --depth=1 firmware/ChibiOS
-        git submodule update --init --depth=1 firmware/ChibiOS-Contrib
-        git submodule update --init --depth=1 firmware/libfirmware
-        git submodule update --init --depth=1 firmware/ext/lua
-        git submodule update --init --depth=1 firmware/ext/uzlib
-        git submodule update --init --depth=1 firmware/ext/openblt
-        git submodule update --init --depth=1 firmware/controllers/lua/luaaa
-        git submodule update --init --depth=1 firmware/controllers/can/wideband_firmware
-        git submodule update --init --depth=1 java_console/luaformatter
-        git submodule update --init --depth=1 java_console/peak-can-basic
+        misc/git_scripts/common_submodule_init.sh
 
-    - uses: actions/setup-java@v4
-      if: ${{ env.skip != 'true' }}
+    - uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
-        java-version: '11'
+        java-version: '17'
 
     - name: Install multilib, mingw, sshpass and mtools
-      if: ${{ env.skip != 'true' }}
       run: |
         sudo bash misc/actions/add-ubuntu-latest-apt-mirrors.sh
-        sudo apt-get install gcc-multilib g++-multilib g++-mingw-w64 gcc-mingw-w64 sshpass mtools zip dosfstools
-
-    - name: Generate Live Documentation
-      if: ${{ env.skip != 'true' }}
-      working-directory: ./firmware/
-      run: ./gen_live_documentation.sh
+        sudo bash misc/actions/ubuntu-install-tools.sh
 
     - name: Set Build Env Variables
-      if: ${{ env.skip != 'true' }}
       working-directory: ./firmware/
       run: |
-        echo LTS=${{toJSON(inputs.lts)}} >> $GITHUB_ENV
-        echo REF=${{github.ref_name}} >> $GITHUB_ENV
-        echo BUNDLE_NAME=${{matrix.build-target}} >> $GITHUB_ENV
-        echo BOARD_DIR=${{matrix.folder}} >> $GITHUB_ENV
-        echo BOARD_META_PATH=$(bash bin/find_meta_info.sh ${{matrix.folder}} ${{matrix.build-target}}) >> $GITHUB_ENV
+        echo AUTOMATION_LTS=${{toJSON(inputs.lts)}} >> $GITHUB_ENV
+        echo AUTOMATION_REF=${{github.ref_name}} >> $GITHUB_ENV
+        echo BOARD_META_PATH=${{matrix.meta-info}} >> $GITHUB_ENV
+        echo "WHITE_LABEL=rusefi" >> $GITHUB_ENV
 
     - name: Git Status
-      if: ${{ env.skip != 'true' }}
       run: |
         git status
 
 #
 # Note to humans: on personal devices we have firmware/provide_gcc.sh and setup_linux_environment.sh
 #
-    - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
-      if: ${{ env.skip != 'true' }}
-      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      # TODO: address `Acquire GCC` version copy paste, maybe a tiny action to acquire specific version?
+    - name: Acquire Arm GNU Toolchain (arm-none-eabi-gcc)
+      uses: carlosperate/arm-none-eabi-gcc-action@v1.11.0
       with:
-        release: '12.3.Rel1'
+        release: '14.2.Rel1'
 
     # Make sure the compiler we just downloaded works - just print out the version
     - name: Test arm-none-eabi-gcc Compiler
-      if: ${{ env.skip != 'true' }}
       run: arm-none-eabi-gcc -v
 
     - name: Configs build_server upload SSH variables
-      if: ${{ env.full == 'true' && env.upload == 'server' }}
+      if: ${{ env.upload == 'server' }}
       env:
         ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
       run: |
@@ -509,32 +247,48 @@ jobs:
 #        name: libopenblt-macos
 #        path: ./firmware/ext/openblt/Host/
 
-      # Build the firmware!
-    - name: Build Firmware
-      if: ${{ env.skip != 'true' }}
+    - name: Clean (Just in Case)
       working-directory: ./firmware/
       run: |
         make clean
-        if [ "$full" == "true" ]; then
-          bash bin/compile.sh -b ${{env.BOARD_META_PATH}}
-        else
-          bash bin/compile.sh ${{env.BOARD_META_PATH}} all deliver/rusefi.dfu deliver/rusefi.bin
-        fi
+
+    - name: Handle configs separately just to make github logs more readable
+      working-directory: ./firmware/
+      run: |
+        bash bin/compile.sh ${{env.BOARD_META_PATH}} docs-enums
+        bash bin/compile.sh ${{env.BOARD_META_PATH}} config
+
+    - name: Building Windows simulator separately just to make github logs more readable
+      working-directory: ./firmware/
+      run: |
+        bash bin/compile.sh ${{env.BOARD_META_PATH}} ../simulator/build/rusefi_simulator.exe
+
+      # Build the firmware! We have the technology to build _everything_ in one 'make' invocation but choose to do separately for sake of more readable GHA logs
+    - name: Build Firmware
+      working-directory: ./firmware/
+      run: |
+        bash bin/compile.sh ${{env.BOARD_META_PATH}} build_both_bundles --output-sync=recurse
+
+    - name: Check for illegal time conversions
+      working-directory: ./firmware/
+      run: bash check_illegal_conversion.sh
 
     - name: Upload Bundle
       if: ${{ env.full == 'true' }}
       working-directory: ./artifacts
-      run: bash ../firmware/bin/upload_bundle.sh
+      run: |
+        source ../firmware/config/boards/common_script_read_meta_env.inc ../firmware/${{ env.BOARD_META_PATH }}
+        bash ../firmware/bin/upload_bundle.sh ${{ secrets.RUSEFI_SSH_USER }} "${{ secrets.RUSEFI_SSH_PASS }}" ${{ secrets.RUSEFI_SSH_SERVER }} ${BUNDLE_NAME}
 
     - name: Add Bundles to Release
-      if: ${{ env.full == 'true' && env.upload == 'release' }}
-      uses: ncipollo/release-action@v1.14.0
+      if: ${{ env.upload == 'release' }}
+      uses: ncipollo/release-action@v1.19.1
       with:
         tag: ${{ env.date }}
         name: "Nightly ${{ env.date }}"
         artifacts: "artifacts/rusefi_bundle_*.zip"
         replacesArtifacts: false
-        token: ${{ secrets.ACCESS_TOKEN }}
+        token: ${{ secrets.NIGHTLY_RELEASE_ACCESS_TOKEN }}
         allowUpdates: true
         prerelease: true
 
@@ -543,33 +297,48 @@ jobs:
       working-directory: ./firmware
       run: |
         source config/boards/common_script_read_meta_env.inc ${{ env.BOARD_META_PATH }}
-        cd tunerstudio/generated
-        ../upload_ini.sh ${{ secrets.RUSEFI_ONLINE_FTP_USER }} ${{ secrets.RUSEFI_ONLINE_FTP_PASS }} ${{ secrets.RUSEFI_FTP_SERVER }}
+        cd ${META_OUTPUT_ROOT_FOLDER}tunerstudio/generated
+        ${OLDPWD}/tunerstudio/upload_ini.sh "${{ secrets.RUSEFI_ONLINE_FTP_USER }}" "${{ secrets.RUSEFI_ONLINE_FTP_PASS }}" "${{ secrets.RUSEFI_FTP_SERVER }}"
+
+# sad: we have duplication with custom-board-build/action.yaml :(
+      # todo: is this insanity? does not gcc produce similar file directly?
+    - name: elf2text
+      if: ${{ env.upload == 'gha_artifact' }}
+      working-directory: ./firmware/build
+      run: |
+        arm-none-eabi-objdump -d rusefi.elf > rusefi.txt
+
+    - name: Upload github action text artifact
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
+      with:
+        name: rusefi_${{matrix.build-target}}.txt
+        path: ./firmware/build/rusefi.txt
 
     - name: Upload github action elf artifact
-      if: ${{ env.partial == 'true' }}
-      uses: actions/upload-artifact@v4
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_${{matrix.build-target}}.elf
         path: ./firmware/build/rusefi.elf
 
     - name: Upload github action map artifact
-      if: ${{ env.partial == 'true' }}
-      uses: actions/upload-artifact@v4
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_${{matrix.build-target}}.map
         path: ./firmware/build/rusefi.map
 
     - name: Upload github action bin artifact
-      if: ${{ env.partial == 'true' }}
-      uses: actions/upload-artifact@v4
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_${{matrix.build-target}}.bin
         path: ./firmware/deliver/rusefi*.bin
 
     - name: Upload github action hex artifact
-      if: ${{ env.partial == 'true' }}
-      uses: actions/upload-artifact@v4
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_${{matrix.build-target}}.hex
 # we have a bit of a mess - this file from 'build' folder is only legit for not-BLT builds
@@ -577,22 +346,20 @@ jobs:
         path: ./firmware/build/rusefi*.hex
 
     - name: Upload github action dfu artifact
-      if: ${{ env.partial == 'true' }}
-      uses: actions/upload-artifact@v4
+      if: ${{ env.upload == 'gha_artifact' }}
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_${{matrix.build-target}}.dfu
         path: ./firmware/deliver/rusefi*.dfu
 
     - name: Upload bundle artifact
-      if: ${{ env.full == 'true' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_bundle_${{matrix.build-target}}.zip
-        path: ./artifacts/rusefi_bundle*.zip
+        path: ./artifacts/rusefi_bundle_${{matrix.build-target}}.zip
 
     - name: Upload github action autoupdate artifact
-      if: ${{ env.full == 'true' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: rusefi_bundle_${{matrix.build-target}}_autoupdate.zip
         path: ./artifacts/rusefi_bundle_${{matrix.build-target}}_autoupdate.zip

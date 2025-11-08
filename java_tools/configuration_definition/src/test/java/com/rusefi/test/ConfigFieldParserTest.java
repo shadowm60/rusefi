@@ -3,7 +3,9 @@ package com.rusefi.test;
 import com.rusefi.*;
 import com.rusefi.output.*;
 import com.rusefi.parse.TypesHelper;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -12,13 +14,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * 1/15/15
  */
 public class ConfigFieldParserTest {
+    @Test
+    public void testErrorDetection() {
+        Assertions.assertThrows(IllegalStateException.class, () -> ConfigFieldImpl.getScaleSpec("2.54", "test"));
+    }
 
     @Test
     public void testByteArray() {
         ReaderStateImpl state = new ReaderStateImpl();
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "uint8_t[8] field");
-            assertEquals(cf.getType(), "uint8_t");
+            assertEquals(cf.getTypeName(), "uint8_t");
             assertEquals(cf.getArraySizes().length, 1);
             assertEquals(cf.getArraySizes()[0], 8);
             assertEquals(cf.getSize(null), 8);
@@ -27,11 +33,21 @@ public class ConfigFieldParserTest {
     }
 
     @Test
+    public void testNameTemplating() {
+        ReaderStateImpl state = new ReaderStateImpl();
+        state.getVariableRegistry().put("name", "value");
+        {
+            ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "uint8_t @@name@@");
+            assertEquals(cf.getName(), "value");
+        }
+    }
+
+    @Test
     public void testByte3dArray() {
         ReaderStateImpl state = new ReaderStateImpl();
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "uint8_t[8 x 16] field");
-            assertEquals(cf.getType(), "uint8_t");
+            assertEquals(cf.getTypeName(), "uint8_t");
             assertEquals(cf.getArraySizes().length, 2);
             assertEquals(cf.getArraySizes()[0], 8);
             assertEquals(cf.getArraySizes()[1], 16);
@@ -44,15 +60,15 @@ public class ConfigFieldParserTest {
     public void testFloatMsAlias() {
         String test = "struct pid_s\n" +
                 "floatms_t afr_type;PID dTime;\"ms\",      1.0,      0,       0, 3000,      0, noMsqSave\n" +
-                "percent_t afr_typet;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "percent_t afr_typet;PID dTime;\"ms\",      0.1,      0,       0, 3000,      0\n" +
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("afr_type = scalar, F32, 0, \"ms\", 1, 0, 0, 3000, 0, noMsqSave\n" +
-                "afr_typet = scalar, F32, 4, \"ms\", 1, 0, 0, 3000, 0\n" +
-                "; total TS size = 8\n", tsProjectConsumer.getContent());
+            "afr_typet = scalar, F32, 4, \"ms\", 0.1, 0, 0, 3000, 0\n" +
+            "; total TS size = 8\n", tsProjectConsumer.getContent());
     }
 
     @Test
@@ -62,11 +78,70 @@ public class ConfigFieldParserTest {
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("afr_type = array, S32, 0, [1x3], \"ms\", 1, 0, 0, 3000, 0, noMsqSave\n" +
                 "; total TS size = 12\n", tsProjectConsumer.getContent());
     }
+
+    @Test
+    public void testMinValue() {
+        assertThrows(ParsingException.class, () -> {
+            handle("struct pid_s\n" +
+                "uint8_t[3 x 1] afr_type;PID dTime;\"ms\",      1.0,      0,       -10, 3000,      0, noMsqSave\n" +
+                "end_struct\n");
+        });
+    }
+
+    private static ReaderStateImpl handle(String meta) {
+        ReaderStateImpl state = new ReaderStateImpl();
+
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
+        state.readBufferedReader(meta, tsProjectConsumer);
+        return state;
+    }
+
+    @Test
+    public void testMaxValue() {
+        handle("struct pid_s\n" +
+            "uint8_t[6] autoscale values;;\"volts\", {1/100}, 0, 0, 2.5, 2\n" +
+            "end_struct\n");
+        handle("struct pid_s\n" +
+            "uint8_t autoscale maxIdleRegionRpm;Below this RPM, the idle region is active, idle+300 would be a good value;\"RPM\", 50, 0, 0, 12000, 0\n" +
+            "end_struct\n");
+
+        assertThrows(ParsingException.class, () -> {
+            handle("struct pid_s\n" +
+                "int8_t[8] ignitionCltCorrTempBins;CLT-based timing correction;\"C\", 1, 0, -40, 250, 0\n" +
+                "end_struct\n");
+        });
+    }
+
+    @Test
+    public void testEmbeddedStructs() {
+        assertThrows(IllegalStateException.class, () -> {
+            handle("struct pid_s\n" +
+                "int afr_type;PID dTime;\"ms\",      1.0,      0,       0, 3000,      0, noMsqSave\n" +
+                "struct pid_s\n" +
+                "int afr_type;PID dTime;\"ms\",      1.0,      0,       0, 3000,      0, noMsqSave\n" +
+                "end_struct\n" +
+                "end_struct\n");
+        });
+    }
+
+    @Test
+    public void testArrayBitStringValue() {
+        String test = "struct pid_s\n" +
+            "int[3 x 1] afr_type;;{bitStringValue(fuelUnits, fuelAlgorithm) },      1.0,      0,       0, 3000,      0, noMsqSave\n" +
+            "end_struct\n";
+        ReaderStateImpl state = new ReaderStateImpl();
+
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
+        state.readBufferedReader(test, tsProjectConsumer);
+        assertEquals("afr_type = array, S32, 0, [1x3], {bitStringValue(fuelUnits, fuelAlgorithm) }, 1, 0, 0, 3000, 0, noMsqSave\n" +
+            "; total TS size = 12\n", tsProjectConsumer.getContent());
+    }
+
 
     @Test
     public void testSameFieldTwice() {
@@ -94,12 +169,30 @@ public class ConfigFieldParserTest {
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("afr_type1 = bits, S08, 0, [0:1], \"BPSX\", \"Innovate\", \"14Point7\", \"INVALID\"\n" +
                 "afr_type2 = bits, S08, 1, [0:1], \"BPSX\", \"Innovate\", \"14Point7\", \"INVALID\"\n" +
                 "int = scalar, S16, 2, \"\", 1, 0, 0, 32000, 0\n" +
                 "; total TS size = 4\n", tsProjectConsumer.getContent());
+    }
+
+    @Test
+    public void testCustomEnumAlignment() {
+        assertThrows(SizeMismatchException.class, new Executable() {
+            @Override
+            public void execute() throws Throwable {
+                String test = "struct pid_s\n" +
+                    "#define can_wbo_type_e_enum \"RusEFI\", \"AEM X-series\", \"Disabled/Analog\"\n" +
+                    "\tcustom can_wbo_type_e 2 bits, U08, @OFFSET@, [0:1], @@can_wbo_type_e_enum@@\n" +
+                    "\tcan_wbo_type_e wboType1;\n" +
+                    "end_struct\n";
+                ReaderStateImpl state = new ReaderStateImpl();
+
+                TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
+                state.readBufferedReader(test, tsProjectConsumer);
+            }
+        });
     }
 
     @Test
@@ -112,7 +205,7 @@ public class ConfigFieldParserTest {
             "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("afr_type1 = bits, S08, 0, [0:1], $ego_sensor_e_list\n" +
             "int = scalar, S16, 2, \"\", 1, 0, 0, 32000, 0\n" +
@@ -130,7 +223,7 @@ public class ConfigFieldParserTest {
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("afr_type1 = bits, S08, 0, [0:1], \"BPSX\"\n" +
                 "afr_type2 = bits, S08, 1, [0:1], \"BPSX\"\n" +
@@ -149,7 +242,7 @@ public class ConfigFieldParserTest {
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("int = scalar, S08, 0, \"\", 1, 0, 0, 100, 0\n" +
                 "afr_type1 = bits, S16, 2, [0:1], \"BPSX\", \"Innovate\", \"14Point7\", \"INVALID\"\n" +
@@ -167,7 +260,7 @@ public class ConfigFieldParserTest {
                 "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("int2 = scalar, S08, 0, \"\", 1, 0, 0, 100, 0\n" +
                 "afr_type3 = bits, S32, 4, [0:1], \"BPSX\", \"Innovate\", \"14Point7\", \"INVALID\"\n" +
@@ -201,7 +294,7 @@ public class ConfigFieldParserTest {
         String test = "struct vr_threshold_s\n" +
                 "\tuint8_t pin;\n" +
                 "\tuint8_t[3] pad;;\"\",1,0,0,0,0\n" +
-                "\tuint8_t[6] autoscale rpmBins;;\"rpm\", 1, 0, 0, 12000, 0\n" +
+                "\tuint8_t[6] autoscale rpmBins;;\"rpm\", 1, 0, 0, 12, 0\n" +
                 "\tuint8_t[6] autoscale values;;\"volts\", 1, 0, 0, 2.5, 2\n" +
                 "end_struct\n\n";
         ReaderStateImpl state = new ReaderStateImpl();
@@ -263,7 +356,7 @@ public class ConfigFieldParserTest {
                 "";
 
         ReaderStateImpl state = new ReaderStateImpl();
-        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
 
         state.readBufferedReader(test, tsProjectConsumer);
 
@@ -298,7 +391,7 @@ public class ConfigFieldParserTest {
         ReaderStateImpl state = new ReaderStateImpl();
         String test = "struct pid_s\n" +
                 "\tint16_t periodMs;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
-                "\tint8_t periodByte;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
+                "\tint8_t periodByte;PID dTime;\"ms\",      1,      0,       0, 30,      0\n" +
                 "\tfloat periodFloat;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
                 "end_struct\n" +
                 "";
@@ -333,7 +426,7 @@ public class ConfigFieldParserTest {
                 "\t * units: units\n" +
                 "\t * offset 3\n" +
                 "\t */\n" +
-                "\tuint8_t alignmentFill_at_3[1];\n" +
+                "\tuint8_t alignmentFill_at_3[1] = {};\n" +
                 "\t/**\n" +
                 "\t * PID dTime\n" +
                 "\t * units: ms\n" +
@@ -379,11 +472,11 @@ public class ConfigFieldParserTest {
     }
 
     @Test
-    public void testFsioVisible() {
+    public void testLegacyVisible() {
         {
             ReaderStateImpl state = new ReaderStateImpl();
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int field");
-            assertEquals(cf.getType(), "int");
+            assertEquals(cf.getTypeName(), "int");
 
             assertEquals(cf.getName(), "field", "Unexpected Field Name");
         }
@@ -391,9 +484,9 @@ public class ConfigFieldParserTest {
         {
             ReaderStateImpl state = new ReaderStateImpl();
             String test = "struct pid_s\n" +
-                    "\tint16_t fsio_visible offset;Linear addition to PID logic;\"\",      1,      0,       -1000, 1000,      0\n" +
+                    "\tint16_t offset;Linear addition to PID logic;\"\",      1,      0,       -1000, 1000,      0\n" +
                     "\tint16_t periodMs;PID dTime;\"ms\",      1,      0,       0, 3000,      0\n" +
-                    "\tint16_t fsio_visible minValue;Output min value;\"\",        1,     0,  -30000,    30000.0,  0\n" +
+                    "\tint16_t minValue;Output min value;\"\",        1,     0,  -30000,    30000.0,  0\n" +
                     "end_struct\n" +
                     "struct_no_prefix engine_configuration_s\n" +
                     "\tpid_s alternatorControl;\n" +
@@ -443,6 +536,9 @@ public class ConfigFieldParserTest {
         ReaderStateImpl state = new ReaderStateImpl();
         JavaFieldsConsumer javaFieldsConsumer = new TestJavaFieldsConsumer(state);
         state.readBufferedReader(test, consumer, javaFieldsConsumer);
+
+        assertEquals(1, state.getDefaultBitNameCounter());
+
         assertEquals("\tpublic static final Field BYTE1 = Field.create(\"BYTE1\", 0, FieldType.INT8).setScale(1.0).setBaseOffset(0);\n" +
                         "\tpublic static final Field ALIGNMENTFILL_AT_1 = Field.create(\"ALIGNMENTFILL_AT_1\", 1, FieldType.INT8).setScale(1.0).setBaseOffset(0);\n" +
                         "\tpublic static final Field SHORT = Field.create(\"SHORT\", 2, FieldType.INT16).setScale(1.0).setBaseOffset(0);\n" +
@@ -462,7 +558,7 @@ public class ConfigFieldParserTest {
             "\t * units: units\n" +
             "\t * offset 1\n" +
             "\t */\n" +
-            "\tuint8_t alignmentFill_at_1[1];\n" +
+            "\tuint8_t alignmentFill_at_1[1] = {};\n" +
             "\t/**\n" +
             "\t * offset 2\n" +
             "\t */\n" +
@@ -480,7 +576,7 @@ public class ConfigFieldParserTest {
             "\t * units: units\n" +
             "\t * offset 9\n" +
             "\t */\n" +
-            "\tuint8_t alignmentFill_at_9[3];\n" +
+            "\tuint8_t alignmentFill_at_9[3] = {};\n" +
             "\t/**\n" +
             "\toffset 12 bit 0 */\n" +
             "\tbool periodMs : 1 {};\n" +
@@ -601,7 +697,7 @@ public class ConfigFieldParserTest {
             "\t * units: ratio\n" +
             "\t * offset 0\n" +
             "\t */\n" +
-            "\tscaled_channel<int, 100, 1> field[ERROR_BUFFER_SIZE];\n" +
+            "\tscaled_channel<int, 100, 1> field[ERROR_BUFFER_SIZE] = {};\n" +
             "};\n" +
             "static_assert(sizeof(pid_s) == 4);\n" +
             "\n", consumer.getContent());
@@ -641,7 +737,7 @@ public class ConfigFieldParserTest {
                 "\t * units: units\n" +
                 "\t * offset 1\n" +
                 "\t */\n" +
-                "\tuint8_t alignmentFill_at_1[3];\n" +
+                "\tuint8_t alignmentFill_at_1[3] = {};\n" +
                 "\t/**\n" +
                 "\t * offset 4\n" +
                 "\t */\n" +
@@ -678,7 +774,7 @@ public class ConfigFieldParserTest {
                 "\t * units: units\n" +
                 "\t * offset 2\n" +
                 "\t */\n" +
-                "\tuint8_t alignmentFill_at_2[2];\n" +
+                "\tuint8_t alignmentFill_at_2[2] = {};\n" +
                 "};\n" +
                 "static_assert(sizeof(pid_s) == 4);\n" +
                 "\n",
@@ -691,24 +787,24 @@ public class ConfigFieldParserTest {
         assertNull(ConfigFieldImpl.parse(state, "int"));
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int field");
-            assertEquals(cf.getType(), "int");
+            assertEquals(cf.getTypeName(), "int");
             assertEquals(cf.getName(), "field", "Name");
         }
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int_4 fie4_ld");
-            assertEquals(cf.getType(), "int_4");
+            assertEquals(cf.getTypeName(), "int_4");
             assertEquals(cf.getName(), "fie4_ld");
         }
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int_8 fi_eld;comm_;ts,1,1");
-            assertEquals(cf.getType(), "int_8");
+            assertEquals(cf.getTypeName(), "int_8");
             assertEquals(cf.getName(), "fi_eld");
             assertEquals(cf.getComment(), "comm_", "Comment");
             assertEquals(cf.getTsInfo(), "ts,1,1");
         }
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int[3 iterate] field");
-            assertEquals(cf.getType(), "int");
+            assertEquals(cf.getTypeName(), "int");
             assertEquals(cf.getArraySizes().length, 1);
             assertEquals(cf.getArraySizes()[0], 3);
             assertTrue(cf.isIterate(), "isIterate");
@@ -717,19 +813,19 @@ public class ConfigFieldParserTest {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "int16_t crankingRpm;This,. value controls what RPM values we consider 'cranking' (any RPM below 'crankingRpm')\\nAnything above 'crankingRpm' would be 'running'");
             assertEquals(cf.getName(), "crankingRpm");
             assertEquals(cf.getArraySizes().length, 0);
-            assertEquals(cf.getType(), "int16_t");
+            assertEquals(cf.getTypeName(), "int16_t");
         }
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "MAP_sensor_config_s map");
             assertEquals(cf.getName(), "map");
             assertEquals(cf.getArraySizes().length, 0);
-            assertEquals(cf.getType(), "MAP_sensor_config_s");
+            assertEquals(cf.getTypeName(), "MAP_sensor_config_s");
         }
         {
             ConfigFieldImpl cf = ConfigFieldImpl.parse(state, "MAP_sensor_config_s map;@see hasMapSensor\\n@see isMapAveragingEnabled");
             assertEquals(cf.getName(), "map");
             assertEquals(cf.getArraySizes().length, 0);
-            assertEquals(cf.getType(), "MAP_sensor_config_s");
+            assertEquals(cf.getTypeName(), "MAP_sensor_config_s");
             assertEquals(cf.getComment(), "@see hasMapSensor\\n@see isMapAveragingEnabled");
         }
     }
@@ -760,7 +856,7 @@ public class ConfigFieldParserTest {
         "end_struct\n";
         ReaderStateImpl state = new ReaderStateImpl();
 
-        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer("", state);
+        TestTSProjectConsumer tsProjectConsumer = new TestTSProjectConsumer(state);
         state.readBufferedReader(test, tsProjectConsumer);
         assertEquals("pid_afr_type = scalar, F32, 0, \"ms\", 1, 0, 0, 3000, 0\n" +
                 "pid_afr_typet = scalar, F32, 4, \"\", 1, 0, 0, 100, 0\n" +

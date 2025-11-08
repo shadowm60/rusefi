@@ -21,8 +21,8 @@
 *.txt text eol=lf
 *.yaml text eol=lf
 *.ini text eol=lf
-*.input text eol=lf
 *.rules text eol=lf
+gradlew text eol=lf
 
 # KiCad files
 *.dsn text eol=lf

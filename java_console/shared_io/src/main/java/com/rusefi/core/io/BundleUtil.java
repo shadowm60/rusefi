@@ -1,51 +1,66 @@
 package com.rusefi.core.io;
 
+import com.devexperts.logging.Logging;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+import static com.devexperts.logging.Logging.getLogging;
 
 public class BundleUtil {
+    private static final Logging log = getLogging(BundleUtil.class);
+
+    private static final String BRANCH_REF_FILE = "release.txt";
+
     /**
      * @return null in case of error
      */
-    @Nullable
-    public static String readBundleFullName() {
+    public static List<@NotNull String> readBundleFullName() {
+        File f = new File(BRANCH_REF_FILE);
+        if (!f.exists()) {
+            log.error(BRANCH_REF_FILE + " not found");
+            return null;
+        }
         try {
-            Path path = Paths.get("").toAbsolutePath();
-            String fullName = path.getParent().getFileName().toString();
-            if (fullName.length() < 3)
-                return null; // just paranoia check
-            return fullName;
-        } catch (InvalidPathException e) {
-            System.err.println(new Date() + ": BundleUtil: Error reading bundle name");
+            return Files.readAllLines(f.toPath());
+        } catch (InvalidPathException | IOException e) {
+            log.error("Error reading bundle name", e);
             return null;
         }
     }
 
     @NotNull
-    public static String readBundleFullNameNotNull() {
-        String bundle = readBundleFullName();
-        bundle = bundle == null ? "unknown bundle" : bundle;
-        return bundle;
+    public static BundleInfo readBundleFullNameNotNull() {
+        List<@NotNull String> info = readBundleFullName();
+        if (info == null)
+            return BundleInfo.UNKNOWN;
+        return parse(info);
     }
 
     public static String getBundleTarget() {
-        return getBundleTarget(readBundleFullName());
+        return readBundleFullNameNotNull().getTarget();
     }
 
-    public static String getBundleTarget(String s) {
-        if (s == null)
-            return null;
-        int lastDot = s.lastIndexOf('.');
-        if (lastDot == -1)
-            throw new IllegalStateException("Dot expected somewhere in [" + s + "]");
-        return s.substring(lastDot + 1);
+    public static BundleInfo parse(List<@NotNull String> info) {
+        Map<String, String> keyValues = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (String line : info) {
+            String[] pair = line.split("=", 2);
+            keyValues.put(pair[0], pair[1]);
+        }
+        String target = keyValues.get("platform");
+        String branchName = keyValues.get("release");
+        String nextBranchName = keyValues.get("nextRelease");
+        if (target == null || branchName == null) {
+            log.info(BRANCH_REF_FILE + " says " + keyValues);
+            return BundleInfo.UNKNOWN;
+        }
+        return new BundleInfo(branchName, nextBranchName, target);
     }
+
 }

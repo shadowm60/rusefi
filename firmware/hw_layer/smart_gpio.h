@@ -12,12 +12,15 @@
 #include "drivers/gpio/tle6240.h"
 #include "drivers/gpio/mc33972.h"
 #include "drivers/gpio/tle8888.h"
+#include "drivers/gpio/tle9201.h"
 #include "drivers/gpio/drv8860.h"
-#include "drivers/gpio/can_gpio.h"
+#include "drivers/gpio/can_gpio_msiobox.h"
 // we seem OK without L9779 here do we need those includes at all?
 #endif /* EFI_PROD_CODE */
 
-#if EFI_UNIT_TEST
+#if EFI_SIMULATOR
+#define BOARD_EXT_GPIOCHIPS 0
+#elif EFI_UNIT_TEST || EFI_SIMULATOR
 #define BOARD_EXT_GPIOCHIPS 3
 #else
 #define BOARD_EXT_GPIOCHIPS (\
@@ -28,11 +31,12 @@ BOARD_DRV8860_COUNT + \
 BOARD_MC33810_COUNT + \
 BOARD_L9779_COUNT + \
 BOARD_CAN_GPIO_COUNT + \
+BOARD_TLE9104_COUNT + \
 0)
 #endif
 
-void initSmartGpio(void);
-void startSmartCsPins(void);
-void stopSmartCsPins(void);
+void initSmartGpio();
+void startSmartCsPins();
+void stopSmartCsPins();
 
-void tle8888startup(void);
+void tle8888startup();

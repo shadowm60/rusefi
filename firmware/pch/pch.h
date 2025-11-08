@@ -9,34 +9,43 @@
  * this file.
  */
 
+#include <rusefi/efistringutil.h>
 #include <rusefi/arrays.h>
 #include <rusefi/crc.h>
 #include <rusefi/fragments.h>
 #include <rusefi/interpolation.h>
-#include <rusefi/isnan.h>
-#include <rusefi/math.h>
+#include <rusefi/rusefi_math.h>
 #include <rusefi/pt2001.h>
-#include <rusefi/efistringutil.h>
+
+#include "main_loop.h"
 
 #include "global.h"
 #include "generated_lookup_meta.h"
 #include "loggingcentral.h"
 #include "error_handling.h"
 #include "efi_gpio.h"
+#ifndef EFI_BOOTLOADER
 #include "tunerstudio_outputs.h"
 #include "engine.h"
+#endif // EFI_BOOTLOADER
 #include "engine_configuration.h"
 #include "engine_controller.h"
 #include "engine_math.h"
 #include "pwm_generator_logic.h"
+#ifndef EFI_BOOTLOADER
 #include "allsensors.h"
 #include "sensor.h"
 #include "settings.h"
+#endif // EFI_BOOTLOADER
 #include "efi_interpolation.h"
 #include "perf_trace.h"
 #include "hardware.h"
 #include "thread_priority.h"
+#ifndef EFI_BOOTLOADER
 #include "tooth_logger.h"
+#endif // EFI_BOOTLOADER
+#include "signature.h"
+#include "pin_repository.h"
 
 #if EFI_UNIT_TEST
 #include <gtest/gtest.h>

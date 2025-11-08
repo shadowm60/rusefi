@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.devexperts.logging.Logging.getLogging;
-import static com.rusefi.config.generated.TriggerMeta.IGNITION_OUTPUT;
+import static com.rusefi.config.generated.TriggerVariableRegistryValues.IGNITION_OUTPUT;
 
 /**
  * Andrey Belomutskiy, (c) 2012-2016
@@ -22,19 +22,22 @@ public class FiringOrderTSLogic {
     private static final String FIRING_ORDER_PREFIX = "FO_";
 
     public static void main(String[] args) throws IOException {
+        VariableRegistry variableRegistry = new VariableRegistry();
+        variableRegistry.register("MAX_CYLINDER_COUNT", 8);
         // sandbox code
-        invoke("../firmware/controllers/algo/firing_order.h");
+        invoke("../firmware/controllers/algo/firing_order.h", variableRegistry);
     }
 
-    public static String invoke(String fileName) throws IOException {
+    public static String invoke(String fileName, VariableRegistry variableRegistry) throws IOException {
         State state = new State();
 
         readFiringOrders(fileName, state);
 
         StringBuilder sb = new StringBuilder();
-        for (int i = 2; i <= 12; i++) {
+        Integer maxCylinderCount = variableRegistry.intValues.getOrDefault("MAX_CYLINDER_COUNT", 12);
+        for (int i = 2; i <= maxCylinderCount; i++) {
             String line = processId(i, state);
-            sb.append(line).append("\r\n");
+            sb.append(line).append("\n");
         }
         return sb.toString();
     }
@@ -105,7 +108,7 @@ public class FiringOrderTSLogic {
         String output = "\t\tfield = \"" + IGNITION_OUTPUT + " " + cylinderId +
                 "\",                       ignitionPins" + cylinderId +
                 ", {isIgnitionEnabled == 1 && (ignitionMode != 0 && cylindersCount >= " + cylinderId + ") && (ignitionMode !=2 || twoWireBatchIgnition == 1 " + result + ")}";
-        System.out.println(output);
+        //log.info(output);
         return output;
     }
 

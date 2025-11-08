@@ -21,12 +21,9 @@
 void setDodgeNeon1995EngineConfiguration() {
 	engineConfiguration->trigger.type = trigger_type_e::TT_DODGE_NEON_1995;
 
-	engineConfiguration->fuelAlgorithm = LM_ALPHA_N;
+	engineConfiguration->fuelAlgorithm = engine_load_mode_e::LM_ALPHA_N;
 
-	// set_rpm_hard_limit 4000
-	engineConfiguration->rpmHardLimit = 4000; // yes, 4k. let's play it safe for now
-
-	setWholeTimingTable_d(12);
+	setWholeTimingTable(12);
 
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	// set injection_mode 1
@@ -36,8 +33,9 @@ void setDodgeNeon1995EngineConfiguration() {
 	engineConfiguration->ignitionMode = IM_WASTED_SPARK;
 	engineConfiguration->firingOrder = FO_1_3_4_2;
 
-	// set global_trigger_offset_angle 497
-	engineConfiguration->globalTriggerAngleOffset = 497;
+	// set global_trigger_offset_angle 137
+	engineConfiguration->camSyncOnSecondCrankRevolution = true;
+	engineConfiguration->globalTriggerAngleOffset = 137;
 
 	// set cranking_timing_angle 0
 	engineConfiguration->crankingTimingAngle = 0;
@@ -68,7 +66,7 @@ void setDodgeNeonNGCEngineConfiguration() {
 	 * fuel 2.8
 	 *
 	 */
-	//setWholeTimingTable_d(12);
+	//setWholeTimingTable(12);
 
 	//setMap(config->veTable, 50);
 
@@ -84,7 +82,7 @@ void setDodgeNeonNGCEngineConfiguration() {
 
 	setLinearCurve(config->ignitionLoadBins, 20, 120, 1);
 
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
 	setFuelTablesLoadBin(20, 120);
 
@@ -134,8 +132,6 @@ void setDodgeNeonNGCEngineConfiguration() {
 
 	engineConfiguration->map.sensor.type = MT_DODGE_NEON_2003;
 
-	engineConfiguration->hip9011Gain = 0.3;
-
 	engineConfiguration->cylinderBore = 87.5;
 
 	engineConfiguration->clutchDownPin = Gpio::C12;
@@ -150,12 +146,10 @@ void setDodgeNeonNGCEngineConfiguration() {
 //	engineConfiguration->fanOnTemperature = 115; // knock testing - value is a bit high
 //	engineConfiguration->fanOffTemperature = 100;
 
-//	engineConfiguration->tunerStudioSerialSpeed = 9600;
-	engineConfiguration->tunerStudioSerialSpeed = 19200;
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
 //temp	engineConfiguration->alternatorControlPin = Gpio::D5;
-	engineConfiguration->targetVBatt = 14.0;
+	setTable(config->alternatorVoltageTargetTable, 14.0);
 	engineConfiguration->alternatorControl.offset = 20;
 	engineConfiguration->alternatorControl.pFactor = 20;
 	engineConfiguration->alternatorControl.iFactor = 0.2;
@@ -171,7 +165,7 @@ void setDodgeNeonNGCEngineConfiguration() {
 	engineConfiguration->wwaeBeta = 0;
 
 	engineConfiguration->isSdCardEnabled = false;
-	engineConfiguration->manIdlePosition = 36; // set_idle_pwm 40
+	setTable(config->cltIdleCorrTable, 36.0);
 
 	// end of setDodgeNeonNGCEngineConfiguration
 }

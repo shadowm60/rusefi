@@ -8,7 +8,7 @@
 #include "pch.h"
 
 #include "nissan_vq.h"
-#include "hellen_meta.h"
+#include "hellen_all_meta.h"
 #include "defaults.h"
 
 #define NISSAN_VQ_VVT_OFFSET 157
@@ -53,7 +53,7 @@ static void setNissanVqEngineConfig() {
 //	engineConfiguration->auxPid[0].minValue = 20;
 //	engineConfiguration->auxPid[0].maxValue = 90;
 
-	engineConfiguration->cranking.baseFuel = 35;
+	setTable(config->crankingCycleBaseFuel, 35);
 }
 
 void setHellen121nissanVQ() {
@@ -64,7 +64,7 @@ void setHellen121nissanVQ() {
 	// we have this here and not in board_configuration.cpp so that unit test would get this value
 	engineConfiguration->invertCamVVTSignal = true;
 
-#if HW_HELLEN
+#if HW_HELLEN && EFI_PROD_CODE
 	engineConfiguration->vvtPins[0 * CAMS_PER_BANK] = H176_LS_7;
 	engineConfiguration->vvtPins[1 * CAMS_PER_BANK] = H176_LS_8;
 #endif

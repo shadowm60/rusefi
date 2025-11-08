@@ -1,6 +1,6 @@
 package com.rusefi.io;
 
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.MessagesCentral;
 import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
@@ -31,12 +31,12 @@ public class ConnectionStatusLogic {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private ConnectionStatusLogic() {
-        SensorCentral.getInstance().addListener(Sensor.TIME_SECONDS, value -> markConnected());
+        SensorCentral.getInstance().addListener(Sensor.SECONDS, value -> markConnected());
 
         MessagesCentral.getInstance().addListener(new MessagesCentral.MessageListener() {
             @Override
             public void onMessage(Class clazz, String message) {
-                if (message.startsWith(Fields.CRITICAL_PREFIX))
+                if (message.startsWith(Integration.CRITICAL_PREFIX))
                     markConnected();
             }
         });

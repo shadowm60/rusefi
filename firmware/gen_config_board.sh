@@ -31,7 +31,8 @@ fi
 
 echo "BOARD_DIR=${BOARD_DIR} SHORT_BOARD_NAME=${SHORT_BOARD_NAME}"
 
-which realpath >/dev/null 2>&1 || (which grealpath >/dev/null 2>&1 && alias realpath='grealpath')
+shopt -s expand_aliases
+if which grealpath >/dev/null 2>&1; then alias realpath='grealpath'; fi
 FDIR=$(realpath $(dirname "$0"))
 BOARD_DIR=$(realpath --relative-to "$FDIR" "$BOARD_DIR")
 
@@ -40,7 +41,10 @@ cd "$FDIR"
 source gen_config_common.sh
 echo "Using COMMON_GEN_CONFIG [$COMMON_GEN_CONFIG]"
 
+JAVA_REMOTE_DEBUG="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"
+
 # in rare cases order of arguments is important - '-tool' should be specified before '-definition'
+ #java $JAVA_REMOTE_DEBUG \
 java \
  $COMMON_GEN_CONFIG_PREFIX \
  	-tool gen_config.sh \
@@ -52,9 +56,6 @@ java \
 
 [ $? -eq 0 ] || { echo "ERROR generating TunerStudio config for ${BOARD_DIR}"; exit 1; }
 
-if [ -z "META_OUTPUT_ROOT_FOLDER" ]; then
-	META_OUTPUT_ROOT_FOLDER=""
-fi
 
 echo "Happy ${SHORT_BOARD_NAME}!"
 exit 0

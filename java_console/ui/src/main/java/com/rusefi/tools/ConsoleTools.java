@@ -2,19 +2,14 @@ package com.rusefi.tools;
 
 import com.devexperts.logging.Logging;
 import com.opensr5.ConfigurationImage;
-import com.opensr5.ini.IniFileModel;
 import com.opensr5.io.ConfigurationImageFile;
 import com.rusefi.*;
 import com.rusefi.autodetect.PortDetector;
 import com.rusefi.autodetect.SerialAutoChecker;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.binaryprotocol.IncomingDataBuffer;
-import com.rusefi.binaryprotocol.MsqFactory;
-import com.rusefi.config.generated.Fields;
-import com.rusefi.core.EngineState;
-import com.rusefi.core.Pair;
-import com.rusefi.core.ResponseBuffer;
-import com.rusefi.core.SignatureHelper;
+import com.rusefi.config.generated.Integration;
+import com.rusefi.core.*;
 import com.rusefi.io.ConnectionStateListener;
 import com.rusefi.io.ConnectionStatusLogic;
 import com.rusefi.io.IoStream;
@@ -25,16 +20,13 @@ import com.rusefi.io.tcp.BinaryProtocolProxy;
 import com.rusefi.io.tcp.BinaryProtocolServer;
 import com.rusefi.io.tcp.ServerSocketReference;
 import com.rusefi.maintenance.ExecHelper;
-import com.rusefi.proxy.client.LocalApplicationProxy;
 import com.rusefi.tools.online.Online;
-import com.rusefi.tune.xml.Msq;
 import com.rusefi.ui.AuthTokenPanel;
 import com.rusefi.ui.StatusConsumer;
+import com.rusefi.io.UiLinkManagerHelper;
 import com.rusefi.ui.basic.BasicStartupFrame;
-import com.rusefi.ui.light.LightweightGUI;
 import org.jetbrains.annotations.Nullable;
 
-import javax.xml.bind.JAXBException;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -47,6 +39,7 @@ import static com.rusefi.binaryprotocol.BinaryProtocol.sleep;
 import static com.rusefi.binaryprotocol.IoHelper.getCrc32;
 
 public class ConsoleTools {
+    private static final Logging log = Logging.getLogging(ConsoleTools.class);
     public static final String SET_AUTH_TOKEN = "set_auth_token";
     public static final String RUS_EFI_NOT_DETECTED = "rusEFI not detected";
     private static final Map<String, ConsoleTool> TOOLS = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -56,7 +49,7 @@ public class ConsoleTools {
     private static final StatusConsumer statusListener = new StatusConsumer() {
         final Logging log = getLogging(CANConnectorStartup.class);
         @Override
-        public void append(String message) {
+        public void logLine(final String message) {
             log.info(message);
         }
     };
@@ -67,14 +60,14 @@ public class ConsoleTools {
         registerTool("basic-ui", BasicStartupFrame::runTool, "Basic UI");
 
         registerTool("functional_test", ConsoleTools::runFunctionalTest, "NOT A USER TOOL. Development tool related to functional testing");
-        registerTool("convert_binary_configuration_to_xml", ConsoleTools::convertBinaryToXml, "NOT A USER TOOL. Development tool to convert binary configuration into XML form.");
+//        registerTool("convert_binary_configuration_to_xml", ConsoleTools::convertBinaryToXml, "NOT A USER TOOL. Development tool to convert binary configuration into XML form.");
 
         registerTool("get_image_tune_crc", ConsoleTools::calcBinaryImageTuneCrc, "Calculate tune CRC for given binary tune");
-        registerTool("get_xml_tune_crc", ConsoleTools::calcXmlImageTuneCrc, "Calculate tune CRC for given XML tune");
+//        registerTool("get_xml_tune_crc", ConsoleTools::calcXmlImageTuneCrc, "Calculate tune CRC for given XML tune");
 
-        registerTool("network_connector", strings -> NetworkConnectorStartup.start(), "Connect your rusEFI ECU to rusEFI Online");
-        registerTool("network_authenticator", strings -> LocalApplicationProxy.start(), "rusEFI Online Authenticator");
-        registerTool("elm327_connector", strings -> Elm327ConnectorStartup.start(), "Connect your rusEFI ECU using ELM327 CAN-bus adapter");
+//        registerTool("network_connector", strings -> NetworkConnectorStartup.start(), "Connect your rusEFI ECU to rusEFI Online");
+//        registerTool("network_authenticator", strings -> LocalApplicationProxy.start(), "rusEFI Online Authenticator");
+//        registerTool("elm327_connector", strings -> Elm327ConnectorStartup.start(), "Connect your rusEFI ECU using ELM327 CAN-bus adapter");
         registerTool("pcan_connector", strings -> {
 
             PCanIoStream stream = PCanIoStream.createStream();
@@ -89,28 +82,33 @@ public class ConsoleTools {
         registerTool("upload_tune", ConsoleTools::uploadTune, "Upload specified tune file to rusEFI Online using auth token from settings");
 
         registerTool("read_tune", args -> readTune(), "Read tune from controller");
-        registerTool("write_tune", ConsoleTools::writeTune, "Write specified XML tune into controller");
         registerTool("get_performance_trace", args -> PerformanceTraceHelper.getPerformanceTune(), "DEV TOOL: Get performance trace from ECU");
 
         registerTool("version", ConsoleTools::version, "Only print version");
 
-        registerTool("lightui", strings -> lightUI(), "Start lightweight GUI for tiny screens");
+/*
+    on the one hand we can do low level DFU programming but c'mon we are not planning to maintain it any day soon!
         registerTool("dfu", DfuTool::run, "Program specified file into ECU via DFU");
-
+*/
+        // java -jar rusefi_console.jar local_proxy
         registerTool("local_proxy", ConsoleTools::localProxy, "Detect rusEFI ECU and proxy serial <> TCP");
 
         registerTool("detect", ConsoleTools::detect, "Find attached rusEFI");
         registerTool("send_command", new ConsoleTool() {
             @Override
             public void runTool(String[] args) throws Exception {
-                String command = args[1];
-                System.out.println("Sending command " + command);
-                sendCommand(command);
+                if (args.length < 1)
+                    throw new IllegalStateException("argument expected");
+                String command = CommandHelper.assembleCommand(args);
+                log.info("Sending command [" + command + "]");
+                IoStream stream = sendNonBlockingCommandDoNotWaitForConfirmation(command);
+                stream.close(); // this would close connector non-daemon thread
+//                sleepAndPrintNonDaemons(4000);
             }
         }, "Sends command specified as second argument");
-        registerTool("reboot_ecu", args -> sendCommand(Fields.CMD_REBOOT), "Sends a command to reboot rusEFI controller.");
-        registerTool(Fields.CMD_REBOOT_DFU, args -> {
-            sendCommand(Fields.CMD_REBOOT_DFU);
+        registerTool("reboot_ecu", args -> sendNonBlockingCommandDoNotWaitForConfirmation(Integration.CMD_REBOOT), "Sends a command to reboot rusEFI controller.");
+        registerTool(Integration.CMD_REBOOT_DFU, args -> {
+            sendNonBlockingCommandDoNotWaitForConfirmation(Integration.CMD_REBOOT_DFU);
             /**
              * AndreiKA reports that auto-detect fails to interrupt communication threads while in native code
              * See https://github.com/rusefi/rusefi/issues/3300
@@ -125,11 +123,11 @@ public class ConsoleTools {
             System.out.println(RUS_EFI_NOT_DETECTED);
             return;
         }
-        IoStream ecuStream = LinkManager.open(autoDetectedPort);
+        IoStream ecuStream = UiLinkManagerHelper.open(autoDetectedPort);
 
         ServerSocketReference serverHolder = BinaryProtocolProxy.createProxy(ecuStream, 29001, new BinaryProtocolProxy.ClientApplicationActivityListener() {
             @Override
-            public void onActivity() {
+            public void onActivity(BinaryProtocolServer.Packet clientRequest) {
 
             }
         }, StatusConsumer.ANONYMOUS);
@@ -145,34 +143,21 @@ public class ConsoleTools {
         System.setProperty("ini_file_path", "../firmware/tunerstudio");
 //        calcBinaryImageTuneCrc(null, "current_configuration.rusefi_binary");
 
-        calcXmlImageTuneCrc(null, "CurrentTune.msq");
-    }
-
-    private static void calcXmlImageTuneCrc(String... args) throws Exception {
-        String fileName = args[1];
-        Msq msq = Msq.readTune(fileName);
-        ConfigurationImage image = msq.asImage(IniFileModel.getInstance(), Fields.TOTAL_CONFIG_SIZE);
-        printCrc(image);
+//        calcXmlImageTuneCrc(null, "CurrentTune.msq");
     }
 
     private static void calcBinaryImageTuneCrc(String... args) throws IOException {
         String fileName = args[1];
-        ConfigurationImage image = ConfigurationImageFile.readFromFile(fileName);
+        ConfigurationImage image = ConfigurationImageFile.readFromFile(fileName).getConfigurationImage();
         printCrc(image);
     }
 
     private static void printCrc(ConfigurationImage image) {
-        for (int i = 0; i < Fields.WARNING_BUFFER_SIZE; i++)
-            image.getContent()[Fields.WARNING_MESSAGE.getOffset() + i] = 0;
         int crc32 = getCrc32(image.getContent());
         int crc16 = crc32 & 0xFFFF;
         System.out.printf("tune_CRC32_hex=0x%x\n", crc32);
         System.out.printf("tune_CRC16_hex=0x%x\n", crc16);
         System.out.println("tune_CRC16=" + crc16);
-    }
-
-    private static void lightUI() {
-        LightweightGUI.start();
     }
 
     private static void uploadTune(String[] args) {
@@ -198,15 +183,37 @@ public class ConsoleTools {
         }
     }
 
-    private static void sendCommand(String command) throws IOException {
+    private static IoStream sendNonBlockingCommandDoNotWaitForConfirmation(String command) throws IOException {
         String autoDetectedPort = autoDetectPort();
         if (autoDetectedPort == null)
-            return;
-        IoStream stream = LinkManager.open(autoDetectedPort);
+            return null;
+        IoStream stream = UiLinkManagerHelper.open(autoDetectedPort);
         byte[] commandBytes = BinaryProtocol.getTextCommandBytes(command);
         stream.sendPacket(commandBytes);
+        return stream;
     }
+/*
+    private static void sleepAndPrintNonDaemons(final int millis) {
+        new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Sleeping " + millis);
+                try {
+                    Thread.sleep(millis);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                for (Thread thread : Thread.getAllStackTraces().keySet()) {
+                    // Daemon thread will not prevent the JVM from exiting
+                    if (!thread.isDaemon())
+                        System.out.println("Non-daemon: " + thread.getName() + "\n");
 
+                }
+
+            }
+        }, "test").start();
+    }
+*/
     private static void setAuthToken(String[] args) {
         String newToken = args[1];
         System.out.println("Saving auth token " + newToken);
@@ -284,25 +291,6 @@ public class ConsoleTools {
         });
     }
 
-    private static void writeTune(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.out.println("No tune file name specified");
-            return;
-        }
-
-        String fileName = args[1];
-        Msq msq = Msq.readTune(fileName);
-
-        startAndConnect(linkManager -> {
-            ConfigurationImage ci = msq.asImage(IniFileModel.getInstance(), Fields.TOTAL_CONFIG_SIZE);
-            linkManager.getConnector().getBinaryProtocol().uploadChanges(ci);
-
-            //System.exit(0);
-            return null;
-        });
-
-    }
-
     private static void invokeCallback(String callback) {
         if (callback == null)
             return;
@@ -341,22 +329,6 @@ public class ConsoleTools {
         return autoDetectedPort;
     }
 
-    private static void convertBinaryToXml(String[] args) throws IOException, JAXBException {
-        if (args.length < 2) {
-            System.err.println("Binary file input expected");
-            System.exit(-1);
-        }
-        String inputBinaryFileName = args[1];
-        ConfigurationImage image = ConfigurationImageFile.readFromFile(inputBinaryFileName);
-        System.out.println("Got " + image.getSize() + " of configuration from " + inputBinaryFileName);
-
-        Msq tune = MsqFactory.valueOf(image, IniFileModel.getInstance());
-        tune.writeXmlFile(Online.outputXmlFileName);
-        String authToken = AuthTokenPanel.getAuthToken();
-        System.out.println("Using " + authToken);
-        Online.upload(new File(Online.outputXmlFileName), authToken);
-    }
-
     static void detect(String[] strings) throws IOException {
         SerialAutoChecker.AutoDetectResult detectResult = PortDetector.autoDetectSerial(null);
         String autoDetectedPort = detectResult.getSerialPort();
@@ -364,7 +336,7 @@ public class ConsoleTools {
             System.out.println(RUS_EFI_NOT_DETECTED);
             return;
         }
-        IoStream stream = LinkManager.open(autoDetectedPort);
+        IoStream stream = UiLinkManagerHelper.open(autoDetectedPort);
         IncomingDataBuffer incomingData = stream.getDataBuffer();
         byte[] commandBytes = BinaryProtocol.getTextCommandBytes("hello");
         stream.sendPacket(commandBytes);
@@ -372,7 +344,7 @@ public class ConsoleTools {
         incomingData.getPacket("");
 
         sleep(300);
-        stream.sendPacket(new byte[]{Fields.TS_GET_TEXT});
+        stream.sendPacket(new byte[]{Integration.TS_GET_TEXT});
         sleep(300);
 
         byte[] response = incomingData.getPacket("");
@@ -388,7 +360,7 @@ public class ConsoleTools {
             EngineState.ValueCallback<String> callback = new EngineState.ValueCallback<String>() {
                 @Override
                 public void onUpdate(String value) {
-                    if (value.startsWith(Fields.PROTOCOL_HELLO_PREFIX)) {
+                    if (value.startsWith(Integration.PROTOCOL_HELLO_PREFIX)) {
                         messages.append(value);
                         messages.append("\n");
                     }
@@ -396,7 +368,7 @@ public class ConsoleTools {
             };
             while (!unpack.isEmpty()) {
                 String original = unpack;
-                unpack = EngineState.handleStringActionPair(unpack, new EngineState.StringActionPair(Fields.PROTOCOL_MSG, callback), null);
+                unpack = EngineState.handleStringActionPair(unpack, new EngineState.StringActionPair(Integration.PROTOCOL_MSG, callback), null);
                 if (original.length() == unpack.length()) {
                     // skip key
                     unpack = EngineState.skipToken(unpack);

@@ -18,6 +18,7 @@ public class RawIniFile {
      * A list of lines. Lines which are only a comment were filtered out already.
      */
     private final List<Line> lines;
+    final String msg;
 
     /**
      * Often we want to look-up line by first token.
@@ -25,12 +26,18 @@ public class RawIniFile {
      */
     private final Map<String, Line> asSet = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
-    public RawIniFile(List<Line> lines) {
+    public RawIniFile(List<Line> lines, String msg) {
         this.lines = lines;
+        this.msg = msg;
 
         for (Line line : lines) {
-            if (line.tokens.length > 1)
-                asSet.put(line.tokens[0], line);
+            if (line.tokens.length > 1) {
+                String key = line.tokens[0];
+                if (!asSet.containsKey(key)) {
+                    // odd API: we want to use *first* occurrence of specific key (that's important at least for signature)
+                    asSet.put(key, line);
+                }
+            }
         }
     }
 
@@ -39,10 +46,10 @@ public class RawIniFile {
     }
 
     @NotNull
-    public Line getMandatoryLine(String key) {
+    public Line getMandatoryLine(String key) throws MandatoryLineMissing {
         Line result = getByKey(key);
         if (result == null)
-            throw new IllegalStateException("Line not found: " + key);
+            throw new MandatoryLineMissing("Line not found: " + key);
         assert result.tokens.length > 1;
         return result;
     }
@@ -56,21 +63,21 @@ public class RawIniFile {
         return lines;
     }
 
-    public int getSimpleIntegerProperty(String key) {
+    public int getSimpleIntegerProperty(String key) throws MandatoryLineMissing {
         Line line = asSet.get(key);
         if (line == null)
-            throw new IllegalStateException("Line not found: " + key);
+            throw new MandatoryLineMissing("Line not found: " + key);
         String value = line.getTokens()[1];
         return Integer.parseInt(value);
     }
 
-    public int getSimpleIntegerProperty(String key, int defaultValue) {
+    public int getSimpleIntegerProperty(String key, int defaultValue) throws MandatoryLineMissing {
         if (!asSet.containsKey(key))
             return defaultValue;
         return getSimpleIntegerProperty(key);
     }
 
-    public List<String> getValues(String key) {
+    public List<String> getValues(String key) throws MandatoryLineMissing {
         RawIniFile.Line line = getMandatoryLine(key);
         return Arrays.asList(line.getTokens()).subList(1, line.getTokens().length);
     }

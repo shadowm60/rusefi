@@ -23,7 +23,7 @@ void tryResetWatchdog() {
 void setWatchdogResetPeriod(int) {
 }
 
-void baseMCUInit(void) {
+void baseMCUInit() {
 }
 
 void _unhandled_exception(void) {
@@ -132,10 +132,10 @@ void initSpiModule(SPIDriver *driver, brain_pin_e sck, brain_pin_e miso,
 	 * Info on the silicon defect can be found in this document, section 2.5.2:
 	 * https://www.st.com/content/ccc/resource/technical/document/errata_sheet/0a/98/58/84/86/b6/47/a2/DM00037591.pdf/files/DM00037591.pdf/jcr:content/translations/en.DM00037591.pdf
 	 */
-	efiSetPadMode("SPI clock", sck,	PAL_MODE_ALTERNATE(getSpiAf(driver)) | sckMode | PAL_STM32_OSPEED_HIGHEST);
+	efiSetPadMode("SPI CLK ", sck,	PAL_MODE_ALTERNATE(getSpiAf(driver)) | sckMode | PAL_STM32_OSPEED_HIGHEST);
 
-	efiSetPadMode("SPI master out", mosi, PAL_MODE_ALTERNATE(getSpiAf(driver)) | mosiMode | PAL_STM32_OSPEED_HIGHEST);
-	efiSetPadMode("SPI master in ", miso, PAL_MODE_ALTERNATE(getSpiAf(driver)) | misoMode | PAL_STM32_OSPEED_HIGHEST);
+	efiSetPadMode("SPI MOSI", mosi, PAL_MODE_ALTERNATE(getSpiAf(driver)) | mosiMode | PAL_STM32_OSPEED_HIGHEST);
+	efiSetPadMode("SPI MISO", miso, PAL_MODE_ALTERNATE(getSpiAf(driver)) | misoMode | PAL_STM32_OSPEED_HIGHEST);
 }
 
 void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
@@ -147,11 +147,28 @@ void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
 
 void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
 	/* TODO: why this is here? */
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
 	spiConfig->end_cb = nullptr;
+#else
+	spiConfig->data_cb = nullptr;
+	spiConfig->error_cb = nullptr;
+#endif
 
 	initSpiCsNoOccupy(spiConfig, csPin);
 	// CS is controlled inside 'hal_spi_lld' driver using both software and hardware methods.
 	//efiSetPadMode("chip select", csPin, PAL_MODE_OUTPUT_OPENDRAIN);
+}
+
+int spiGetBaseClock(SPIDriver*)
+{
+	// TODO: implement
+	return 0;
+}
+
+int spiCalcClockDiv(SPIDriver*, SPIConfig*, unsigned int)
+{
+	// TODO: implement
+	return -1;
 }
 
 #endif /* HAL_USE_SPI */
@@ -206,7 +223,7 @@ void canHwInfo(CANDriver* cand)
 
 #endif /* EFI_CAN_SUPPORT */
 
-bool allowFlashWhileRunning() {
+bool mcuCanFlashWhileRunning() {
 	return false;
 }
 
@@ -255,24 +272,27 @@ float getMcuTemperature() {
 	return 0;
 }
 
+float getMcuVrefVoltage() {
+	// TODO: implement me!
+	return engineConfiguration->adcVcc;
+}
+
 bool readSlowAnalogInputs(adcsample_t* convertedSamples) {
 	// TODO: implement me!
 	return true;
 }
 
-static constexpr FastAdcToken invalidToken = (FastAdcToken)(-1);
-
-FastAdcToken enableFastAdcChannel(const char*, adc_channel_e channel) {
+AdcToken enableFastAdcChannel(const char*, adc_channel_e channel) {
 	if (!isAdcChannelValid(channel)) {
-		return invalidToken;
+		return invalidAdcToken;
 	}
 
 	// TODO: implement me!
-	return invalidToken;
+	return invalidAdcToken;
 }
 
-adcsample_t getFastAdc(FastAdcToken token) {
-	if (token == invalidToken) {
+adcsample_t getFastAdc(AdcToken token) {
+	if (token == invalidAdcToken) {
 		return 0;
 	}
 

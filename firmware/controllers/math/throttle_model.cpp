@@ -30,8 +30,8 @@ static float flowCorrections(float pressureRatio, float p_up, float iat) {
 	float prCorrectionFactor = pressureRatioFlowCorrection(pressureRatio);
 
 	// Inlet density correction
-	float tempCorrection = sqrt(273 / (iat + 273));
-	float pressureCorrection = p_up / 101.325;
+	float tempCorrection = sqrt(C_K_OFFSET / (iat + C_K_OFFSET));
+	float pressureCorrection = p_up / STD_ATMOSPHERE;
 	float densityCorrection = tempCorrection * pressureCorrection;
 
 	return prCorrectionFactor * densityCorrection;
@@ -117,17 +117,25 @@ float ThrottleModelBase::estimateThrottleFlow(float tip, float tps, float map, f
 	}
 }
 
+// todo: migrate to proxy sensor?
+expected<float> getThrottleInletPressure() {
+	// Use TIP sensor
+	// or use Baro sensor if no TIP
+	// or use 101.325kPa (std atmosphere) if no Baro
+	return Sensor::hasSensor(SensorType::ThrottleInletPressure) ? Sensor::get(SensorType::ThrottleInletPressure) :
+				Sensor::hasSensor(SensorType::BarometricPressure) ? Sensor::get(SensorType::BarometricPressure) :
+				SensorResult(STD_ATMOSPHERE);
+}
+
+float getThrottlePressureRatio(float map){
+	return  map / getThrottleInletPressure().Value;
+}
+
 expected<float> ThrottleModelBase::estimateThrottleFlow(float map, float tps) {
 	// Inputs
 	auto iat = Sensor::get(SensorType::Iat);
 
-	// Use TIP sensor
-	// or use Baro sensor if no TIP
-	// or use 101.325kPa (std atmosphere) if no Baro
-	// TODO: have a real TIP sensor
-	auto tip = 	Sensor::hasSensor(SensorType::ThrottleInletPressure) ? Sensor::get(SensorType::ThrottleInletPressure) :
-				Sensor::hasSensor(SensorType::BarometricPressure) ? Sensor::get(SensorType::BarometricPressure) :
-				SensorResult(101.325f);
+  auto tip = getThrottleInletPressure();
 
 	if (!tip || !iat) {
 		return unexpected;

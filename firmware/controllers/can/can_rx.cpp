@@ -10,22 +10,19 @@
 
 #include "pch.h"
 
-#include "rusefi_lua.h"
-#include "can_bench_test.h"
-#include "can_common.h"
-
-typedef float SCRIPT_TABLE_8x8_f32t_linear[SCRIPT_TABLE_8 * SCRIPT_TABLE_8];
-
 #if EFI_CAN_SUPPORT
 
-#include "can.h"
+#include "rusefi_lua.h"
+#include "can_bench_test.h"
+#include "bench_test.h"
+#include "can_common.h"
+
+#include "can_rx.h"
 #include "obd2.h"
 #include "can_sensor.h"
 #include "can_vss.h"
 #include "rusefi_wideband.h"
-#include "wideband_firmware/for_rusefi/wideband_can.h"
-
-
+#include "board_overrides.h"
 /**
  * this build-in CAN sniffer is very basic but that's our CAN sniffer
  */
@@ -37,7 +34,7 @@ static void printPacket(const size_t busIndex, const CANRxFrame &rx) {
 	if (CAN_ISX(rx)) {
 		// print extended IDs in hex only
 		efiPrintf("CAN%d RX: ID %07x DLC %d: %02x %02x %02x %02x %02x %02x %02x %02x",
-				busIndex,
+				busIndex + 1,
 				id,
 				rx.DLC,
 				rx.data8[0], rx.data8[1], rx.data8[2], rx.data8[3],
@@ -45,7 +42,7 @@ static void printPacket(const size_t busIndex, const CANRxFrame &rx) {
 	} else {
 		// internet people use both hex and decimal to discuss packed IDs, for usability it's better to print both right here
 		efiPrintf("CAN%d RX: ID %03x(%d) DLC %d: %02x %02x %02x %02x %02x %02x %02x %02x",
-				busIndex,
+				busIndex + 1,
 				id,	id, // once in hex, once in dec
 				rx.DLC,
 				rx.data8[0], rx.data8[1], rx.data8[2], rx.data8[3],
@@ -53,15 +50,13 @@ static void printPacket(const size_t busIndex, const CANRxFrame &rx) {
 	}
 }
 
-volatile float canMap = 0;
-
 struct CanListenerTailSentinel : public CanListener {
 	CanListenerTailSentinel()
 		: CanListener(0)
 	{
 	}
 
-	bool acceptFrame(const CANRxFrame&) const override {
+	bool acceptFrame(const size_t, const CANRxFrame&) const override {
 		return false;
 	}
 
@@ -73,12 +68,12 @@ struct CanListenerTailSentinel : public CanListener {
 static CanListenerTailSentinel tailSentinel;
 CanListener *canListeners_head = &tailSentinel;
 
-void serviceCanSubscribers(const CANRxFrame &frame, efitick_t nowNt) {
+void serviceCanSubscribers(const size_t busIndex, const CANRxFrame &frame, efitick_t nowNt) {
 	CanListener *current = canListeners_head;
 	size_t iterationValidationCounter = 0;
 
 	while (current) {
-		current = current->processFrame(frame, nowNt);
+		current = current->processFrame(busIndex, frame, nowNt);
 		if (iterationValidationCounter++ > 239) {
 		  criticalError("forever loop canListeners_head");
 		  return;
@@ -121,12 +116,23 @@ void registerCanSensor(CanSensorBase& sensor) {
 #define MM5_10_MB_YAW_Y_CANID		0x150
 #define MM5_10_MB_ROLL_X_CANID		0x151
 
-static uint16_t getLSB_intel(const CANRxFrame& frame, int offset) {
+uint32_t getFourBytesLsb(const CANRxFrame& frame, int offset) {
+	return (frame.data8[offset + 3] << 24) +
+	    (frame.data8[offset + 2] << 16) +
+	    (frame.data8[offset + 1] << 8) +
+	    frame.data8[offset];
+}
+
+uint16_t getTwoBytesLsb(const CANRxFrame& frame, int offset) {
 	return (frame.data8[offset + 1] << 8) + frame.data8[offset];
 }
 
+uint16_t getTwoBytesMsb(const CANRxFrame& frame, int offset) {
+	return (frame.data8[offset] << 8) + frame.data8[offset + 1];
+}
+
 static int16_t getShiftedLSB_intel(const CANRxFrame& frame, int offset) {
-	return getLSB_intel(frame, offset) - 0x8000;
+	return getTwoBytesLsb(frame, offset) - 0x8000;
 }
 
 static void processCanRxImu_BoschM5_10_YawY(const CANRxFrame& frame) {
@@ -187,15 +193,31 @@ static void processCanRxImu(const CANRxFrame& frame) {
 
 extern bool verboseRxCan;
 
+void boardProcessCanRxMessage(const size_t, const CANRxFrame &, efitick_t) {
+ // this is here to indicate that migration is required
+ // todo: remove in 2026
+}
+
+std::optional<board_can_rx_type> custom_board_can_rx;
+
 void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick_t nowNt) {
-	if ((engineConfiguration->verboseCan && busIndex == 0) || verboseRxCan) {
-		printPacket(busIndex, frame);
-	} else if (engineConfiguration->verboseCan2 && busIndex == 1) {
+	if (verboseRxCan ||
+		(engineConfiguration->verboseCan && busIndex == 0) ||
+		(engineConfiguration->verboseCan2 && busIndex == 1) ||
+#if (EFI_CAN_BUS_COUNT >= 3)
+		(engineConfiguration->verboseCan3 && busIndex == 2) ||
+#endif
+		0) {
 		printPacket(busIndex, frame);
 	}
 
+	// TODO use call_board_override
+	if (custom_board_can_rx.has_value()) {
+		custom_board_can_rx.value()(busIndex, frame, nowNt);
+	}
+
     // see AemXSeriesWideband as an example of CanSensorBase/CanListener
-	serviceCanSubscribers(frame, nowNt);
+	serviceCanSubscribers(busIndex, frame, nowNt);
 
 	// todo: convert to CanListener or not?
 	//Vss is configurable, should we handle it here:
@@ -206,16 +228,20 @@ void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick
 		processCanRxImu(frame);
 	}
 
+/*
+static Timer dashAliveTimer;
+
+  if (CAN_EID(frame) == (int)bench_test_packet_ids_e::DASH_ALIVE) {
+    // todo: add an indicator that dash is connected?
+    dashAliveTimer.reset();
+  }
+*/
+
 	processCanQcBenchTest(frame);
+	processCanEcuControl(frame);
 
 	processLuaCan(busIndex, frame);
 
-#if EFI_CANBUS_SLAVE
-	if (CAN_EID(frame) == engineConfiguration->verboseCanBaseAddress + CAN_SENSOR_1_OFFSET) {
-		int16_t mapScaled = *reinterpret_cast<const int16_t*>(&frame.data8[0]);
-		canMap = mapScaled / (1.0 * PACK_MULT_PRESSURE);
-	} else
-#endif
 	{
 		obdOnCanPacketRx(frame, busIndex);
 	}
@@ -223,18 +249,14 @@ void processCanRxMessage(const size_t busIndex, const CANRxFrame &frame, efitick
 #if EFI_ENGINE_CONTROL
 	if (CAN_EID(frame) == GDI4_BASE_ADDRESS && frame.data8[7] == GDI4_MAGIC) {
 //	    efiPrintf("CAN GDI4 says hi");
-	    getLimpManager()->gdiComms.reset();
+	    getLimpManager()->externalGdiCanBusComms.reset();
 	}
 #endif // EFI_ENGINE_CONTROL
 
-#if EFI_WIDEBAND_FIRMWARE_UPDATE
-	// Bootloader acks with address 0x727573 aka ascii "rus"
-	if (CAN_EID(frame) == WB_ACK) {
-		handleWidebandBootloaderAck();
-	}
-#endif
+	handleWidebandCan(busIndex, frame);
 #if EFI_USE_OPENBLT
-	if ((CAN_SID(frame) == 0x667) && (frame.DLC == 2)) {
+#include "openblt/efi_blt_ids.h"
+	if ((CAN_SID(frame) == BOOT_COM_CAN_RX_MSG_ID) && (frame.DLC == 2)) {
 		/* TODO: gracefull shutdown? */
 		if (((busIndex == 0) && (engineConfiguration->canOpenBLT)) ||
 			((busIndex == 1) && (engineConfiguration->can2OpenBLT))) {

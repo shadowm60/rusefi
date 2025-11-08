@@ -2,10 +2,12 @@
 #include "can_filter.h"
 #include "can_hw.h"
 
-static constexpr size_t maxFilterCount = 48;
+#ifndef LUA_RX_MAX_FILTER_COUNT
+#define LUA_RX_MAX_FILTER_COUNT 48
+#endif
 
 static size_t filterCount = 0;
-static CanFilter filters[maxFilterCount];
+static CanFilter filters[LUA_RX_MAX_FILTER_COUNT];
 
 CanFilter* getFilterForId(size_t busIndex, int Id) {
 	for (size_t i = 0; i < filterCount; i++) {
@@ -27,11 +29,11 @@ void resetLuaCanRx() {
 }
 
 void addLuaCanRxFilter(int32_t eid, uint32_t mask, int bus, int callback) {
-	if (filterCount >= maxFilterCount) {
+	if (filterCount >= LUA_RX_MAX_FILTER_COUNT) {
 		criticalError("Too many Lua CAN RX filters");
 	}
 
-	efiPrintf("Added Lua CAN RX filter id 0x%x mask 0x%x with%s custom function", eid, mask, (callback == -1 ? "out" : ""));
+	efiPrintf("Added Lua CAN RX filter id 0x%x mask 0x%x with%s custom function", (unsigned int)eid, (unsigned int)mask, (callback == -1 ? "out" : ""));
 
 	filters[filterCount].Id = eid;
 	filters[filterCount].Mask = mask;

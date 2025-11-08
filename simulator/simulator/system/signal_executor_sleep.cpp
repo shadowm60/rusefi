@@ -36,20 +36,18 @@ struct CallbackContext
 	bool shouldFree = false;
 };
 
-void SleepExecutor::scheduleByTimestamp(const char *msg, scheduling_s *scheduling, efitimeus_t timeUs, action_s action) {
-	scheduleForLater(msg, scheduling, timeUs - getTimeNowUs(), action);
+static void doScheduleForLater(scheduling_s *scheduling, int delayUs, action_s const& action);
+
+void SleepExecutor::schedule(const char * /*msg*/, scheduling_s* scheduling, efitick_t timeNt, action_s const& action) {
+	doScheduleForLater(scheduling, NT2US(timeNt) - getTimeNowUs(), action);
 }
 
-void SleepExecutor::scheduleByTimestampNt(const char *msg, scheduling_s* scheduling, efitick_t timeNt, action_s action) {
-	scheduleByTimestamp(msg, scheduling, NT2US(timeNt), action);
-}
-
-static void timerCallback(CallbackContext* ctx) {
+static void timerCallback(ch_virtual_timer *, CallbackContext* ctx) {
 #if EFI_PRINTF_FUEL_DETAILS
 	if (printSchedulerDebug) {
 		if (ctx->scheduling->action.getCallback() == (schfunc_t)&turnInjectionPinLow) {
 			printf("executing cb=turnInjectionPinLow p=%d sch=%d now=%d\r\n", (int)ctx->scheduling->action.getArgument(), (int)scheduling,
-				(int)getTimeNowUs());
+				time2print(getTimeNowUs()));
 		} else {
 //		printf("exec cb=%d p=%d\r\n", (int)scheduling->callback, (int)scheduling->param);
 		}
@@ -70,7 +68,7 @@ static void timerCallback(CallbackContext* ctx) {
 	action.execute();
 }
 
-static void doScheduleForLater(scheduling_s *scheduling, int delayUs, action_s action) {
+static void doScheduleForLater(scheduling_s *scheduling, int delayUs, action_s const& action) {
 	int delaySt = MY_US2ST(delayUs);
 	if (delaySt <= 0) {
 		/**
@@ -102,10 +100,6 @@ static void doScheduleForLater(scheduling_s *scheduling, int delayUs, action_s a
 	}
 
 	chVTSetI(&scheduling->timer, delaySt, (vtfunc_t)timerCallback, ctx);
-}
-
-void SleepExecutor::scheduleForLater(const char *msg, scheduling_s *scheduling, int delayUs, action_s action) {
-	doScheduleForLater(scheduling, delayUs, action);
 }
 
 void SleepExecutor::cancel(scheduling_s* s) {

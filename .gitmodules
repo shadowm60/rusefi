@@ -1,14 +1,15 @@
 [submodule "firmware/ChibiOS"]
 	path = firmware/ChibiOS
 	url = https://github.com/rusefi/ChibiOS.git
-	branch = stable_20.3.x.rusefi_clean_history
+	branch = stable_21.11.x.rusefi_clean_history
 [submodule "firmware/ChibiOS-Contrib"]
 	path = firmware/ChibiOS-Contrib
 	url = https://github.com/rusefi/ChibiOS-Contrib.git
-	branch = rusefi-20.3.x
+	branch = rusefi-21.11.x
 [submodule "unit_tests/googletest"]
 	path = unit_tests/googletest
 	url = https://github.com/google/googletest.git
+	branch = main
 [submodule "hardware/rusefi_lib"]
 	path = hardware/rusefi_lib
 	url = https://github.com/rusefi/kicad-libraries
@@ -17,14 +18,15 @@
 	url = https://github.com/openscopeproject/InteractiveHtmlBom.git
 [submodule "firmware/controllers/can/wideband_firmware"]
 	path = firmware/controllers/can/wideband_firmware
-	url = https://github.com/mck1117/wideband
+	url = https://github.com/rusefi/wideband
+	branch = prod-2025-05
 [submodule "firmware/ext/uzlib"]
 	path = firmware/ext/uzlib
 	url = https://github.com/pfalcon/uzlib
 [submodule "firmware/ext/lua"]
 	path = firmware/ext/lua
 	url = https://github.com/rusefi/lua
-	branch = rusefi-5.4.3
+	branch = rusefi-5.4.6
 [submodule "firmware/controllers/lua/luaaa"]
 	path = firmware/controllers/lua/luaaa
 	url = https://github.com/rusefi/luaaa

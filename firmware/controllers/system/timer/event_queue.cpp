@@ -16,12 +16,17 @@
 #include "event_queue.h"
 #include "efitime.h"
 
+#ifndef EFI_UNIT_TEST_VERBOSE_ACTION
+#define EFI_UNIT_TEST_VERBOSE_ACTION 0
+#elif EFI_UNIT_TEST_VERBOSE_ACTION
+#include <iostream>
+#endif
+
 #if EFI_UNIT_TEST
-extern int timeNowUs;
 extern bool verboseMode;
 #endif /* EFI_UNIT_TEST */
 
-EventQueue::EventQueue(efitick_t lateDelay)
+EventQueue::EventQueue(efidur_t lateDelay)
 	: m_lateDelay(lateDelay)
 {
 	for (size_t i = 0; i < efi::size(m_pool); i++) {
@@ -37,8 +42,8 @@ scheduling_s* EventQueue::getFreeScheduling() {
 	auto retVal = m_freelist;
 
 	if (retVal) {
-		m_freelist = retVal->nextScheduling_s;
-		retVal->nextScheduling_s = nullptr;
+		m_freelist = retVal->next;
+		retVal->next = nullptr;
 
 #if EFI_PROD_CODE
 		getTunerStudioOutputChannels()->schedulingUsedCount++;
@@ -51,7 +56,7 @@ scheduling_s* EventQueue::getFreeScheduling() {
 void EventQueue::tryReturnScheduling(scheduling_s* sched) {
 	// Only return this scheduling to the free list if it's from the correct pool
 	if (sched >= &m_pool[0] && sched <= &m_pool[efi::size(m_pool) - 1]) {
-		sched->nextScheduling_s = m_freelist;
+		sched->next = m_freelist;
 		m_freelist = sched;
 
 #if EFI_PROD_CODE
@@ -63,7 +68,7 @@ void EventQueue::tryReturnScheduling(scheduling_s* sched) {
 /**
  * @return true if inserted into the head of the list
  */
-bool EventQueue::insertTask(scheduling_s *scheduling, efitick_t timeX, action_s action) {
+bool EventQueue::insertTask(scheduling_s *scheduling, efitick_t timeNt, action_s const& action) {
 	ScopePerf perf(PE::EventQueueInsertTask);
 
 	if (!scheduling) {
@@ -72,43 +77,46 @@ bool EventQueue::insertTask(scheduling_s *scheduling, efitick_t timeX, action_s 
 		// If still null, the free list is empty and all schedulings in the pool have been expended.
 		if (!scheduling) {
 			// TODO: should we warn or error here?
-
+// todo: look into why units tests fail here
+#if EFI_PROD_CODE
+      criticalError("No slots in scheduling pool");
+#endif
 			return false;
 		}
 	}
 
 	assertListIsSorted();
-	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, action.getCallback() != NULL, "NULL callback", false);
+	efiAssert(ObdCode::CUSTOM_ERR_ASSERT, action.getCallback() != nullptr, "NULL callback", false);
 
 // please note that simulator does not use this code at all - simulator uses signal_executor_sleep
 
 	if (scheduling->action) {
 #if EFI_UNIT_TEST
 		if (verboseMode) {
-			printf("Already scheduled was %d\r\n", (int)scheduling->momentX);
-			printf("Already scheduled now %d\r\n", (int)timeX);
+			printf("Already scheduled was %d\r\n", (int)scheduling->getMomentNt());
+			printf("Already scheduled now %d\r\n", (int)timeNt);
 		}
 #endif /* EFI_UNIT_TEST */
 		return false;
 	}
 
-	scheduling->momentX = timeX;
+	scheduling->setMomentNt(timeNt);
 	scheduling->action = action;
 
-	if (!m_head || timeX < m_head->momentX) {
+	if (!m_head || timeNt < m_head->getMomentNt()) {
 		// here we insert into head of the linked list
-		LL_PREPEND2(m_head, scheduling, nextScheduling_s);
+		LL_PREPEND(m_head, scheduling);
 		assertListIsSorted();
 		return true;
 	} else {
 		// here we know we are not in the head of the list, let's find the position - linear search
 		scheduling_s *insertPosition = m_head;
-		while (insertPosition->nextScheduling_s != NULL && insertPosition->nextScheduling_s->momentX < timeX) {
-			insertPosition = insertPosition->nextScheduling_s;
+		while (insertPosition->next != nullptr && insertPosition->next->getMomentNt() < timeNt) {
+			insertPosition = insertPosition->next;
 		}
 
-		scheduling->nextScheduling_s = insertPosition->nextScheduling_s;
-		insertPosition->nextScheduling_s = scheduling;
+		scheduling->next = insertPosition->next;
+		insertPosition->next = scheduling;
 		assertListIsSorted();
 		return false;
 	}
@@ -129,17 +137,17 @@ void EventQueue::remove(scheduling_s* scheduling) {
 
 	// Special case: is the item to remove at the head?
 	if (scheduling == m_head) {
-		m_head = m_head->nextScheduling_s;
-		scheduling->nextScheduling_s = nullptr;
+		m_head = m_head->next;
+		scheduling->next = nullptr;
 		scheduling->action = {};
 	} else {
 		auto prev = m_head;	// keep track of the element before the one to remove, so we can link around it
-		auto current = prev->nextScheduling_s;
+		auto current = prev->next;
 
 		// Find our element
 		while (current && current != scheduling) {
 			prev = current;
-			current = current->nextScheduling_s;
+			current = current->next;
 		}
 
 		// Walked off the end, this is an error since this *should* have been scheduled
@@ -151,10 +159,10 @@ void EventQueue::remove(scheduling_s* scheduling) {
 		efiAssertVoid(ObdCode::OBD_PCM_Processor_Fault, current == scheduling, "current not equal to scheduling");
 
 		// Link around the removed item
-		prev->nextScheduling_s = current->nextScheduling_s;
+		prev->next = current->next;
 
 		// Clean the item to remove
-		current->nextScheduling_s = nullptr;
+		current->next = nullptr;
 		current->action = {};
 	}
 
@@ -167,9 +175,9 @@ void EventQueue::remove(scheduling_s* scheduling) {
  * This method is always invoked under a lock
  * @return Get the timestamp of the soonest pending action, skipping all the actions in the past
  */
-expected<efitick_t> EventQueue::getNextEventTime(efitick_t nowX) const {
+expected<efitick_t> EventQueue::getNextEventTime(efitick_t nowNt) const {
 	if (m_head) {
-		if (m_head->momentX <= nowX) {
+		if (m_head->getMomentNt() <= nowNt) {
 			/**
 			 * We are here if action timestamp is in the past. We should rarely be here since this 'getNextEventTime()' is
 			 * always invoked by 'scheduleTimerCallback' which is always invoked right after 'executeAllPendingActions' - but still,
@@ -178,9 +186,9 @@ expected<efitick_t> EventQueue::getNextEventTime(efitick_t nowX) const {
 			 * looks like we end up here after 'writeconfig' (which freezes the firmware) - we are late
 			 * for the next scheduled event
 			 */
-			return nowX + m_lateDelay;
+			return nowNt + m_lateDelay;
 		} else {
-			return m_head->momentX;
+			return m_head->getMomentNt();
 		}
 	}
 
@@ -228,55 +236,78 @@ bool EventQueue::executeOne(efitick_t now) {
 	// resetting the timer and scheduling an new interrupt is greater than just
 	// waiting for the time to arrive.  On current CPUs, this is reasonable to set
 	// around 10 microseconds.
-	if (current->momentX > now + m_lateDelay) {
+	if (current->getMomentNt() > now + m_lateDelay) {
 		return false;
 	}
+
+#if EFI_UNIT_TEST
+//	efitick_t spinDuration = current->getMomentNt() - getTimeNowNt();
+//	if (spinDuration > 0) {
+//		throw std::runtime_error("Time Spin in unit test");
+//	}
+#endif
 
 	// near future - spin wait for the event to happen and avoid the
 	// overhead of rescheduling the timer.
 	// yes, that's a busy wait but that's what we need here
-	while (current->momentX > getTimeNowNt()) {
+	while (current->getMomentNt() > getTimeNowNt()) {
+#if EFI_UNIT_TEST
+  // todo: remove this hack see https://github.com/rusefi/rusefi/issues/6457
+extern bool unitTestBusyWaitHack;
+    if (unitTestBusyWaitHack) {
+	    break;
+	  }
+#endif
 		UNIT_TEST_BUSY_WAIT_CALLBACK();
 	}
 
 	// step the head forward, unlink this element, clear scheduled flag
-	m_head = current->nextScheduling_s;
-	current->nextScheduling_s = nullptr;
+	m_head = current->next;
+	current->next = nullptr;
 
 	// Grab the action but clear it in the event so we can reschedule from the action's execution
-	auto action = current->action;
-	current->action = {};
+	auto const action{ std::move(current->action) };
 
 	tryReturnScheduling(current);
 	current = nullptr;
 
-#if EFI_DEFAILED_LOGGING
-	printf("QUEUE: execute current=%d param=%d\r\n", (uintptr_t)current, (uintptr_t)action.getArgument());
+#if EFI_DETAILED_LOGGING
+	printf("QUEUE: execute current=%d param=%d\r\n", reinterpret_cast<uintptr_t>(current), action.getArgumentRaw());
 #endif
 
 	// Execute the current element
 	{
 		ScopePerf perf2(PE::EventQueueExecuteCallback);
+#if EFI_DETAILED_LOGGING && EFI_UNIT_TEST_VERBOSE_ACTION
+		std::cout << "EventQueue::executeOne: " << action.getCallbackName() << "(" << reinterpret_cast<uintptr_t>(action.getCallback()) << ") with raw arg = " << action.getArgumentRaw() << std::endl;
+#endif
 		action.execute();
+
+#if EFI_UNIT_TEST
+		// std::cout << "Executed at " << now << std::endl;
+#endif
 	}
 
 	assertListIsSorted();
 	return true;
 }
 
-int EventQueue::size(void) const {
+int EventQueue::size() const {
 	scheduling_s *tmp;
 	int result;
-	LL_COUNT2(m_head, tmp, result, nextScheduling_s);
+	LL_COUNT(m_head, tmp, result);
 	return result;
 }
 
 void EventQueue::assertListIsSorted() const {
 #if EFI_UNIT_TEST || EFI_SIMULATOR
+	int counter = 0;
 	scheduling_s *current = m_head;
-	while (current != NULL && current->nextScheduling_s != NULL) {
-		efiAssertVoid(ObdCode::CUSTOM_ERR_6623, current->momentX <= current->nextScheduling_s->momentX, "list order");
-		current = current->nextScheduling_s;
+	while (current != nullptr && current->next != nullptr) {
+		efiAssertVoid(ObdCode::CUSTOM_ERR_6623, current->getMomentNt() <= current->next->getMomentNt(), "list order");
+		current = current->next;
+		if (counter++ > 1'000'000'000)
+			criticalError("EventQueue: looks like a loop?!");
 	}
 #endif // EFI_UNIT_TEST || EFI_SIMULATOR
 }
@@ -289,26 +320,27 @@ scheduling_s * EventQueue::getHead() {
 scheduling_s *EventQueue::getElementAtIndexForUnitText(int index) {
 	scheduling_s * current;
 
-	LL_FOREACH2(m_head, current, nextScheduling_s)
+	LL_FOREACH(m_head, current)
 	{
-		if (index == 0)
+		if (index == 0) {
 			return current;
+		}
 		index--;
 	}
 
-	return NULL;
+	return nullptr;
 }
 
-void EventQueue::clear(void) {
+void EventQueue::clear() {
 	// Flush the queue, resetting all scheduling_s as though we'd executed them
 	while(m_head) {
 		auto x = m_head;
 		// link next element to head
-		m_head = x->nextScheduling_s;
+		m_head = x->next;
 
 		// Reset this element
-		x->momentX = 0;
-		x->nextScheduling_s = nullptr;
+		x->setMomentNt(0);
+		x->next = nullptr;
 		x->action = {};
 	}
 

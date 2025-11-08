@@ -4,13 +4,15 @@ pins:
   - pin: On-board MAP
     meta: MM176_IN_MAP3_ANALOG
     class: analog_inputs
+    type: av
     function: MAP Sensor Input
     ts_name: On-board MAP
     color: orange
 
   - pin: 1A
     meta: MM176_IN_CRANK_ANALOG
-    function: Aux Analog 1
+    function: Aux Analog 1 / External MAP
+    type: av
     class: analog_inputs
     ts_name: 1A - Aux Analog 1
     color: blue
@@ -18,19 +20,22 @@ pins:
   - pin: 2A
     meta: MM176_IN_MAP1_ANALOG
     function: Aux Analog 4
+    type: av
     class: analog_inputs
     ts_name: 2A - Aux Analog 4
-    color: blue
+    color: violet
 
   - pin: 3A
     meta: MM176_IN_O2S_ANALOG
     function: Aux Analog 2
+    type: av
     class: analog_inputs
     ts_name: 3A - Aux Analog 2
-    color: blue
+    color: yellow
 
   - pin: 4A
     meta: MM176_IN_AUX2_ANALOG
+    type: av
     function: Aux Analog 7
     class: analog_inputs
     ts_name: 4A - Aux Analog 7
@@ -57,13 +62,14 @@ pins:
 
   - pin: 8A
     function: Analog Ground
-    type: gnd
-    color: green
+    type: agnd
+    color: black
 
   - pin: 9A
     function: Hall Input 4
-    meta: MM176_IN_D4
-    class: event_inputs
+    type: hall
+    id: [MM176_IN_D4, MM176_IN_D4]
+    class: [event_inputs, switch_inputs]
     ts_name: 9A - Hall Input 4
     color: green
 
@@ -71,6 +77,7 @@ pins:
   - pin: 10A
     meta: MM176_IN_MAP2_ANALOG
     function: Aux Analog 5
+    type: av
     class: analog_inputs
     ts_name: 10A - Aux Analog 5
     color: yellow
@@ -78,6 +85,7 @@ pins:
   - pin: 11A
     meta: MM176_IN_O2S2_ANALOG
     function: Aux Analog 3
+    type: av
     class: analog_inputs
     ts_name: 11A - Aux Analog 3
     color: yellow
@@ -85,14 +93,16 @@ pins:
   - pin: 12A
     meta: MM176_IN_AUX3_ANALOG
     function: Aux Analog 8
+    type: av
     class: analog_inputs
     ts_name: 12A - Aux Analog 8
     color: yellow
 
   - pin: 13A
     function: Hall Input 5
-    meta: MM176_IN_SENS2
-    class: event_inputs
+    type: hall
+    id: [MM176_IN_SENS2, MM176_IN_SENS2]
+    class: [event_inputs, switch_inputs]
     ts_name: 13A - Hall Input 5
     color: yellow
 
@@ -105,29 +115,32 @@ pins:
 
   - pin: 15A
     function: Hall Input 1
-    meta: MM176_IN_D1
-    class: event_inputs
+    type: hall
+    id: [MM176_IN_D1, MM176_IN_D1]
+    class: [event_inputs, switch_inputs]
     ts_name: 15A - Hall Input 1
-    color: orange
+    color: orange/brown
 
   - pin: 16A
     function: +5v sensors
     color: orange
+    type: 5v
 
   - pin: 17A
     function: Analog Ground
-    type: gnd
-    color: orange
+    type: agnd
+    color: black
 
 
   - pin: 18A
     function: Power Ground
     type: gnd
-    color: blue
+    color: black
 
   - pin: 19A
     meta: MM176_IN_AUX1_ANALOG
     function: Aux Analog 6
+    type: av
     class: analog_inputs
     ts_name: 19A - Aux Analog 6
     color: blue
@@ -135,6 +148,7 @@ pins:
   - pin: 20A
     meta: MM176_IN_AUX4_ANALOG
     function: Aux Analog 9
+    type: av
     class: analog_inputs
     ts_name: 20A - Aux Analog 9
     color: blue
@@ -144,7 +158,7 @@ pins:
     class: [event_inputs, switch_inputs]
     function: Flex
     type: hall
-    ts_name: 21B - Flex
+    ts_name: ___ - Flex
     color: blue
 
   - pin: 22A
@@ -155,29 +169,31 @@ pins:
     color: orange
 
   - pin: 23A
-    function: Hall Input 2
-    meta: MM176_IN_D2
-    class: event_inputs
+    function: Hall Input 2 (cannot be used simultaneously with VR3)
+    type: hall
+    id: [MM176_IN_D2, MM176_IN_D2]
+    class: [event_inputs, switch_inputs]
     ts_name: ___ - Hall Input 2
     color: white
 
   - pin: 24A
     function: Hall Input 3 / SENT
-    meta: MM176_IN_D3
-    class: event_inputs
+    type: hall
+    id: [MM176_IN_D3, MM176_IN_D3]
+    class: [event_inputs, switch_inputs]
     ts_name: 24A - Hall Input 3 / SENT
     color: black
 
   - pin: 25A
     function: Analog Ground
-    type: gnd
+    type: agnd
     color: black
-
 
   - pin: 26A
     function: VSS Hall Input
-    meta: MM176_IN_VSS
-    class: event_inputs
+    type: hall
+    id: [MM176_IN_VSS, MM176_IN_VSS]
+    class: [event_inputs, switch_inputs]
     ts_name: 26A - VSS Hall
     color: purple
 
@@ -186,6 +202,7 @@ pins:
     class: analog_inputs
     function: IAT Sensor Input
     ts_name: 27A - IAT Sensor Input
+    type: at
     color: purple
 
   - pin: 28A
@@ -193,12 +210,14 @@ pins:
     class: analog_inputs
     function: Aux Temp 1
     ts_name: 28A - Aux Temp 1
+    type: at
     color: purple
 
   - pin: 29A
     meta: MM176_IN_CLT_ANALOG
     class: analog_inputs
     function: CLT Sensor Input
+    type: at
     ts_name: 29A - CLT Sensor Input
     color: purple
 
@@ -206,43 +225,50 @@ pins:
     meta: MM176_IN_AT2_ANALOG
     class: analog_inputs
     function: Aux Temp 2
-    ts_name: 28A - Aux Temp 2
+    type: at
+    ts_name: ___ - Aux Temp 2
 
   - pin: 31A
     meta: MM176_IN_TPS_ANALOG
     class: analog_inputs
-    function: TPS Sensor Input
+    function: Universal analog input. Suggested TPS Sensor Input
+    color: green
+    type: av
     ts_name: 31A - TPS Sensor Input
 
   - pin: 32A
     meta: MM176_IN_PPS1_ANALOG
     class: analog_inputs
-    function: PPS Sensor Input
+    function: Universal analog input. Suggested PPS Sensor Input
     ts_name: ___ - PPS Sensor Input
+    type: av
     color: orange
 
   - pin: 33A
     meta: MM176_IN_TPS2_ANALOG
     class: analog_inputs
-    function: TPS2 Sensor Input
+    color: blue
+    type: av
+    function: Universal analog input. Suggested TPS2 Sensor Input
     ts_name: ___ - TPS2 Sensor Input
 
   - pin: 34A
     meta: MM176_IN_PPS2_ANALOG
     class: analog_inputs
-    function: PPS2 Sensor Input
+    type: av
+    function: Universal analog input. Suggested PPS2 Sensor Input
     ts_name: 34A - PPS2 Sensor Input
-
+    color: white
 
   - pin: 1B
-    function: VR1-/Hall Input
+    function: VR1-/Hall Input max9924
     meta: MM176_USB1ID
     class: event_inputs
-    ts_name: 1B - VR1-/Hall Input
+    ts_name: 1B - VR1-/Hall Input max9924
     color: red
 
   - pin: 2B
-    function: VR1+
+    function: VR1+ max9924
 
 #  - pin: 1B2B
 #    function: VR1
@@ -269,7 +295,7 @@ pins:
     function: VR3+
 
   - pin: 5B6B
-    function: VR3
+    function: VR3 (cannot be used simultaneously with Hall2)
     meta: MM176_GP14
     class: event_inputs
     ts_name: 5B/6B - VR3
@@ -279,19 +305,29 @@ pins:
 
 
   - pin: 8B
-    function: WBO2 heater white 3
+    function: WBO2 Heater Negative (pin 3)
+    color: white
+    type: wbo
 
   - pin: 9B
-    function: WBO2 VM yellow 2
+    function: WBO2 VM Vs/Ip (Vm) (pin 2)
+    type: wbo
+    color: yellow
 
   - pin: 10B
-    function: WBO2 IP red 1
+    function: WBO2 IP Ip (pin 1)
+    type: wbo
+    color: red
 
   - pin: 11B
-    function: WBO2 cal R green 5
+    function: WBO2 cal R CalR (pin 5)
+    type: wbo
+    color: green
 
   - pin: 12B
-    function: WBO2 VS black 6
+    function: WBO2 Vs (Un) (pin 6)
+    type: wbo
+    color: black
 
   - pin: 13B
     function: VR4+
@@ -304,28 +340,37 @@ pins:
     ts_name: 7B/13B - VR4
 
   - pin: 14B
-    function: WBO1 heater white 3
+    function: WBO1 Heater Negative (pin 3)
+    color: white
+    type: wbo
 
   - pin: 15B
-    function: WBO1 VM yellow 2
+    function: WBO1 Vs/Ip (Vm) (pin 2)
+    type: wbo
+    color: yellow
 
   - pin: 16B
-    function: WBO1 IP red 1
+    function: WBO1 Ip (pin 1)
+    type: wbo
+    color: red
 
   - pin: 17B
-    function: WBO1 cal R green 5
+    function: WBO1 CalR (pin 5)
+    type: wbo
+    color: green
 
   - pin: 18B
-    function: WBO2 VS black 6
+    function: WBO1 Vs (Un) (pin 6)
+    type: wbo
+    color: black
 
   - pin: 19B
-    function: +12V
+    function: regulated +12V output (12V from main relay for consumers)
     type: 12v
-
 
   - pin: 20B
     function: Analog Ground
-    type: gnd
+    type: agnd
 
   - pin: 21B
     meta: MM176_IN_SENS4
@@ -343,26 +388,30 @@ pins:
 
   - pin: 23B
     function: +5v sensors
-    color: green
+    color: red
+    type: 5v
 
   - pin: 24B
     meta: MM176_IN_VBATT
     class: analog_inputs
-    ts_name: 24 - Ignition Key Voltage
+    ts_name: ___ - Ignition Key Voltage
     function: +12V engine ECU power source, run/start
     color: green
+    type: 12v
 
   - pin: 25B
     function: Power GND
     type: gnd
 
   - pin: 26B
-    function: +12V ETB/DC power source
+    function: +12V from main relay ETB/DC power source
     type: 12v
 
 info:
-  title: AlphaX 8chan
-  name: AlphaX 8chan
+  title: AlphaX Platinum
+  cid: ab
+  name: AlphaX Platinum
+  # directory see D.yaml
   board_url: https://rusefi.com/s/8chan
   image:
     file: 8chan-A-B.jpg

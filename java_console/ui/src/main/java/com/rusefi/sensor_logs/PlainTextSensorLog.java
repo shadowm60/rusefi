@@ -1,15 +1,12 @@
 package com.rusefi.sensor_logs;
 
-import com.opensr5.ConfigurationImage;
-import com.opensr5.Logger;
+import com.devexperts.logging.FileLogger;
 import com.rusefi.FileLog;
 import com.rusefi.Launcher;
 import com.rusefi.binaryprotocol.BinaryProtocol;
-import com.rusefi.config.generated.Fields;
 import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.ui.UIContext;
-import com.rusefi.ui.config.ConfigUiField;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -40,8 +37,8 @@ public class PlainTextSensorLog implements SensorLog {
     }
 
     private void startSensorLogFile() {
-        FileLog.createFolderIfNeeded();
-        String fileName = Logger.DIR + "rusEFI_gauges_" + FileLog.getDate() + ".msl";
+        FileLogger.createFolderIfNeeded();
+        String fileName = FileLogger.DIR + "rusEFI_gauges_" + FileLog.getDate() + ".msl";
 
         fileStartTime = System.currentTimeMillis();
         try {
@@ -50,19 +47,11 @@ public class PlainTextSensorLog implements SensorLog {
             logFile.write("\"rusEFI console" + Launcher.CONSOLE_VERSION + " firmware " + Launcher.firmwareVersion.get() + "\"\r\n");
             logFile.write("Captured " + FileLog.getDate() + "\r\n");
 
-            int debugMode = -1;
             BinaryProtocol bp = uiContext.getLinkManager().getCurrentStreamState();
-            if (bp != null) {
-                ConfigurationImage ci = bp.getControllerConfiguration();
-                if (ci != null) {
-                    debugMode = ConfigUiField.getIntValue(ci, Fields.DEBUGMODE);
-                }
-            }
-            // todo: kill debug mode!
-            System.out.println("debug mode " + debugMode);
+
             logFile.write("Time\t");
             for (Sensor sensor : SensorLogger.SENSORS) {
-                logFile.write(SensorLogger.getSensorName(sensor, debugMode) + "\t");
+                logFile.write(SensorLogger.getSensorName(sensor, -1) + "\t");
             }
             logFile.write("\r\n");
 

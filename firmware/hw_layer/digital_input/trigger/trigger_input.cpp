@@ -130,12 +130,12 @@ static void turnOffTriggerInputPin(int index, bool isTriggerShaft) {
 void stopTriggerInputPins() {
 	for (int i = 0; i < TRIGGER_INPUT_PIN_COUNT; i++) {
 		if (isConfigurationChanged(triggerInputPins[i])) {
-			turnOffTriggerInputPin(i, true);
+			turnOffTriggerInputPin(i, /*isTriggerShaft*/true);
 		}
 	}
 	for (int i = 0; i < CAM_INPUTS_COUNT; i++) {
 		if (isConfigurationChanged(camInputs[i])) {
-			turnOffTriggerInputPin(i, false);
+			turnOffTriggerInputPin(i, /*isTriggerShaft*/false);
 		}
 	}
 }
@@ -146,13 +146,13 @@ void startTriggerInputPins() {
 	for (int i = 0; i < TRIGGER_INPUT_PIN_COUNT; i++) {
 		if (isConfigurationChanged(triggerInputPins[i])) {
 			const char * msg = (i == 0 ? "Trigger #1" : "Trigger #2");
-			turnOnTriggerInputPin(msg, i, true);
+			turnOnTriggerInputPin(msg, i, /*isTriggerShaft*/true);
 		}
 	}
 
 	for (int i = 0; i < CAM_INPUTS_COUNT; i++) {
 		if (isConfigurationChanged(camInputs[i])) {
-			turnOnTriggerInputPin(camNames[i], i, false);
+			turnOnTriggerInputPin(camNames[i], i, /*isTriggerShaft*/false);
 		}
 	}
 }
@@ -161,25 +161,6 @@ void onEcuStartTriggerImplementation() {
 }
 
 #endif /* (HAL_TRIGGER_USE_PAL == TRUE) || (HAL_TRIGGER_USE_ADC == TRUE) */
-
-
-void stopTriggerDebugPins() {
-	for (int i = 0; i < TRIGGER_INPUT_PIN_COUNT; i++) {
-		efiSetPadUnusedIfConfigurationChanged(triggerInputDebugPins[i]);
-	}
-	for (int i = 0; i < CAM_INPUTS_COUNT; i++) {
-		efiSetPadUnusedIfConfigurationChanged(camInputsDebug[i]);
-	}
-}
-
-void startTriggerDebugPins() {
-	for (int i = 0; i < TRIGGER_INPUT_PIN_COUNT; i++) {
-		efiSetPadModeIfConfigurationChanged("trigger debug", triggerInputDebugPins[i], PAL_MODE_OUTPUT_PUSHPULL);
-	}
-	for (int i = 0; i < CAM_INPUTS_COUNT; i++) {
-		efiSetPadModeIfConfigurationChanged("cam debug", camInputsDebug[i], PAL_MODE_OUTPUT_PUSHPULL);
-	}
-}
 
 #endif /* EFI_SHAFT_POSITION_INPUT */
 

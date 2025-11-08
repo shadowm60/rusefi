@@ -26,6 +26,8 @@ public class ConfigStructureImpl implements ConfigStructure {
 
     private final Map<String, ConfigField> tsFieldsMap = new TreeMap<>();
 
+    private final Map</*type name*/String, ConfigField> currentInstance = new TreeMap<>();
+
     private int totalSize;
 
     private final BitState readingBitState = new BitState();
@@ -38,6 +40,11 @@ public class ConfigStructureImpl implements ConfigStructure {
         this.comment = comment;
         this.withPrefix = withPrefix;
         this.parent = parent;
+    }
+
+    @Override
+    public Map<String, ConfigField> getCurrentInstance() {
+        return currentInstance;
     }
 
     public void addBitField(ConfigFieldImpl bitField) {
@@ -55,6 +62,7 @@ public class ConfigStructureImpl implements ConfigStructure {
         return name;
     }
 
+    @Override
     public void addAlignmentFill(ReaderState state, int alignment) {
         if (alignment == 0)
             return;
@@ -64,12 +72,12 @@ public class ConfigStructureImpl implements ConfigStructure {
          */
         FieldIteratorWithOffset iterator = new FieldIteratorWithOffset(cFields) {
             @Override
-            public void end() {
-                super.end();
+            public void end(int currentPosition) {
+                super.end(currentPosition);
                 currentOffset += cf.getSize(next);
             }
         };
-        iterator.loop();
+        iterator.loop(0);
 
         totalSize = iterator.currentOffset;
         int fillSize = totalSize % alignment == 0 ? 0 : alignment - (totalSize % alignment);
@@ -86,7 +94,7 @@ public class ConfigStructureImpl implements ConfigStructure {
             }
             ConfigFieldImpl fill = new ConfigFieldImpl(state, ALIGNMENT_FILL_AT + totalSize, "need 4 byte alignment",
                     "" + fillSize,
-                    TypesHelper.UINT8_T, fillSizeArray, "\"units\", 1, 0, -20, 100, 0", false, false, null, null);
+                    TypesHelper.UINT8_T, fillSizeArray, "\"units\", 1, 0, 0, 100, 0", false, false, null, null);
             addBoth(fill);
         }
         totalSize += fillSize;
@@ -114,6 +122,7 @@ public class ConfigStructureImpl implements ConfigStructure {
     public void addTs(ConfigFieldImpl cf) {
         tsFields.add(cf);
         tsFieldsMap.put(cf.getName(), cf);
+        currentInstance.put(cf.getTypeName(), cf);
     }
 
     @Override
@@ -121,6 +130,7 @@ public class ConfigStructureImpl implements ConfigStructure {
         return tsFieldsMap.get(name);
     }
 
+    @Override
     public void addBitPadding(ReaderState readerState) {
         if (readingBitState.get() == 0)
             return;

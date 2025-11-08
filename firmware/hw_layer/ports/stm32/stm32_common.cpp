@@ -10,6 +10,7 @@
 
 #include <rusefi/expected.h>
 #include "hardware.h"
+#include "os_util.h"
 
 #ifdef STM32F4XX
 #include "stm32f4xx_hal_flash.h"
@@ -29,22 +30,36 @@ extern "C" {
 #if EFI_PROD_CODE
 #include "mpu_util.h"
 #include "backup_ram.h"
-#endif /* EFI_PROD_CODE */
 
-#if EFI_PROD_CODE
+#ifndef ALLOW_JUMP_WITH_IGNITION_VOLTAGE
+// stm32 bootloader might touch uart ports which we cannot allow on boards where uart pins are used to control engine coils etc
+#define ALLOW_JUMP_WITH_IGNITION_VOLTAGE TRUE
+#endif
 
 static void reset_and_jump(void) {
+#if !ALLOW_JUMP_WITH_IGNITION_VOLTAGE
+  if (isIgnVoltage()) {
+    criticalError("Not allowed with ignition power");
+    return;
+  }
+#endif
+
 	#ifdef STM32H7XX
 		// H7 needs a forcible reset of the USB peripheral(s) in order for the bootloader to work properly.
 		// If you don't do this, the bootloader will execute, but USB doesn't work (nobody knows why)
 		// See https://community.st.com/s/question/0D53W00000vQEWsSAO/stm32h743-dfu-entry-doesnt-work-unless-boot0-held-high-at-poweron
+	#ifdef STM32H723xx
+		RCC->AHB1ENR &= ~(RCC_AHB1ENR_USB1OTGHSEN);
+	#else
 		RCC->AHB1ENR &= ~(RCC_AHB1ENR_USB1OTGHSEN | RCC_AHB1ENR_USB2OTGFSEN);
+	#endif
 	#endif
 
 	// and now reboot
 	NVIC_SystemReset();
 }
 
+#if EFI_DFU_JUMP
 void jump_to_bootloader() {
 	// leave DFU breadcrumb which assembly startup code would check, see [rusefi][DFU] section in assembly code
 
@@ -52,6 +67,7 @@ void jump_to_bootloader() {
 
 	reset_and_jump();
 }
+#endif
 
 void jump_to_openblt() {
 #if EFI_USE_OPENBLT
@@ -109,14 +125,37 @@ void startWatchdog(int timeoutMs) {
 	static WDGConfig wdgcfg;
 	wdgcfg.pr = STM32_IWDG_PR_64;	// t = (1/32768) * 64 = ~2 ms
 	wdgcfg.rlr = STM32_IWDG_RL((uint32_t)((32.768f / 64.0f) * timeoutMs));
-#if 0
-  efiPrintf("[wdgStart]");
+#if STM32_IWDG_IS_WINDOWED
+	wdgcfg.winr = 0xfff; // don't use window
 #endif
-	wdgStart(&WDGD1, &wdgcfg);
+
+#ifndef __OPTIMIZE__ // gcc-specific built-in define
+	// if no optimizations, then it's most likely a debug version,
+	// and we need to enable a special watchdog feature to allow debugging
+	efiPrintf("Enabling 'debug freeze' watchdog feature...");
+#ifdef STM32H7XX
+    DBGMCU->APB4FZ1 |= DBGMCU_APB4FZ1_DBG_IWDG1;
+#else // F4 & F7
+	DBGMCU->APB1FZ |= DBGMCU_APB1_FZ_DBG_IWDG_STOP;
+#endif // STM32H7XX
+#endif // __OPTIMIZE__
+
+    static bool isStarted = false;
+    if (!isStarted) {
+		efiPrintf("Starting watchdog with timeout %d ms...", timeoutMs);
+		wdgStart(&WDGD1, &wdgcfg);
+		isStarted = true;
+	} else {
+		efiPrintf("Changing watchdog timeout to %d ms...", timeoutMs);
+		// wdgStart() uses kernel lock, thus we cannot call it here from locked or ISR code
+		wdg_lld_start(&WDGD1);
+	}
 #endif // HAL_USE_WDG
 }
 
 static efitimems_t watchdogResetPeriodMs = 0;
+// Reset watchod reset counted in SharedParams after this delay
+static const efitimems_t watchdogCounterResetDelay = 3000;
 
 void setWatchdogResetPeriod(int resetMs) {
 #if 0
@@ -128,30 +167,52 @@ void setWatchdogResetPeriod(int resetMs) {
 void tryResetWatchdog() {
 #if HAL_USE_WDG
 	static Timer lastTimeWasReset;
+	static efitimems_t wdUptime = 0;
 	// check if it's time to reset the watchdog
 	if (lastTimeWasReset.hasElapsedMs(watchdogResetPeriodMs)) {
 		// we assume tryResetWatchdog() is called from a timer callback
 		wdgResetI(&WDGD1);
 		lastTimeWasReset.reset();
+		// with 100 ms WD
+		if (wdUptime < watchdogCounterResetDelay) {
+			wdUptime += watchdogResetPeriodMs;
+			// we just crossed the treshold
+			if (wdUptime >= watchdogCounterResetDelay) {
+#if EFI_USE_OPENBLT
+				SharedParamsWriteByIndex(1, 0);
+#endif
+			}
+		}
 	}
 #endif // HAL_USE_WDG
 }
 
-void baseMCUInit(void) {
+uint32_t getMcuSerial() {
+	uint32_t *uid = ((uint32_t *)UID_BASE);
+	return uid[0] + uid[1] + uid[2];
+}
+
+void baseMCUInit() {
 	// looks like this holds a random value on start? Let's set a nice clean zero
 	DWT->CYCCNT = 0;
 
-	BOR_Set(BOR_Level_1); // one step above default value
 
-	setWatchdogResetPeriod(WATCHDOG_RESET_MS);
-	startWatchdog();
+#ifndef EFI_SKIP_BOR
+	BOR_Set(BOR_Level_1); // one step above default value
+#else
+  BOR_Set(BOR_Level_None);
+#endif
+
+#ifndef EFI_BOOTLOADER
+	engine->outputChannels.mcuSerial = getMcuSerial();
+#endif // EFI_BOOTLOADER
 }
 
 extern uint32_t __main_stack_base__;
 
 typedef struct port_intctx intctx_t;
 
-EXTERNC int getRemainingStack(thread_t *otp) {
+int getRemainingStack(thread_t *otp) {
 #if CH_DBG_ENABLE_STACK_CHECK
 	// this would dismiss coverity warning - see http://rusefi.com/forum/viewtopic.php?f=5&t=655
 	// coverity[uninit_use]
@@ -159,7 +220,7 @@ EXTERNC int getRemainingStack(thread_t *otp) {
 	otp->activeStack = r13;
 
 	int remainingStack;
-    if (ch.dbg.isr_cnt > 0) {
+    if (ch0.dbg.isr_cnt > 0) {
 		// ISR context
 		remainingStack = (int)(r13 - 1) - (int)&__main_stack_base__;
 	} else {
@@ -173,62 +234,17 @@ EXTERNC int getRemainingStack(thread_t *otp) {
 #endif /* CH_DBG_ENABLE_STACK_CHECK */
 }
 
-#if defined(STM32F4) || defined(STM32F7) || defined(STM32H7)
-
-#define HWREG(x)                                                              \
-        (*((volatile unsigned long *)(x)))
-
-#define NVIC_FAULT_STAT         0xE000ED28  // Configurable Fault Status
-#define NVIC_FAULT_STAT_BFARV   0x00008000  // Bus Fault Address Register Valid
-#define NVIC_CFG_CTRL_BFHFNMIGN 0x00000100  // Ignore Bus Fault in NMI and
-                                            // Fault
-#define NVIC_CFG_CTRL           0xE000ED14  // Configuration and Control
-
-
-/**
- * @brief Probe an address to see if can be read without generating a bus fault
- * @details This function must be called with the processor in privileged mode.
- *          It:
- *          - Clear any previous indication of a bus fault in the BFARV bit
- *          - Temporarily sets the processor to Ignore Bus Faults with all interrupts and fault handlers disabled
- *          - Attempt to read from read_address, ignoring the result
- *          - Checks to see if the read caused a bus fault, by checking the BFARV bit is set
- *          - Re-enables Bus Faults and all interrupts and fault handlers
- * @param[in] read_address The address to try reading a byte from
- * @return Returns true if no bus fault occurred reading from read_address, or false if a bus fault occurred.
- */
-bool ramReadProbe(volatile const char *read_address) {
-    bool address_readable = true;
-
-    /* Clear any existing indication of a bus fault - BFARV is write one to clear */
-    HWREG (NVIC_FAULT_STAT) |= NVIC_FAULT_STAT_BFARV;
-
-    HWREG (NVIC_CFG_CTRL) |= NVIC_CFG_CTRL_BFHFNMIGN;
-    asm volatile ("  CPSID f;");
-    *read_address;
-    if ((HWREG (NVIC_FAULT_STAT) & NVIC_FAULT_STAT_BFARV) != 0)
-    {
-        address_readable = false;
-    }
-    asm volatile ("  CPSIE f;");
-    HWREG (NVIC_CFG_CTRL) &= ~NVIC_CFG_CTRL_BFHFNMIGN;
-
-    return address_readable;
-}
-
-#endif
-
 #if defined(STM32F4)
 bool isStm32F42x() {
-	// really it's enough to just check 0x20020010
-	return ramReadProbe((const char *)0x20000010) && ramReadProbe((const char *)0x20020010) && !ramReadProbe((const char *)0x20070010);
+	// Device identifier
+	// 0x419 for STM32F42xxx and STM32F43xxx
+	// 0x413 for STM32F405xx/07xx and STM32F415xx/17xx
+	return ((DBGMCU->IDCODE & DBGMCU_IDCODE_DEV_ID_Msk) == 0x419);
 }
-
 #endif
 
-
 // Stubs for per-board low power helpers
-__attribute__((weak)) void boardPrepareForStop() {
+PUBLIC_API_WEAK void boardPrepareForStop() {
 	// Default implementation - wake up on PA0 - boards should override this
 	palEnableLineEvent(PAL_LINE(GPIOA, 0), PAL_EVENT_MODE_RISING_EDGE);
 }
@@ -261,8 +277,19 @@ void boardPreparePA0ForStandby() {
 #endif
 }
 
-__attribute__((weak)) void boardPrepareForStandby() {
+PUBLIC_API_WEAK void boardPrepareForStandby() {
 	boardPreparePA0ForStandby();
+}
+
+void assertInterruptPriority(const char* func, uint8_t expectedPrio) {
+	auto isr = static_cast<uint8_t>(SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) - 16;
+
+	auto actualMask = NVIC->IP[isr];
+	auto expectedMask = NVIC_PRIORITY_MASK(expectedPrio);
+
+	if (actualMask != expectedMask) {
+		firmwareError(ObdCode::RUNTIME_CRITICAL_WRONG_IRQ_PRIORITY, "bad isr priority at %s expected %02x got %02x", func, expectedMask, actualMask);
+	}
 }
 
 #endif // EFI_PROD_CODE

@@ -12,6 +12,9 @@ void GearControllerBase::initTransmissionController() {
 	case TransmissionControllerMode::SimpleTransmissionController :
 		transmissionController = getSimpleTransmissionController();
 		break;
+	case TransmissionControllerMode::Generic4 :
+		transmissionController = getGeneric4TransmissionController();
+		break;
 	case TransmissionControllerMode::Gm4l6x :
 		transmissionController = getGm4l6xTransmissionController();
 		break;
@@ -26,11 +29,17 @@ void GearControllerBase::update() {
 	if (transmissionController == NULL) {
 		initTransmissionController();
 	} else if (transmissionController->getMode() != engineConfiguration->transmissionControllerMode) {
+		// TODO de-init here to allow change without power cycling
 		initTransmissionController();
 	}
-	// We are responsible for telling the transmission controller
-	//  what gear we want.
-	transmissionController->update(getDesiredGear());
+
+	// check if it was init'd (it wouldn't be if set to NONE)
+	if (transmissionController != NULL) {
+		// We are responsible for telling the transmission controller
+		//  what gear we want.
+		transmissionController->update(getDesiredGear());
+	}
+
 	// Post state to TS
 	postState();
 }
@@ -65,7 +74,11 @@ void initGearController() {
 	engine->gearController->init();
 }
 
-uint8_t* GearControllerBase::getRangeStateArray(int i) {
+float* GearControllerBase::getRangeStateArray(int i) {
+	// I don't remember why I put manual +/- first.
+	// I think maybe I had some concern about them needing to override under-specified ranges?
+	// e.g. with it this way, you could put 2 in the cells for +/- pins in everything else.
+	// So this way might make it a little easier/foolproof to configure, but not necessary.
 	switch (i) {
 	case 1 :
 		return config->tcu_rangePlus;

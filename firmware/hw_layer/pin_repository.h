@@ -16,7 +16,7 @@
 #include "plain_pin_repository.h"
 
 bool isBrainPinValid(Gpio brainPin);
-
+const char *hwOnChipPhysicalPinName(ioportid_t hwPort, int hwPin);
 void initPinRepository();
 bool brain_pin_is_onchip(Gpio brainPin);
 bool brain_pin_is_ext(Gpio brainPin);
@@ -44,5 +44,7 @@ const char *hwPortname(Gpio brainPin);
 const char *hwPhysicalPinName(Gpio brainPin);
 // the main usage for human-readable board-specific pin reference is convenience of error messages in case of pin conflict.
 const char * getBoardSpecificPinName(Gpio brainPin);
+
+void debugBrainPin(char *buffer, size_t size, brain_pin_e brainPin);
 
 const char* & getBrainUsedPin(size_t idx);

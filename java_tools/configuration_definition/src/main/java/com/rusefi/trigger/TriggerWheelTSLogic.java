@@ -21,13 +21,14 @@ public class TriggerWheelTSLogic {
             System.out.println(getClass() + ": Folder not specified");
             return;
         }
-        StringBuilder triggerTypesWithoutKnownLocation = new StringBuilder();
+        // initial value has special provision for TT_CUSTOM_WHEEL
+        StringBuilder triggerTypesWithoutKnownLocation = new StringBuilder("trigger_type == 0");
         StringBuilder triggerTypesWithSecondWheel = new StringBuilder();
         StringBuilder triggerTypesCrankBased = new StringBuilder();
 
 
         TriggerWheelInfo.readWheels(folder, wheelInfo -> {
-            System.out.println("onWheel " + wheelInfo.getTriggerName());
+//            System.out.println("onWheel " + wheelInfo.getTriggerName());
 
             if (!wheelInfo.isKnownOperationMode()) {
                 appendOrIfNotEmpty(triggerTypesWithoutKnownLocation);
@@ -47,8 +48,8 @@ public class TriggerWheelTSLogic {
         });
 
         /*
-         * these are templated into rusefi.input file
-         * note that TT_TOOTHED_WHEEL is not mentioned in the meta file, we handle it manually right in rusefi.input file
+         * these are templated into tunerstudio.template.ini file
+         * note that TT_TOOTHED_WHEEL is not mentioned in the meta file, we handle it manually right in tunerstudio.template.ini file
          */
         variableRegistry.register(TRIGGER_TYPE_WITHOUT_KNOWN_LOCATION, triggerTypesWithoutKnownLocation.toString());
         variableRegistry.register(TRIGGER_TYPE_WITH_SECOND_WHEEL, triggerTypesWithSecondWheel.toString());

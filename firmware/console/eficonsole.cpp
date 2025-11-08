@@ -27,31 +27,46 @@
 #include "eficonsole.h"
 #include "console_io.h"
 #include "mpu_util.h"
-#include "svnversion.h"
+#include "board_overrides.h"
 
-static void testCritical() {
-	chDbgCheck(0);
+std::optional<setup_custom_board_overrides_type> custom_board_boardSayHello;
+
+#if defined(STM32F4) || defined(STM32F7) || defined(STM32H7)
+static void printUid() {
+	uint32_t *uid = ((uint32_t *)UID_BASE);
+	engine->outputChannels.deviceUid = crc8((const uint8_t*)uid, 12);
+	efiPrintf("********************** UID=%lx:%lx:%lx crc=%d ******************************", uid[0], uid[1], uid[2], engine->outputChannels.deviceUid);
+	engineConfiguration->device_uid[0] = uid[0];
+	engineConfiguration->device_uid[1] = uid[1];
+	engineConfiguration->device_uid[2] = uid[2];
 }
+#endif
 
-static void myerror() {
-	firmwareError(ObdCode::CUSTOM_ERR_TEST_ERROR, "firmwareError: %d", getRusEfiVersion());
-}
-
-static void testHardFault() {
-	causeHardFault();
+/*
+ * I was a little bit surprised that we declare __attribute__((weak)) before returning type in a function definition.
+ * In the most sources this declaration is placed either before function name or after function parentheses, see:
+ * - https://gcc.gnu.org/onlinedocs/gcc-4.0.0/gcc/Function-Attributes.html#Function-Attributes
+ * - https://en.wikipedia.org/wiki/Weak_symbol
+ * But it looks like our manner of __attribute__((weak)) declaration works at well, and I hope it will not cause
+ * problems in the future.
+ */
+void boardSayHello() {
+  // please use custom_board_boardSayHello
 }
 
 static void sayHello() {
-	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2023. All rights reserved.");
-	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI v%d@%s", getRusEfiVersion(), VCS_VERSION);
+	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI LLC (c) 2012-2024. All rights reserved.");
+	efiPrintf(PROTOCOL_HELLO_PREFIX " rusEFI v%d@%u now=%d", getRusEfiVersion(), /*do we have a working way to print 64 bit values?!*/(int)SIGNATURE_HASH, (int)getTimeNowMs());
 	efiPrintf(PROTOCOL_HELLO_PREFIX " Chibios Kernel:       %s", CH_KERNEL_VERSION);
 	efiPrintf(PROTOCOL_HELLO_PREFIX " Compiled:     " __DATE__ " - " __TIME__ "");
 	efiPrintf(PROTOCOL_HELLO_PREFIX " COMPILER=%s", __VERSION__);
-#if USE_OPENBLT
+#if EFI_USE_OPENBLT
 	efiPrintf(PROTOCOL_HELLO_PREFIX " with OPENBLT");
 #endif
 
-#if ENABLE_AUTO_DETECT_HSE
+  call_board_override(custom_board_boardSayHello);
+
+#if EFI_PROD_CODE && ENABLE_AUTO_DETECT_HSE
 	extern float hseFrequencyMhz;
 	extern uint8_t autoDetectedRoundedMhz;
 	efiPrintf(PROTOCOL_HELLO_PREFIX " detected HSE clock %.2f MHz PLLM = %d", hseFrequencyMhz, autoDetectedRoundedMhz);
@@ -60,18 +75,15 @@ static void sayHello() {
 	efiPrintf("hellenBoardId=%d", engine->engineState.hellenBoardId);
 
 #if defined(STM32F4) || defined(STM32F7) || defined(STM32H7)
-	uint32_t *uid = ((uint32_t *)UID_BASE);
-	efiPrintf("UID=%x %x %x", uid[0], uid[1], uid[2]);
+  printUid();
 
 #if defined(STM32F4) && !defined(AT32F4XX)
-	efiPrintf("can read 0x20000010 %d", ramReadProbe((const char *)0x20000010));
-	efiPrintf("can read 0x20020010 %d", ramReadProbe((const char *)0x20020010));
-	efiPrintf("can read 0x20070010 %d", ramReadProbe((const char *)0x20070010));
+//	efiPrintf("ramReadProbe 0x20000010 %d", ramReadProbe((const char *)0x20000010));
+//	efiPrintf("ramReadProbe 0x20020010 %d", ramReadProbe((const char *)0x20020010));
+//	efiPrintf("ramReadProbe 0x20070010 %d", ramReadProbe((const char *)0x20070010));
 
 	efiPrintf("isStm32F42x %s", boolToString(isStm32F42x()));
 #endif // STM32F4
-
-#define 	TM_ID_GetFlashSize()    (*(__IO uint16_t *) (FLASHSIZE_BASE))
 
 #ifndef MIN_FLASH_SIZE
 #define MIN_FLASH_SIZE 1024
@@ -90,10 +102,10 @@ static void sayHello() {
 	uint32_t pnFlashSize;
 	int ret = at32GetMcuType(DBGMCU->IDCODE, &partNumber, &package, &pnFlashSize);
 	if (ret == 0) {
-		efiPrintf("MCU IDCODE %s in %s with %d KB flash",
+		efiPrintf("MCU IDCODE %s in %s with %ld KB flash",
 			partNumber, package, pnFlashSize);
 	} else {
-		efiPrintf("MCU IDCODE unknown 0x%x", DBGMCU->IDCODE);
+		efiPrintf("MCU IDCODE unknown 0x%lx", DBGMCU->IDCODE);
 	}
 	efiPrintf("MCU SER_ID %s rev %c",
 		(mcuSerId == 0x0d) ? "AT32F435" : ((mcuSerId == 0x0e) ? "AT32F437" : "UNKNOWN"),
@@ -124,6 +136,20 @@ static void sayHello() {
 	efiPrintf("STM32_PCLK1=%d", STM32_PCLK1);
 	efiPrintf("STM32_PCLK2=%d", STM32_PCLK2);
 #endif
+#ifdef STM32_RTCSEL
+	if (1) {
+		#define STM32_RTCSEL_SHIFT 8
+		const char * rtcsel_names[4] = {"no clock", "LSE", "LSI", "HSE"};
+
+		int rtcsel = (RCC->BDCR & STM32_RTCSEL_MASK) >> STM32_RTCSEL_SHIFT;
+		efiPrintf("STM32_RTCSEL=%d %s actual=%d %s",
+			STM32_RTCSEL >> STM32_RTCSEL_SHIFT, rtcsel_names[STM32_RTCSEL >> STM32_RTCSEL_SHIFT], rtcsel, rtcsel_names[rtcsel]);
+#ifdef RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL
+		efiPrintf("RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL=%d %s",
+			RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL >> STM32_RTCSEL_SHIFT, rtcsel_names[RUSEFI_STM32_LSE_WAIT_MAX_RTCSEL >> STM32_RTCSEL_SHIFT]);
+#endif
+	}
+#endif
 
 	efiPrintf("PORT_IDLE_THREAD_STACK_SIZE=%d", PORT_IDLE_THREAD_STACK_SIZE);
 
@@ -134,24 +160,9 @@ static void sayHello() {
 	efiPrintf("CH_DBG_SYSTEM_STATE_CHECK=%d", CH_DBG_SYSTEM_STATE_CHECK);
 	efiPrintf("CH_DBG_ENABLE_STACK_CHECK=%d", CH_DBG_ENABLE_STACK_CHECK);
 
-#ifdef EFI_LOGIC_ANALYZER
-	efiPrintf("EFI_LOGIC_ANALYZER=%d", EFI_LOGIC_ANALYZER);
-#endif
-#ifdef EFI_TUNER_STUDIO
-	efiPrintf("EFI_TUNER_STUDIO=%d", EFI_TUNER_STUDIO);
-#else
-	efiPrintf("EFI_TUNER_STUDIO=%d", 0);
-#endif
-
-#if defined(EFI_SHAFT_POSITION_INPUT)
-	efiPrintf("EFI_SHAFT_POSITION_INPUT=%d", EFI_SHAFT_POSITION_INPUT);
-#endif
-#ifdef EFI_INTERNAL_ADC
-	efiPrintf("EFI_INTERNAL_ADC=%d", EFI_INTERNAL_ADC);
-#endif
-
 	/**
 	 * Time to finish output. This is needed to avoid mix-up of this methods output and console command confirmation
+	 * this code here dates back to 2015. today in 2024 I have no idea what it does :(
 	 */
 	chThdSleepMilliseconds(5);
 }
@@ -176,14 +187,13 @@ int CountFreeStackSpace(const void* wabase) {
  */
 static void cmd_threads() {
 #if CH_DBG_THREADS_PROFILING && CH_DBG_FILL_THREADS
-
 	thread_t* tp = chRegFirstThread();
 
 	efiPrintf("name\twabase\ttime\tfree stack");
 
 	while (tp) {
 		int freeBytes = CountFreeStackSpace(tp->wabase);
-		efiPrintf("%s\t%08x\t%lu\t%d", tp->name, tp->wabase, tp->time, freeBytes);
+		efiPrintf("%s\t%08x\t%lu\t%d", tp->name, (unsigned int)tp->wabase, tp->time, freeBytes);
 
 		if (freeBytes < 100) {
 			criticalError("Ran out of stack on thread %s, %d bytes remain", tp->name, freeBytes);
@@ -192,8 +202,13 @@ static void cmd_threads() {
 		tp = chRegNextThread(tp);
 	}
 
-	int isrSpace = CountFreeStackSpace(reinterpret_cast<void*>(0x20000000));
+#if EFI_PROD_CODE
+	// isr stack base
+	extern uint32_t __main_stack_base__;
+
+	int isrSpace = CountFreeStackSpace(reinterpret_cast<void*>(&__main_stack_base__));
 	efiPrintf("isr\t0\t0\t%d", isrSpace);
+#endif // EFI_PROD_CODE
 
 #else // CH_DBG_THREADS_PROFILING && CH_DBG_FILL_THREADS
 
@@ -231,17 +246,24 @@ void initializeConsole() {
 
 	startConsole(&handleConsoleLine);
 
+#if defined(STM32F4) || defined(STM32F7) || defined(STM32H7)
+	addConsoleAction("uid", printUid);
+#endif
+
 	sayHello();
 	addConsoleAction("test", [](){ /* do nothing */});
 	addConsoleActionI("echo", echo);
 	addConsoleAction("hello", sayHello);
+	#if EFI_USE_OPENBLT
+	  addConsoleAction("show_blt_version", [](){
+      	uint32_t bltBinVersion = getOpenBltVersion();
+      	efiPrintf("********************** blt=%lx %s version", bltBinVersion, bltBinVersion == BLT_CURRENT_VERSION ? "CURRENT" : "UNEXPECTED");
+	  });
+	#endif
 #if EFI_HAS_RESET
 	addConsoleAction("reset", scheduleReset);
 #endif
 
-	addConsoleAction("critical", testCritical);
-	addConsoleAction("error", myerror);
-	addConsoleAction("hard_fault", testHardFault);
 	addConsoleAction("threadsinfo", cmd_threads);
 
 #if HAL_USE_WDG

@@ -8,9 +8,10 @@
 #pragma once
 
 #include <vector>
+#include <cstdint>
 
 struct CompositeEvent {
-    int timestamp;
+    uint32_t timestamp;
     bool primaryTrigger;
     bool secondaryTrigger;
     bool isTDC;
@@ -19,4 +20,6 @@ struct CompositeEvent {
     bool injector;
 };
 
-void writeFile(const char * fileName, const std::vector<CompositeEvent>& events);
+int getChannelState(int ch, const CompositeEvent* event);
+
+void writeLogicDataFile(const char * fileName, const std::vector<CompositeEvent>& events);

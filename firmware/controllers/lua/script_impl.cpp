@@ -1,8 +1,5 @@
 /**
- * @file fsio_impl.cpp
- * @brief FSIO as it's used for GPIO
- *
- * TODO: rename this file, FSIO is gone!
+ * @file script_impl.cpp
  *
  * @date Oct 5, 2014
  * @author Andrey Belomutskiy, (c) 2012-2020
@@ -12,10 +9,12 @@
 
 #include "script_impl.h"
 
-static fsio8_Map3D_f32t scriptTable1;
-static fsio8_Map3D_u8t scriptTable2;
-static fsio8_Map3D_u8t scriptTable3;
-static script4_Map3D_u8t scriptTable4;
+using namespace rusefi::stringutil;
+
+static script1_Map3D_f32t scriptTable1{"script1"};
+static script2_Map3D_f32t scriptTable2{"script2"};
+static script3_Map3D_u8t scriptTable3{"script3"};
+static script4_Map3D_u8t scriptTable4{"script4"};
 
 ValueProvider3D *getscriptTable(int index) {
 	switch (index) {
@@ -83,12 +82,8 @@ float getCurveValue(int index, float key) {
 }
 
 void initScriptImpl() {
-	scriptTable1.init(config->scriptTable1, config->scriptTable1LoadBins,
-			config->scriptTable1RpmBins);
-	scriptTable2.init(config->scriptTable2, config->scriptTable2LoadBins,
-			config->scriptTable2RpmBins);
-	scriptTable3.init(config->scriptTable3, config->scriptTable3LoadBins,
-			config->scriptTable3RpmBins);
-	scriptTable4.init(config->scriptTable4, config->scriptTable4LoadBins,
-			config->scriptTable4RpmBins);
+	scriptTable1.initTable(config->scriptTable1, config->scriptTable1RpmBins, config->scriptTable1LoadBins);
+	scriptTable2.initTable(config->scriptTable2,	config->scriptTable2RpmBins, config->scriptTable2LoadBins);
+	scriptTable3.initTable(config->scriptTable3,	config->scriptTable3RpmBins, config->scriptTable3LoadBins);
+	scriptTable4.initTable(config->scriptTable4,	config->scriptTable4RpmBins, config->scriptTable4LoadBins);
 }

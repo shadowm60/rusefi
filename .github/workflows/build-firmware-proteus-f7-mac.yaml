@@ -1,35 +1,30 @@
 name: Proteus F7 Firmware on macos-latest
 
-on: [push,pull_request]
+on:
+# realpath drama sorry  push:
+# realpath drama sorry  pull_request:
+  workflow_dispatch:
+
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
-      - uses: carlosperate/arm-none-eabi-gcc-action@v1
+      - uses: carlosperate/arm-none-eabi-gcc-action@v1.11.0
         with:
-          release: '12.3.Rel1' # 13 fails overloaded-virtual
+          release: '14.2.Rel1'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Checkout Submodules
         run: |
-          git submodule update --init --depth=1 firmware/ChibiOS
-          git submodule update --init --depth=1 firmware/ChibiOS-Contrib
-          git submodule update --init --depth=1 firmware/libfirmware
-          git submodule update --init --depth=1 firmware/ext/lua
-          git submodule update --init --depth=1 firmware/ext/uzlib
-          git submodule update --init --depth=1 firmware/ext/openblt
-          git submodule update --init --depth=1 firmware/controllers/lua/luaaa
-          git submodule update --init --depth=1 firmware/controllers/can/wideband_firmware
-          git submodule update --init --depth=1 java_console/luaformatter
-          git submodule update --init --depth=1 java_console/peak-can-basic
+          misc/git_scripts/common_submodule_init.sh
 
       - name: Install required software (macos)
         run: |
@@ -43,11 +38,6 @@ jobs:
 
       - name: Test Java Compiler
         run: javac -version
-
-      - name: Generate Live Documentation
-        if: ${{ env.skip != 'true' }}
-        working-directory: ./firmware/
-        run: ./gen_live_documentation.sh
 
       - name: Build Firmware
         if: ${{ env.skip != 'true' }}

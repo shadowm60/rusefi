@@ -30,7 +30,10 @@ static float getNorm(float K, float Q) {
 }
 
 void Biquad::configureBandpass(float samplingFrequency, float centerFrequency, float Q) {
-	criticalAssertVoid(samplingFrequency >= 2.5f * centerFrequency, "Invalid biquad parameters");
+  if (samplingFrequency < 2.5f * centerFrequency) {
+    criticalError("Invalid biquad parameters samplingFrequency=%f centerFrequency=%f", samplingFrequency, centerFrequency);
+    return;
+  }
 
 	float K = getK(samplingFrequency, centerFrequency);
 	float norm = getNorm(K, Q);
@@ -50,6 +53,19 @@ void Biquad::configureLowpass(float samplingFrequency, float cutoffFrequency, fl
 
 	a0 = K * K * norm;
 	a1 = 2 * a0;
+	a2 = a0;
+	b1 = 2 * (K * K - 1) * norm;
+	b2 = (1 - K / Q + K * K) * norm;
+}
+
+void Biquad::configureHighpass(float samplingFrequency, float cutoffFrequency, float Q) {
+	criticalAssertVoid(samplingFrequency >= 2.5f * cutoffFrequency, "Invalid biquad parameters");
+
+	float K = getK(samplingFrequency, cutoffFrequency);
+	float norm = getNorm(K, Q);
+
+	a0 = 1 * norm;
+	a1 = -2 * a0;
 	a2 = a0;
 	b1 = 2 * (K * K - 1) * norm;
 	b2 = (1 - K / Q + K * K) * norm;

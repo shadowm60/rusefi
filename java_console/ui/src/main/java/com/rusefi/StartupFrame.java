@@ -1,20 +1,20 @@
 package com.rusefi;
 
 import com.devexperts.logging.Logging;
-import com.rusefi.core.io.BundleUtil;
+import com.opensr5.ini.PrimeTunerStudioCache;
+import com.rusefi.core.net.ConnectionAndMeta;
 import com.rusefi.core.preferences.storage.PersistentConfiguration;
+import com.rusefi.core.ui.AutoupdateUtil;
 import com.rusefi.core.ui.FrameHelper;
-import com.rusefi.io.LinkManager;
 import com.rusefi.io.serial.BaudRateHolder;
-import com.rusefi.maintenance.DriverInstall;
-import com.rusefi.maintenance.StLinkFlasher;
-import com.rusefi.maintenance.ProgramSelector;
+import com.rusefi.maintenance.*;
+import com.rusefi.ui.BasicLogoHelper;
 import com.rusefi.ui.LogoHelper;
+import com.rusefi.ui.duplicates.ConsoleBundleUtil;
 import com.rusefi.ui.util.HorizontalLine;
 import com.rusefi.ui.util.URLLabel;
 import com.rusefi.ui.util.UiUtils;
 import com.rusefi.ui.widgets.ToolButtons;
-import com.rusefi.util.IoUtils;
 import net.miginfocom.swing.MigLayout;
 import org.jetbrains.annotations.NotNull;
 import org.putgemin.VerticalFlowLayout;
@@ -22,10 +22,17 @@ import org.putgemin.VerticalFlowLayout;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.devexperts.logging.Logging.getLogging;
+import static com.rusefi.SerialPortType.EcuWithOpenblt;
+import static com.rusefi.SerialPortType.OpenBlt;
 import static com.rusefi.core.preferences.storage.PersistentConfiguration.getConfig;
 import static com.rusefi.ui.util.UiUtils.*;
 import static javax.swing.JOptionPane.YES_NO_OPTION;
@@ -38,16 +45,19 @@ import static javax.swing.JOptionPane.YES_NO_OPTION;
  * 2/14/14
  * @see SimulatorHelper
  * @see StLinkFlasher
+ * @see ProgramSelector
  */
 public class StartupFrame {
     private static final Logging log = getLogging(Launcher.class);
+
     public static final String ALWAYS_AUTO_PORT = "always_auto_port";
     private static final String NO_PORTS_FOUND = "<html>No ports found!<br>Confirm blue LED is blinking</html>";
+    public static final String SCANNING_PORTS = "Scanning ports";
 
     private final JFrame frame;
     private final JPanel connectPanel = new JPanel(new FlowLayout());
     // todo: move this line to the connectPanel
-    private final JComboBox<SerialPortScanner.PortResult> comboPorts = new JComboBox<>();
+    private final PortsComboBox portsComboBox = new PortsComboBox();
     private final JPanel leftPanel = new JPanel(new VerticalFlowLayout());
 
     private final JPanel realHardwarePanel = new JPanel(new MigLayout());
@@ -59,40 +69,48 @@ public class StartupFrame {
             return new Dimension(Math.max(size.width, realHardwarePanel.getPreferredSize().width), size.height);
         }
     };
+    private final ConnectivityContext connectivityContext;
     /**
      * this flag tells us if we are closing the startup frame in order to proceed with console start or if we are
      * closing the application.
      */
     private boolean isProceeding;
-    private final JLabel noPortsMessage = new JLabel("Scanning ports...");
+    private final JLabel noPortsMessage = new JLabel();
+    private final StatusAnimation status;
+    private ProgramSelector selector;
+    private boolean firstTimeHasEcuWithOpenBlt = true;
 
-    public StartupFrame() {
-        String title = "rusEFI console version " + Launcher.CONSOLE_VERSION;
+    public StartupFrame(ConnectivityContext connectivityContext) {
+        this.connectivityContext = connectivityContext;
+        String title = UiProperties.getWhiteLabel() + " console " + Launcher.CONSOLE_VERSION;
         log.info(title);
+        noPortsMessage.setForeground(Color.red);
+        status = new StatusAnimation(new StatusAnimation.StatusConsumer() {
+            @Override
+            public void onStatus(String niceStatus) {
+                noPortsMessage.setText(niceStatus);
+            }
+        }, SCANNING_PORTS);
+
         frame = FrameHelper.createFrame(title).getFrame();
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent ev) {
                 if (!isProceeding) {
                     getConfig().save();
-                    IoUtils.exit("windowClosed", 0);
+                    log.info("Configuration saved.");
                 }
             }
         });
+        new NamedThreadFactory("ecuDef primer").newThread(PrimeTunerStudioCache::primeWithLocalFile).start();
     }
 
     public void showUi() {
-        realHardwarePanel.setBorder(new TitledBorder(BorderFactory.createLineBorder(Color.darkGray), "Real stm32"));
+        String panelTitle = UiProperties.useSimulator() ? "Real stm32" : "";
+        realHardwarePanel.setBorder(new TitledBorder(BorderFactory.createLineBorder(Color.darkGray), panelTitle));
         miscPanel.setBorder(new TitledBorder(BorderFactory.createLineBorder(Color.darkGray), "Miscellaneous"));
 
-        if (FileLog.isWindows()) {
-            setToolTip(comboPorts, "Use 'Device Manager' icon above to launch Device Manager",
-                    "In 'Ports' section look for ",
-                    "'STMicroelectronics Virtual COM Port' for USB port",
-                    "'USB Serial Port' for TTL port");
-        }
-
-        connectPanel.add(comboPorts);
+        connectPanel.add(portsComboBox.getComboPorts());
         final JComboBox<String> comboSpeeds = createSpeedCombo();
         comboSpeeds.setToolTipText("For 'STMicroelectronics Virtual COM Port' device any speed setting would work the same");
         connectPanel.add(comboSpeeds);
@@ -130,43 +148,61 @@ public class StartupFrame {
 
         connectButton.addActionListener(e -> connectButtonAction(comboSpeeds));
 
+        final Optional<JPanel> newReleaseNotification = newReleaseAnnounce(
+            "rusefi_autoupdate.exe",
+            "left",
+            () -> realHardwarePanel.getPreferredSize().width
+        );
+        if (newReleaseNotification.isPresent()) {
+            leftPanel.add(newReleaseNotification.get());
+        }
         leftPanel.add(realHardwarePanel);
-        leftPanel.add(miscPanel);
+        if (UiProperties.useSimulator()) {
+            leftPanel.add(miscPanel);
+        }
 
         if (FileLog.isWindows()) {
             JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
             topButtons.add(ToolButtons.createShowDeviceManagerButton());
-            topButtons.add(DriverInstall.createButton());
-            topButtons.add(ToolButtons.createPcanConnectorButton());
+            if (DriverInstall.isFolderExist())
+                topButtons.add(DriverInstall.createButton());
+            if (UiProperties.usePCAN()) {
+                topButtons.add(ToolButtons.createPcanConnectorButton());
+            }
             realHardwarePanel.add(topButtons, "right, wrap");
         }
         realHardwarePanel.add(connectPanel, "right, wrap");
         realHardwarePanel.add(noPortsMessage, "right, wrap");
         noPortsMessage.setToolTipText("Check you cables. Check your drivers. Do you want to start simulator maybe?");
 
-        ProgramSelector selector = new ProgramSelector(comboPorts);
+        selector = new ProgramSelector(connectivityContext, portsComboBox.getComboPorts());
+
+        realHardwarePanel.add(new HorizontalLine(), "right, wrap");
+        realHardwarePanel.add(selector.getControl(), "right, wrap");
 
         if (FileLog.isWindows()) {
-            realHardwarePanel.add(new HorizontalLine(), "right, wrap");
-
-            realHardwarePanel.add(selector.getControl(), "right, wrap");
 
             // for F7 builds we just build one file at the moment
 //            realHardwarePanel.add(new FirmwareFlasher(FirmwareFlasher.IMAGE_FILE, "ST-LINK Program Firmware", "Default firmware version for most users").getButton());
             JComponent updateHelp = ProgramSelector.createHelpButton();
 
+            JLabel comp = binaryModificationControl();
+            realHardwarePanel.add(comp, "right, wrap");
             realHardwarePanel.add(updateHelp, "right, wrap");
 
             // st-link is pretty advanced use-case, real humans do not have st-link as of 2021
             //realHardwarePanel.add(new EraseChip().getButton(), "right, wrap");
         }
 
-        SerialPortScanner.INSTANCE.addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
+        connectivityContext.getSerialPortScanner().addListener(currentHardware -> SwingUtilities.invokeLater(() -> {
+            status.stop();
             selector.apply(currentHardware);
             applyKnownPorts(currentHardware);
             frame.pack();
         }));
 
+        /*
+        LOG_VIEWER is a bit dead, is not it?
         final JButton buttonLogViewer = new JButton();
         buttonLogViewer.setText("Start " + LinkManager.LOG_VIEWER);
         buttonLogViewer.addActionListener(new ActionListener() {
@@ -179,15 +215,14 @@ public class StartupFrame {
 
         miscPanel.add(buttonLogViewer, "wrap");
         miscPanel.add(new HorizontalLine(), "wrap");
-
+*/
         miscPanel.add(SimulatorHelper.createSimulatorComponent(this));
 
         JPanel rightPanel = new JPanel(new VerticalFlowLayout());
 
-        if (BundleUtil.readBundleFullNameNotNull().contains("proteus_f7")) {
+        if (ConsoleBundleUtil.readBundleFullNameNotNull().getTarget().contains("proteus_f7")) {
             String text = "WARNING: Proteus F7";
             URLLabel urlLabel = new URLLabel(text, "https://github.com/rusefi/rusefi/wiki/F7-requires-full-erase");
-            Color originalColor = urlLabel.getForeground();
             new Timer(500, new ActionListener() {
                 int counter;
                 @Override
@@ -202,8 +237,9 @@ public class StartupFrame {
         JLabel logo = LogoHelper.createLogoLabel();
         if (logo != null)
             rightPanel.add(logo);
-        rightPanel.add(LogoHelper.createUrlLabel());
-        rightPanel.add(new JLabel("Version " + Launcher.CONSOLE_VERSION));
+        if (ConnectionAndMeta.isDefaultWhitelabel(UiProperties.getWhiteLabel()))
+            rightPanel.add(LogoHelper.createUrlLabel());
+        rightPanel.add(new JLabel("Console " + Launcher.CONSOLE_VERSION));
 
         JPanel content = new JPanel(new BorderLayout());
         content.add(leftPanel, BorderLayout.WEST);
@@ -222,26 +258,104 @@ public class StartupFrame {
         }
     }
 
-    private void applyKnownPorts(SerialPortScanner.AvailableHardware currentHardware) {
-        List<SerialPortScanner.PortResult> ports = currentHardware.getKnownPorts();
+    public static @NotNull Optional<JPanel> newReleaseAnnounce(
+        final String upgradeExeFileName,
+        final String textAlign,
+        final Supplier<Integer> minWidthSupplier
+    ) {
+        final String nextBranchName = ConsoleBundleUtil.readBundleFullNameNotNull().getNextBranchName();
+        if (nextBranchName != null && !nextBranchName.isBlank()) {
+            final JLabel newReleaseAmmomceMessage = new JLabel(
+                String.format(
+                    "<html><p style=\"text-align: %s;font-weight: bold;color:red\">New release `%s` is available!<br/>To upgrade please restart `%s`.</p></html>",
+                    textAlign,
+                    nextBranchName,
+                    upgradeExeFileName
+                )
+            );
+            final JPanel newReleaseAnnouncePanel = new JPanel(new MigLayout()) {
+                @Override
+                public Dimension getPreferredSize() {
+                    Dimension size = super.getPreferredSize();
+                    return new Dimension(Math.max(size.width, minWidthSupplier.get()), size.height);
+                }
+            };
+            newReleaseAnnouncePanel.setBorder(new TitledBorder(
+                BorderFactory.createLineBorder(Color.darkGray),
+                ""
+            ));
+            newReleaseAnnouncePanel.add(newReleaseAmmomceMessage);
+            return Optional.of(newReleaseAnnouncePanel);
+        }
+        return Optional.empty();
+    }
+
+    public static @NotNull JLabel binaryModificationControl() {
+        final long binaryModificationTimestamp = MaintenanceUtil.getBinaryModificationTimestamp();
+        JLabel jLabel;
+        if (binaryModificationTimestamp == 0) {
+            jLabel = new JLabel("firmware file not found");
+            jLabel.setForeground(Color.red);
+        } else {
+            final Date binaryModificationDate = new Date(binaryModificationTimestamp);
+            final String branchNameToDisplay = ConsoleBundleUtil.readBundleFullNameNotNull().getBranchName();
+            jLabel = new JLabel(String.format(
+                "<html><center>%s files<br/>%s</center></html>",
+                branchNameToDisplay,
+                binaryModificationDate
+            ));
+            jLabel.setToolTipText("Click to copy");
+            jLabel.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(
+                            new StringSelection(String.format(
+                                "%s files\r%s",
+                                branchNameToDisplay,
+                                binaryModificationDate
+                            )),
+                            null
+                        );
+                }
+            });
+        }
+
+        return jLabel;
+    }
+
+    private void applyKnownPorts(AvailableHardware currentHardware) {
+        List<PortResult> ports = currentHardware.getKnownPorts();
         log.info("Rendering available ports: " + ports);
         connectPanel.setVisible(!ports.isEmpty());
-        noPortsMessage.setText(NO_PORTS_FOUND);
-        noPortsMessage.setVisible(ports.isEmpty());
 
-        applyPortSelectionToUIcontrol(ports);
-        UiUtils.trueLayout(connectPanel);
+
+        boolean hasEcuOrBootloader = applyPortSelectionToUIcontrol(portsComboBox.getComboPorts(), ports);
+        if (ports.isEmpty()) {
+            noPortsMessage.setText(NO_PORTS_FOUND);
+        } else {
+            noPortsMessage.setText("Make sure you are disconnected from TunerStudio");
+        }
+
+        noPortsMessage.setVisible(ports.isEmpty() || !hasEcuOrBootloader);
+
+        boolean hasEcuWithOpenBlt = !currentHardware.getKnownPorts().stream().filter(portResult -> portResult.type == EcuWithOpenblt).collect(Collectors.toList()).isEmpty();
+        if (hasEcuWithOpenBlt && firstTimeHasEcuWithOpenBlt) {
+            selector.setMode(UpdateMode.OPENBLT_AUTO);
+            firstTimeHasEcuWithOpenBlt = false;
+        }
+
+        AutoupdateUtil.trueLayoutAndRepaint(connectPanel);
     }
 
     public static void setFrameIcon(Frame frame) {
-        ImageIcon icon = LogoHelper.getBundleIcon();
-        if (icon != null)
-            frame.setIconImage(icon.getImage());
+        ImageIcon icon = LogoHelper.getBundleSpecificIcon();
+        BasicLogoHelper.setFrameIcon(frame, icon);
     }
 
     private void connectButtonAction(JComboBox<String> comboSpeeds) {
         BaudRateHolder.INSTANCE.baudRate = Integer.parseInt((String) comboSpeeds.getSelectedItem());
-        SerialPortScanner.PortResult selectedPort = ((SerialPortScanner.PortResult)comboPorts.getSelectedItem());
+        PortResult selectedPort = ((PortResult)portsComboBox.getComboPorts().getSelectedItem());
         disposeFrameAndProceed();
         new ConsoleUI(selectedPort.port);
     }
@@ -279,20 +393,28 @@ public class StartupFrame {
     public void disposeFrameAndProceed() {
         isProceeding = true;
         frame.dispose();
-        SerialPortScanner.INSTANCE.stopTimer();
+        status.stop();
+        connectivityContext.getSerialPortScanner().stopTimer();
     }
 
-    private void applyPortSelectionToUIcontrol(List<SerialPortScanner.PortResult> ports) {
+    private static boolean applyPortSelectionToUIcontrol(JComboBox<PortResult> comboPorts, List<PortResult> ports) {
         comboPorts.removeAllItems();
-        for (final SerialPortScanner.PortResult port : ports) {
+        boolean hasEcuOrBootloader = false;
+        for (final PortResult port : ports) {
             comboPorts.addItem(port);
+            if (port.type == SerialPortType.Ecu ||
+                port.type == SerialPortType.EcuWithOpenblt ||
+                port.type == SerialPortType.OpenBlt) {
+                hasEcuOrBootloader = true;
+            }
         }
         String defaultPort = getConfig().getRoot().getProperty(ConsoleUI.PORT_KEY);
         if (!PersistentConfiguration.getBoolProperty(ALWAYS_AUTO_PORT)) {
             comboPorts.setSelectedItem(defaultPort);
         }
 
-        trueLayout(comboPorts);
+        AutoupdateUtil.trueLayoutAndRepaint(comboPorts);
+        return hasEcuOrBootloader;
     }
 
     private static JComboBox<String> createSpeedCombo() {

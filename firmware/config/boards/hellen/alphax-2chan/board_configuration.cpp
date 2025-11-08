@@ -11,6 +11,7 @@
 #include "pch.h"
 #include "hellen_meta.h"
 #include "defaults.h"
+#include "board_overrides.h"
 
 static OutputPin alphaTachPullUp;
 static OutputPin alphaTempPullUp;
@@ -51,11 +52,10 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->afr.hwChannel = EFI_ADC_1;
 
 	engineConfiguration->clt.adcChannel = H144_IN_CLT;
-
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
-void boardInitHardware() {
+static void alphax_2chan_boardInitHardware() {
 
 	alphaTachPullUp.initPin("a-tach", Gpio::H144_OUT_IO1);
 	alphaTempPullUp.initPin("a-temp", Gpio::H144_OUT_IO4);
@@ -63,33 +63,34 @@ void boardInitHardware() {
 	alphaCrankNPullUp.initPin("a-crank-n", Gpio::H144_OUT_IO5);
 	alpha2stepPullDown.initPin("a-2step", Gpio::H144_OUT_IO7);
 	alphaCamPullDown.initPin("a-cam", Gpio::H144_OUT_IO8);
-	boardOnConfigurationChange(nullptr);
 }
 
-void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
-	alphaTachPullUp.setValue(engineConfiguration->boardUseTachPullUp);
-	alphaTempPullUp.setValue(engineConfiguration->boardUseTempPullUp);
-	alphaCrankPPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alphaCrankNPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alpha2stepPullDown.setValue(engineConfiguration->boardUse2stepPullDown);
-	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
+static void customBoardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
+	alphaTachPullUp.setValue(config->boardUseTachPullUp);
+	alphaTempPullUp.setValue(config->boardUseTempPullUp);
+	alphaCrankPPullUp.setValue(config->boardUseCrankPullUp);
+	alphaCrankNPullUp.setValue(config->boardUseCrankPullUp);
+	alpha2stepPullDown.setValue(config->boardUse2stepPullDown);
+	alphaCamPullDown.setValue(config->boardUseCamPullDown);
 }
-
-
 
 static bool isMegaModuleRevision() {
+#ifndef EFI_BOOTLOADER
     int16_t hellenBoardId = engine->engineState.hellenBoardId;
     return hellenBoardId != BOARD_ID_ALPHA2CH_B && hellenBoardId != BOARD_ID_ALPHA2CH_C && hellenBoardId != BOARD_ID_ALPHA2CH_D;
+#else
+  return true;
+#endif // EFI_BOOTLOADER
 }
 
-void setBoardConfigOverrides() {
+static void alphax_2chan_ConfigOverrides() {
 	setHellenVbatt();
+#ifndef EFI_BOOTLOADER
     int16_t hellenBoardId = engine->engineState.hellenBoardId;
 
 	// rev.D uses SPI1 pins for CAN2, but rev.E and later uses mega-module meaning SPI1 for SD-card
 	if (isMegaModuleRevision()) {
-		setHellenSdCardSpi1();
-		hellenMegaAccelerometerPreInitCS2Pin();
+	  hellenMegaSdWithAccelerometer();
 	    setHellenMegaEnPin();
 	} else {
 	    setHellenEnPin(Gpio::H144_OUT_IO3);
@@ -110,6 +111,7 @@ void setBoardConfigOverrides() {
 
     engineConfiguration->vrThreshold[1].pin = Gpio::Unassigned; // 2chan never had second VR
     setDefaultHellenAtPullUps();
+#endif // EFI_BOOTLOADER
 
 	setHellenCan();
 }
@@ -117,10 +119,10 @@ void setBoardConfigOverrides() {
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
  */
-void setBoardDefaultConfiguration() {
+static void  alphax_2chan_defaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
@@ -134,7 +136,7 @@ void setBoardDefaultConfiguration() {
     	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3; // On-board MAP
 	}
 
-    engineConfiguration->boardUseTempPullUp = true;
+  config->boardUseTempPullUp = true;
 
 	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_PWM2;
 	engineConfiguration->fanPin = Gpio::H144_OUT_PWM4;
@@ -169,3 +171,10 @@ Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
 }
 
+void setup_custom_board_overrides() {
+	custom_board_InitHardware = alphax_2chan_boardInitHardware;
+	custom_board_DefaultConfiguration = alphax_2chan_defaultConfiguration;
+	custom_board_ConfigOverrides = alphax_2chan_ConfigOverrides;
+
+	custom_board_OnConfigurationChange = customBoardOnConfigurationChange;
+}

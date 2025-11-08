@@ -15,6 +15,15 @@
 #include "test_engine.h"
 #include "proteus_meta.h"
 
+void setTestEngineBoschQuickStart() {
+	engineConfiguration->trigger.type = trigger_type_e::TT_VVT_BOSCH_QUICK_START;
+}
+
+void setTestEngineWithBoschQuickStartCam() {
+  engineConfiguration->trigger.type = trigger_type_e::TT_HALF_MOON;
+  engineConfiguration->vvtMode[0] = VVT_BOSCH_QUICK_START;
+}
+
 // TEST_ENGINE
 void setTestCamEngineConfiguration() {
 	engineConfiguration->trigger.type = trigger_type_e::TT_ONE_PLUS_ONE;
@@ -76,7 +85,7 @@ void setTestVVTEngineConfiguration() {
 	engineConfiguration->trigger.customSkippedToothCount = 1;
 
 	// set algorithm 3
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
 	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
 	engineConfiguration->camInputs[0] = Gpio::A5;
@@ -105,6 +114,8 @@ void setTestEngineIssue366rise() {
 #ifdef HARDWARE_CI
 // set engine_type 30
 void setProteusAnalogPwmTest() {
+  engineConfiguration->camInputs[0] = Gpio::E0; // a random unused pin needed for happy HW CI. Huh, why do we have cam stimulation?!
+
 	// lowest cpu trigger possible
 	engineConfiguration->trigger.type = trigger_type_e::TT_HALF_MOON;
 

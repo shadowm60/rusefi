@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 2
 
@@ -24,10 +24,11 @@ jobs:
         echo "DELIM" >> $GITHUB_ENV
 
     - name: Generate Pinouts
-      uses: chuckwagoncomputing/interactive-pinout@2.13
+      uses: chuckwagoncomputing/interactive-pinout@2.15
       with:
         mapping-path: ${{ env.CHANGED }}
-        warnings: "false"
+        warnings: "notice"
+        warning-no-connectors: "false"
         warning-dupe: "error"
         columns: |
           {

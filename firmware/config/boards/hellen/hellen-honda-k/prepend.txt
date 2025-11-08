@@ -1,4 +1,4 @@
-#define MAIN_HELP_URL "https://rusefi.com/s/hellen154hyuindai"
+#define MAIN_HELP_URL "https://rusefi.com/s/hellen125honda"
 
 #define ts_show_hip9011 false
 #define ts_show_can_terminator true
@@ -6,6 +6,8 @@
 #define ts_show_vbatt false
 #define ts_show_clt_iat_pullup false
 #define ts_show_egt false
+
+#define ts_drop_template_comments true
 
 #define ts_show_etb_pins false
 #define ts_show_analog_divider false
@@ -19,6 +21,22 @@
 #define ts_show_sd_pins false
 #define ts_show_ignitionPinMode false
 #define ts_show_tps2 false
+#define ts_show_speedo_settings false
+#define ts_show_ford_toyota_tps_pps false
+#define ts_show_check_engine true
+
+#define ts_show_bank2_cam1 false
+#define ts_show_bank2_cam2 false
+#define ts_show_second_bank false
+
+#define ts_show_starter_disable false
+#define ts_show_status_leds false
+#define ts_show_hd false
+#define ts_show_odd_fire false
+#define ts_show_rotary false
+#define ts_show_cylinder_bank false
+#define ts_show_k_line true
+#define ts_show_maf false
 
 #define ts_show_cylinder_5 false
 #define ts_show_cylinder_6 false
@@ -30,9 +48,6 @@
 #define ts_show_cylinder_12 false
 
 
-#define show_Hellen_hyundai_154 false
+#define CLT_UPPER_LIMIT 125
 
-#define IGN_RPM_COUNT 24
-#define IGN_LOAD_COUNT 24
-
-
+#define VVT_TABLE_SIZE 16

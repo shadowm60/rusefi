@@ -12,7 +12,6 @@
 #include "trigger_decoder.h"
 #include "main_trigger_callback.h"
 #include "listener_array.h"
-#include "hip9011.h"
 #include "logic_analyzer.h"
 
 #include "local_version_holder.h"
@@ -33,20 +32,15 @@
 WaveChart waveChart;
 #endif /* EFI_ENGINE_SNIFFER */
 
-static scheduling_s debugToggleScheduling;
-#define DEBUG_PIN_DELAY US2NT(60)
-
 #define TRIGGER_WAVEFORM(x) getTriggerCentral()->triggerShape.x
 
 #if EFI_SHAFT_POSITION_INPUT
 
 TriggerCentral::TriggerCentral() :
-		vvtEventRiseCounter(),
-		vvtEventFallCounter(),
 		vvtPosition(),
 		triggerState("TRG")
 {
-	memset(&hwEventCounters, 0, sizeof(hwEventCounters));
+	setArrayValues(hwEventCounters, 0);
 	triggerState.resetState();
 	noiseFilter.resetAccumSignalData();
 }
@@ -61,7 +55,6 @@ int TriggerCentral::getHwEventCounter(int index) const {
 	return hwEventCounters[index];
 }
 
-
 angle_t TriggerCentral::getVVTPosition(uint8_t bankIndex, uint8_t camIndex) {
 	if (bankIndex >= BANKS_COUNT || camIndex >= CAMS_PER_BANK) {
 		return NAN;
@@ -75,7 +68,7 @@ angle_t TriggerCentral::getVVTPosition(uint8_t bankIndex, uint8_t camIndex) {
 expected<float> TriggerCentral::getCurrentEnginePhase(efitick_t nowNt) const {
 	floatus_t oneDegreeUs = engine->rpmCalculator.oneDegreeUs;
 
-	if (cisnan(oneDegreeUs)) {
+	if (std::isnan(oneDegreeUs)) {
 		return unexpected;
 	}
 
@@ -123,15 +116,24 @@ int getCrankDivider(operation_mode_e operationMode) {
 	return 1;
 }
 
+PUBLIC_API_WEAK bool boardIsSpecialVvtDecoder(vvt_mode_e vvtMode) {
+	UNUSED(vvtMode);
+
+	return false;
+}
+
+PUBLIC_API_WEAK void boardTriggerCallback(efitick_t timestamp, float currentPhase) { UNUSED(timestamp); UNUSED(currentPhase); }
+
 static bool vvtWithRealDecoder(vvt_mode_e vvtMode) {
 	return vvtMode != VVT_INACTIVE
 			&& vvtMode != VVT_TOYOTA_3_TOOTH /* VVT_2JZ is an unusual 3/0 missed tooth symmetrical wheel */
 			&& vvtMode != VVT_HONDA_K_INTAKE
 			&& vvtMode != VVT_MAP_V_TWIN
+			&& !boardIsSpecialVvtDecoder(vvtMode)
 			&& vvtMode != VVT_SINGLE_TOOTH;
 }
 
-angle_t TriggerCentral::syncAndReport(int divider, int remainder) {
+angle_t TriggerCentral::syncEnginePhaseAndReport(int divider, int remainder) {
 	angle_t engineCycle = getEngineCycle(getEngineRotationState()->getOperationMode());
 
 	angle_t totalShift = triggerState.syncEnginePhase(divider, remainder, engineCycle);
@@ -143,20 +145,11 @@ angle_t TriggerCentral::syncAndReport(int divider, int remainder) {
 	return totalShift;
 }
 
-static void turnOffAllDebugFields(void *arg) {
-	(void)arg;
-#if EFI_PROD_CODE
-	for (int index = 0;index<TRIGGER_INPUT_PIN_COUNT;index++) {
-		if (isBrainPinValid(engineConfiguration->triggerInputDebugPins[index])) {
-			writePad("trigger debug", engineConfiguration->triggerInputDebugPins[index], 0);
-		}
-	}
-	for (int index = 0;index<CAM_INPUTS_COUNT;index++) {
-		if (isBrainPinValid(engineConfiguration->camInputsDebug[index])) {
-			writePad("cam debug", engineConfiguration->camInputsDebug[index], 0);
-		}
-	}
-#endif /* EFI_PROD_CODE */
+PUBLIC_API_WEAK angle_t customAdjustCustom(TriggerCentral *tc, vvt_mode_e vvtMode) {
+	UNUSED(tc);
+	UNUSED(vvtMode);
+
+  return 0;
 }
 
 static angle_t adjustCrankPhase(int camIndex) {
@@ -182,30 +175,41 @@ static angle_t adjustCrankPhase(int camIndex) {
 	switch (vvtMode) {
 	case VVT_MAP_V_TWIN:
 	case VVT_MITSUBISHI_4G63:
-	case VVT_MITSUBISHI_4G9x:
-		return tc->syncAndReport(crankDivider, 1);
+	case VVT_UNUSED_17:
+		return tc->syncEnginePhaseAndReport(crankDivider, 1);
 	case VVT_SINGLE_TOOTH:
 	case VVT_NISSAN_VQ:
 	case VVT_BOSCH_QUICK_START:
 	case VVT_MIATA_NB:
+	case VVT_TOYOTA_3TOOTH_UZ:
 	case VVT_TOYOTA_3_TOOTH:
 	case VVT_TOYOTA_4_1:
 	case VVT_FORD_COYOTE:
+	case VVT_DEV:
 	case VVT_FORD_ST170:
 	case VVT_BARRA_3_PLUS_1:
 	case VVT_NISSAN_MR:
+  case VVT_HR12DDR_IN:
 	case VVT_MAZDA_SKYACTIV:
+	case VVT_MAZDA_L:
 	case VVT_MITSUBISHI_4G69:
 	case VVT_MITSUBISHI_3A92:
 	case VVT_MITSUBISHI_6G72:
-	case VVT_MITSUBISHI_6G75:
+	case VVT_CHRYSLER_PHASER:
 	case VVT_HONDA_K_EXHAUST:
 	case VVT_HONDA_CBR_600:
-		return tc->syncAndReport(crankDivider, 0);
+	case VVT_SUBARU_7TOOTH:
+		return tc->syncEnginePhaseAndReport(crankDivider, 0);
+	case VVT_CUSTOM_25:
+	case VVT_CUSTOM_26:
+	  return customAdjustCustom(tc, vvtMode);
+
 	case VVT_HONDA_K_INTAKE:
 	    // with 4 evenly spaced tooth we cannot use this wheel for engine sync
         criticalError("Honda K Intake is not suitable for engine sync");
         [[fallthrough]];
+	case VVT_CUSTOM_1:
+	case VVT_CUSTOM_2:
 	case VVT_INACTIVE:
 		// do nothing
 		return 0;
@@ -228,19 +232,12 @@ static angle_t wrapVvt(angle_t vvtPosition, int period) {
 }
 
 static void logVvtFront(bool useOnlyRise, bool isImportantFront, TriggerValue front, efitick_t nowNt, int index) {
-	if (isImportantFront && isBrainPinValid(engineConfiguration->camInputsDebug[index])) {
-#if EFI_PROD_CODE
-		writePad("cam debug", engineConfiguration->camInputsDebug[index], 1);
-#endif /* EFI_PROD_CODE */
-		getExecutorInterface()->scheduleByTimestampNt("dbg_on", &debugToggleScheduling, nowNt + DEBUG_PIN_DELAY, &turnOffAllDebugFields);
-	}
-
 	if (!useOnlyRise || engineConfiguration->displayLogicLevelsInEngineSniffer) {
 		// If we care about both edges OR displayLogicLevel is set, log every front exactly as it is
 		addEngineSnifferVvtEvent(index, front == TriggerValue::RISE ? FrontDirection::UP : FrontDirection::DOWN);
 
 #if EFI_TOOTH_LOGGER
-		LogTriggerTooth(front == TriggerValue::RISE ? SHAFT_SECONDARY_RISING : SHAFT_SECONDARY_FALLING, nowNt);
+		LogTriggerCamTooth(front == TriggerValue::RISE, nowNt, index);
 #endif /* EFI_TOOTH_LOGGER */
 	} else {
 		if (isImportantFront) {
@@ -249,25 +246,78 @@ static void logVvtFront(bool useOnlyRise, bool isImportantFront, TriggerValue fr
 			addEngineSnifferVvtEvent(index, FrontDirection::DOWN);
 
 #if EFI_TOOTH_LOGGER
-			LogTriggerTooth(SHAFT_SECONDARY_RISING, nowNt);
-			LogTriggerTooth(SHAFT_SECONDARY_FALLING, nowNt);
+			LogTriggerCamTooth(true, nowNt, index);
+			LogTriggerCamTooth(false, nowNt, index);
 #endif /* EFI_TOOTH_LOGGER */
 		}
 	}
 }
 
-void hwHandleVvtCamSignal(bool isRising, efitick_t timestamp, int index) {
-	hwHandleVvtCamSignal(isRising ? TriggerValue::RISE : TriggerValue::FALL, timestamp, index);
+static bool tooSoonToHandleSignal() {
+#if EFI_PROD_CODE
+extern bool main_loop_started;
+	if (!main_loop_started) {
+	  warning(ObdCode::CUSTOM_ERR_INPUT_DURING_INITIALISATION, "event too early");
+		return true;
+	}
+#endif //EFI_PROD_CODE
+  return false;
+}
+
+/**
+ * This function is called by all "hardware" trigger inputs:
+ *  - Hardware triggers
+ *  - Trigger replay from CSV (unit tests)
+ */
+void hwHandleVvtCamSignal(bool isRising, efitick_t nowNt, int index) {
+	int camIndex = CAM_BY_INDEX(index);
+	bool invertSetting = camIndex == 0 ? engineConfiguration->invertCamVVTSignal : engineConfiguration->invertExhaustCamVVTSignal;
+
+	if (isRising ^ invertSetting) {
+		hwHandleVvtCamSignal(TriggerValue::RISE, nowNt, index);
+	} else {
+		hwHandleVvtCamSignal(TriggerValue::FALL, nowNt, index);
+	}
 }
 
 // 'invertCamVVTSignal' is already accounted by the time this method is invoked
 void hwHandleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
+  if (tooSoonToHandleSignal()) {
+    return;
+  }
 	TriggerCentral *tc = getTriggerCentral();
 	if (tc->directSelfStimulation || !tc->hwTriggerInputEnabled) {
 		// sensor noise + self-stim = loss of trigger sync
 		return;
 	}
 	handleVvtCamSignal(front, nowNt, index);
+}
+
+/**
+ * @returns true if tooth should be ignored
+ */
+PUBLIC_API_WEAK bool skipToothSpecialShape(size_t index, vvt_mode_e vvtMode, angle_t currentPosition) {
+	UNUSED(index);
+
+	switch(vvtMode) {
+	case VVT_TOYOTA_3_TOOTH:
+	{
+	    int from = engineConfiguration->camDecoder2jzPosition - engineConfiguration->camDecoder2jzPrecision;
+	    int to   = engineConfiguration->camDecoder2jzPosition + engineConfiguration->camDecoder2jzPrecision;
+		// we do not know if we are in sync or out of sync, so we have to be looking for both possibilities
+		if ((currentPosition < from       || currentPosition > to) &&
+		    (currentPosition < from + 360 || currentPosition > to + 360)) {
+			// outside of the expected range
+			return true;
+		}
+	}
+		break;
+	default:
+
+		// else, do nothing
+		break;
+	}
+	return false;
 }
 
 void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
@@ -292,20 +342,6 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	if (engineConfiguration->vvtMode[camIndex] == VVT_INACTIVE) {
 		warning(ObdCode::CUSTOM_VVT_MODE_NOT_SELECTED, "VVT: event on %d but no mode", camIndex);
 	}
-
-#if VR_HW_CHECK_MODE
-	// some boards do not have hardware VR input LEDs which makes such boards harder to validate
-	// from experience we know that assembly mistakes happen and quality control is required
-	extern ioportid_t criticalErrorLedPort;
-	extern ioportmask_t criticalErrorLedPin;
-
-	for (int i = 0 ; i < 100 ; i++) {
-		// turning pin ON and busy-waiting a bit
-		palWritePad(criticalErrorLedPort, criticalErrorLedPin, 1);
-	}
-
-	palWritePad(criticalErrorLedPort, criticalErrorLedPin, 0);
-#endif // VR_HW_CHECK_MODE
 
 	const auto& vvtShape = tc->vvtShape[camIndex];
 
@@ -336,10 +372,7 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 			nullptr,
 			tc->vvtTriggerConfiguration[camIndex],
 			front == TriggerValue::RISE ? SHAFT_PRIMARY_RISING : SHAFT_PRIMARY_FALLING, nowNt);
-		// yes we log data from all VVT channels into same fields for now
-		tc->triggerState.vvtSyncGapRatio = vvtDecoder.triggerSyncGapRatio;
-		tc->triggerState.vvtToothDurations0 = (uint32_t)NT2US(vvtDecoder.toothDurations[0]);
-		tc->triggerState.vvtStateIndex = vvtDecoder.currentCycle.current_index;
+		vvtDecoder.vvtToothDurations0 = (uint32_t)NT2US(vvtDecoder.toothDurations[0]);
 	}
 
     // here we count all cams together
@@ -371,23 +404,10 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 	auto vvtPosition = engineConfiguration->vvtOffsets[bankIndex * CAMS_PER_BANK + camIndex] - currentPosition;
 	tc->triggerState.vvtToothPosition[index] = vvtPosition;
 
-	switch(engineConfiguration->vvtMode[camIndex]) {
-	case VVT_TOYOTA_3_TOOTH:
-	{
-	    int from = engineConfiguration->camDecoder2jzPosition - engineConfiguration->camDecoder2jzPrecision;
-	    int to   = engineConfiguration->camDecoder2jzPosition + engineConfiguration->camDecoder2jzPrecision;
-		// we do not know if we are in sync or out of sync, so we have to be looking for both possibilities
-		if ((currentPosition < from       || currentPosition > to) &&
-		    (currentPosition < from + 360 || currentPosition > to + 360)) {
-			// outside of the expected range
+  bool skipTooth = skipToothSpecialShape(index, engineConfiguration->vvtMode[camIndex], currentPosition);
+  if (skipTooth) {
 			return;
-		}
-	}
-		break;
-	default:
-		// else, do nothing
-		break;
-	}
+  }
 
 	// this could be just an 'if' but let's have it expandable for future use :)
 	switch(engineConfiguration->vvtMode[camIndex]) {
@@ -399,6 +419,13 @@ void handleVvtCamSignal(TriggerValue front, efitick_t nowNt, int index) {
 		// else, do nothing
 		break;
 	}
+
+#if EFI_PROD_CODE
+  if (!isBrainPinValid(engineConfiguration->camInputs[engineConfiguration->engineSyncCam]) &&
+      engineConfiguration->vvtMode[engineConfiguration->engineSyncCam] != VVT_MAP_V_TWIN) {
+    criticalError("Selected engine sync input not configured: %d", engineConfiguration->engineSyncCam);
+  }
+#endif // EFI_PROD_CODE
 
 	// Only do engine sync using one cam, other cams just provide VVT position.
 	if (index == engineConfiguration->engineSyncCam) {
@@ -440,26 +467,11 @@ uint32_t triggerMaxDuration = 0;
  *  - Trigger replay from CSV (unit tests)
  */
 void hwHandleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp) {
+  if (tooSoonToHandleSignal()) {
+    return;
+  }
 	TriggerCentral *tc = getTriggerCentral();
 	ScopePerf perf(PE::HandleShaftSignal);
-#if VR_HW_CHECK_MODE
-	// some boards do not have hardware VR input LEDs which makes such boards harder to validate
-	// from experience we know that assembly mistakes happen and quality control is required
-	extern ioportid_t criticalErrorLedPort;
-	extern ioportmask_t criticalErrorLedPin;
-
-#if HW_CHECK_ALWAYS_STIMULATE
-	disableTriggerStimulator();
-#endif // HW_CHECK_ALWAYS_STIMULATE
-
-
-	for (int i = 0 ; i < 100 ; i++) {
-		// turning pin ON and busy-waiting a bit
-		palWritePad(criticalErrorLedPort, criticalErrorLedPin, 1);
-	}
-
-	palWritePad(criticalErrorLedPort, criticalErrorLedPin, 0);
-#endif // VR_HW_CHECK_MODE
 
 	if (tc->directSelfStimulation || !tc->hwTriggerInputEnabled) {
 		// sensor noise + self-stim = loss of trigger sync
@@ -523,13 +535,6 @@ void handleShaftSignal(int signalIndex, bool isRising, efitick_t timestamp) {
 		}
 	}
 
-	if (engineConfiguration->triggerInputDebugPins[signalIndex] != Gpio::Unassigned) {
-#if EFI_PROD_CODE
-		writePad("trigger debug", engineConfiguration->triggerInputDebugPins[signalIndex], 1);
-#endif /* EFI_PROD_CODE */
-		getExecutorInterface()->scheduleByTimestampNt("dbg_off", &debugToggleScheduling, timestamp + DEBUG_PIN_DELAY, &turnOffAllDebugFields);
-	}
-
 #if EFI_TOOTH_LOGGER
 	if (logLogicState) {
 		// first log rising normally
@@ -559,7 +564,6 @@ void TriggerCentral::resetCounters() {
 	memset(hwEventCounters, 0, sizeof(hwEventCounters));
 }
 
-static const bool isUpEvent[4] = { false, true, false, true };
 static const int wheelIndeces[4] = { 0, 0, 1, 1};
 
 static void reportEventToWaveChart(trigger_event_e ckpSignalType, int triggerEventIndex, bool addOppositeEvent) {
@@ -569,7 +573,7 @@ static void reportEventToWaveChart(trigger_event_e ckpSignalType, int triggerEve
 
 	int wheelIndex = wheelIndeces[(int )ckpSignalType];
 
-	bool isUp = isUpEvent[(int) ckpSignalType];
+	bool isUp = isTriggerUpEvent(ckpSignalType);
 
 	addEngineSnifferCrankEvent(wheelIndex, triggerEventIndex, isUp ? FrontDirection::UP : FrontDirection::DOWN);
 	if (addOppositeEvent) {
@@ -641,16 +645,16 @@ bool TriggerNoiseFilter::noiseFilter(efitick_t nowNt,
 	return false;
 }
 
-void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
-    isDecodingMapCam = engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN &&
-                       			Sensor::getOrZero(SensorType::Rpm) < engineConfiguration->cranking.rpm;
-	if (isDecodingMapCam) {
+bool TriggerCentral::isMapCamSync(efitick_t timestamp, float currentPhase) {
+	UNUSED(timestamp);
+
 		// we are trying to figure out which 360 half of the total 720 degree cycle is which, so we compare those in 360 degree sense.
 		auto toothAngle360 = currentPhase;
 		while (toothAngle360 >= 360) {
 			toothAngle360 -= 360;
 		}
 
+    bool result;
 		if (mapCamPrevToothAngle < engineConfiguration->mapCamDetectionAnglePosition && toothAngle360 > engineConfiguration->mapCamDetectionAnglePosition) {
 			// we are somewhere close to 'mapCamDetectionAnglePosition'
 
@@ -658,15 +662,57 @@ void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
 			float map = engine->outputChannels.instantMAPValue;
 
 			// Compute diff against the last time we were here
-			float diff = map - mapCamPrevCycleValue;
+			float instantMapDiffBetweenReadoutAngles = map - mapCamPrevCycleValue;
 			mapCamPrevCycleValue = map;
 
-			if (diff > 0) {
-				mapVvt_map_peak++;
-				int revolutionCounter = getTriggerCentral()->triggerState.getCrankSynchronizationCounter();
+			if (instantMapDiffBetweenReadoutAngles > engineConfiguration->mapSyncThreshold) {
+				mapVvt_sync_counter++;
+				int revolutionCounter = getTriggerCentral()->triggerState.getSynchronizationCounter();
 				mapVvt_MAP_AT_CYCLE_COUNT = revolutionCounter - prevChangeAtCycle;
 				prevChangeAtCycle = revolutionCounter;
+				result = true;
+			} else {
+				result = false;
+			}
 
+			mapVvt_MAP_AT_SPECIAL_POINT = map;
+			mapVvt_MAP_AT_DIFF = instantMapDiffBetweenReadoutAngles;
+		} else {
+			result = false;
+		}
+
+		mapCamPrevToothAngle = toothAngle360;
+		return result;
+}
+
+#ifdef TEMP_V_TWIN
+
+float mapAtAngle[200];
+
+#endif
+
+void TriggerCentral::decodeMapCam(int toothIndexForListeners, efitick_t timestamp, float currentPhase) {
+	UNUSED(toothIndexForListeners);
+
+    isDecodingMapCam = engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN &&
+                       			Sensor::getOrZero(SensorType::Rpm) < engineConfiguration->cranking.rpm;
+	if (isDecodingMapCam) {
+
+
+#ifdef TEMP_V_TWIN
+  mapAtAngle[toothIndexForListeners] = engine->outputChannels.instantMAPValue;
+
+  if (toothIndexForListeners > 2) {
+    if (mapAtAngle[toothIndexForListeners - 2] > mapAtAngle[toothIndexForListeners - 1] &&
+      mapAtAngle[toothIndexForListeners - 1] < mapAtAngle[toothIndexForListeners - 0]) {
+        mapVvt_min_point_counter++;
+      }
+
+  }
+#endif
+
+
+	  if (isMapCamSync(timestamp, currentPhase)) {
 				hwHandleVvtCamSignal(TriggerValue::RISE, timestamp, /*index*/0);
 				hwHandleVvtCamSignal(TriggerValue::FALL, timestamp, /*index*/0);
 #if EFI_UNIT_TEST
@@ -674,13 +720,7 @@ void TriggerCentral::decodeMapCam(efitick_t timestamp, float currentPhase) {
 				// but current implementation which is based on periodicFastCallback would only make result available on NEXT tooth
 				getLimpManager()->onFastCallback();
 #endif // EFI_UNIT_TEST
-			}
-
-			mapVvt_MAP_AT_SPECIAL_POINT = map;
-			mapVvt_MAP_AT_DIFF = diff;
-		}
-
-		mapCamPrevToothAngle = toothAngle360;
+	  }
 	}
 }
 
@@ -699,6 +739,8 @@ bool TriggerCentral::isToothExpectedNow(efitick_t timestamp) {
 			angleError += cycle;
 		}
 
+		// positive value - tooth received earlier than expected
+		// negative value - tooth received later than expected
 		triggerToothAngleError = angleError;
 
 		// Only perform checks if engine is spinning quickly
@@ -728,7 +770,8 @@ bool TriggerCentral::isToothExpectedNow(efitick_t timestamp) {
 			// TODO: configurable threshold
 			if (isRpmEnough && absError > 10 && absError < 180) {
 				// This tooth came at a very unexpected time, ignore it
-				warning(ObdCode::CUSTOM_PRIMARY_BAD_TOOTH_TIMING, "tooth #%d error of %.1f", triggerState.currentCycle.current_index, angleError);
+				warning((angleError > 0) ? ObdCode::CUSTOM_PRIMARY_BAD_TOOTH_TIMING_EARLY : ObdCode::CUSTOM_PRIMARY_BAD_TOOTH_TIMING_LATE,
+					"tooth #%d error of %.1f", triggerState.currentCycle.current_index, angleError);
 
 				// TODO: this causes issues with some real engine logs, should it?
 				// return false;
@@ -742,6 +785,27 @@ bool TriggerCentral::isToothExpectedNow(efitick_t timestamp) {
 	return true;
 }
 
+PUBLIC_API_WEAK bool boardAllowTriggerActions() { return true; }
+
+angle_t TriggerCentral::findNextTriggerToothAngle(int p_currentToothIndex) {
+  int currentToothIndex = p_currentToothIndex;
+		// TODO: is this logic to compute next trigger tooth angle correct?
+		angle_t nextToothAngle = 0;
+
+		int loopAllowance = 2 * engineCycleEventCount + 1000;
+		do {
+			// I don't love this.
+			currentToothIndex = (currentToothIndex + 1) % engineCycleEventCount;
+			nextToothAngle = getTriggerCentral()->triggerFormDetails.eventAngles[currentToothIndex] - tdcPosition();
+			wrapAngle(nextToothAngle, "nextEnginePhase", ObdCode::CUSTOM_ERR_6555);
+		} while (nextToothAngle == currentEngineDecodedPhase && --loopAllowance > 0); // '==' for float works here since both values come from 'eventAngles' array
+		if (nextToothAngle != 0 && loopAllowance == 0) {
+		  // HW CI fails here, looks like we sometimes change trigger while still handling it?
+			firmwareError(ObdCode::CUSTOM_ERR_TRIGGER_ZERO, "handleShaftSignal unexpected loop end %d %d %f %f", p_currentToothIndex, engineCycleEventCount, nextToothAngle, currentEngineDecodedPhase);
+		}
+		return nextToothAngle;
+}
+
 /**
  * This method is NOT invoked for VR falls.
  */
@@ -749,8 +813,6 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 	if (triggerShape.shapeDefinitionError) {
 		// trigger is broken, we cannot do anything here
 		warning(ObdCode::CUSTOM_ERR_UNEXPECTED_SHAFT_EVENT, "Shaft event while trigger is mis-configured");
-		// magic value to indicate a problem
-		hwEventCounters[0] = 155;
 		return;
 	}
 
@@ -771,14 +833,17 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 
 	isSpinningJustForWatchdog = true;
 
-    bool firstEventInAWhile = m_lastEventTimer.hasElapsedSec(1);
-	m_lastEventTimer.reset(timestamp);
-	if (firstEventInAWhile) {
 #if EFI_HD_ACR
+    bool firstEventInAWhile = m_lastEventTimer.hasElapsedSec(1);
+	if (firstEventInAWhile) {
         // let's open that valve on first sign of movement
         engine->module<HarleyAcr>()->updateAcr();
-#endif // EFI_HD_ACR
 	}
+#endif // EFI_HD_ACR
+
+  if (boardAllowTriggerActions()) {
+	  m_lastEventTimer.reset(timestamp);
+  }
 
 	int eventIndex = (int) signal;
 	efiAssertVoid(ObdCode::CUSTOM_TRIGGER_EVENT_TYPE, eventIndex >= 0 && eventIndex < HW_EVENT_TYPES, "signal type");
@@ -801,7 +866,7 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		 * cycle into a four stroke, 720 degrees cycle.
 		 */
 		int crankDivider = getCrankDivider(triggerShape.getWheelOperationMode());
-		int crankInternalIndex = triggerState.getCrankSynchronizationCounter() % crankDivider;
+		int crankInternalIndex = triggerState.getSynchronizationCounter() % crankDivider;
 		int triggerIndexForListeners = decodeResult.Value.CurrentIndex + (crankInternalIndex * triggerShape.getSize());
 
 		reportEventToWaveChart(signal, triggerIndexForListeners, triggerShape.useOnlyRisingEdges);
@@ -823,7 +888,7 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		}
 
 #if TRIGGER_EXTREME_LOGGING
-	efiPrintf("trigger %d %d %d", triggerIndexForListeners, getRevolutionCounter(), (int)getTimeNowUs());
+	efiPrintf("trigger %d %d %d", triggerIndexForListeners, getRevolutionCounter(), time2print(getTimeNowUs()));
 #endif /* TRIGGER_EXTREME_LOGGING */
 
 		// Update engine RPM
@@ -832,30 +897,11 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 		// Schedule the TDC mark
 		tdcMarkCallback(triggerIndexForListeners, timestamp);
 
-#if !EFI_UNIT_TEST
-#if EFI_MAP_AVERAGING
-		mapAveragingTriggerCallback(triggerIndexForListeners, timestamp);
-#endif /* EFI_MAP_AVERAGING */
-#endif /* EFI_UNIT_TEST */
-
 #if EFI_LOGIC_ANALYZER
 		waTriggerEventListener(signal, triggerIndexForListeners, timestamp);
 #endif
 
-		// TODO: is this logic to compute next trigger tooth angle correct?
-		auto nextToothIndex = triggerIndexForListeners;
-		angle_t nextPhase = 0;
-
-		int loopAllowance = 2 * engineCycleEventCount + 1000;
-		do {
-			// I don't love this.
-			nextToothIndex = (nextToothIndex + 1) % engineCycleEventCount;
-			nextPhase = getTriggerCentral()->triggerFormDetails.eventAngles[nextToothIndex] - tdcPosition();
-			wrapAngle(nextPhase, "nextEnginePhase", ObdCode::CUSTOM_ERR_6555);
-		} while (nextPhase == currentEngineDecodedPhase && --loopAllowance > 0);
-		if (nextPhase != 0 && loopAllowance == 0) {
-			firmwareError(ObdCode::CUSTOM_ERR_TRIGGER_ZERO, "handleShaftSignal unexpected loop end");
-		}
+		angle_t nextPhase = findNextTriggerToothAngle(triggerIndexForListeners);
 
 		float expectNextPhase = nextPhase + tdcPosition();
 		wrapAngle(expectNextPhase, "nextEnginePhase", ObdCode::CUSTOM_ERR_6555);
@@ -863,20 +909,24 @@ void TriggerCentral::handleShaftSignal(trigger_event_e signal, efitick_t timesta
 
 #if EFI_CDM_INTEGRATION
 		if (trgEventIndex == 0 && isBrainPinValid(engineConfiguration->cdmInputPin)) {
-			int cdmKnockValue = getCurrentCdmValue(getTriggerCentral()->triggerState.getCrankSynchronizationCounter());
+			int cdmKnockValue = getCurrentCdmValue(getTriggerCentral()->triggerState.getSynchronizationCounter());
 			engine->knockLogic(cdmKnockValue);
 		}
 #endif /* EFI_CDM_INTEGRATION */
 
 		if (engine->rpmCalculator.getCachedRpm() > 0 && triggerIndexForListeners == 0) {
-			engine->tpsAccelEnrichment.onEngineCycleTps();
+			engine->module<TpsAccelEnrichment>()->onEngineCycleTps();
 		}
 
 		// Handle ignition and injection
 		mainTriggerCallback(triggerIndexForListeners, timestamp, currentEngineDecodedPhase, nextPhase);
 
+    temp_mapVvt_index = triggerIndexForListeners / 2;
+
 		// Decode the MAP based "cam" sensor
-		decodeMapCam(timestamp, currentEngineDecodedPhase);
+		decodeMapCam(temp_mapVvt_index, timestamp, currentEngineDecodedPhase);
+
+		boardTriggerCallback(timestamp, currentEngineDecodedPhase);
 	} else {
 		// We don't have sync, but report to the wave chart anyway as index 0.
 		reportEventToWaveChart(signal, 0, triggerShape.useOnlyRisingEdges);
@@ -908,16 +958,11 @@ void triggerInfo(void) {
 	TriggerCentral *tc = getTriggerCentral();
 	TriggerWaveform *ts = &tc->triggerShape;
 
-
-#if (HAL_TRIGGER_USE_PAL == TRUE) && (PAL_USE_CALLBACKS == TRUE)
-		efiPrintf("trigger PAL mode %d", tc->hwTriggerInputEnabled);
-#else
-
-#endif /* HAL_TRIGGER_USE_PAL */
-
 	efiPrintf("Template %s (%d) trigger %s (%d) syncEdge=%s tdcOffset=%.2f",
-			getEngine_type_e(engineConfiguration->engineType), engineConfiguration->engineType,
-			getTrigger_type_e(engineConfiguration->trigger.type), engineConfiguration->trigger.type,
+			getEngine_type_e(engineConfiguration->engineType),
+			(int)engineConfiguration->engineType,
+			getTrigger_type_e(engineConfiguration->trigger.type),
+			(int)engineConfiguration->trigger.type,
 			getSyncEdge(TRIGGER_WAVEFORM(syncEdge)), TRIGGER_WAVEFORM(tdcPosition));
 
 	if (engineConfiguration->trigger.type == trigger_type_e::TT_TOOTHED_WHEEL) {
@@ -937,16 +982,16 @@ void triggerInfo(void) {
 			TRIGGER_WAVEFORM(getExpectedEventCount(TriggerWheel::T_PRIMARY)),
 			TRIGGER_WAVEFORM(getExpectedEventCount(TriggerWheel::T_SECONDARY)));
 
-	efiPrintf("trigger type=%d/need2ndChannel=%s", engineConfiguration->trigger.type,
+	efiPrintf("trigger type=%d/need2ndChannel=%s", (int)engineConfiguration->trigger.type,
 			boolToString(TRIGGER_WAVEFORM(needSecondTriggerInput)));
 
 
-	efiPrintf("synchronizationNeeded=%s/isError=%s/total errors=%d ord_err=%d/total revolutions=%d/self=%s",
+	efiPrintf("synchronizationNeeded=%s/isError=%s/total errors=%lu ord_err=%lu/total revolutions=%d/self=%s",
 			boolToString(ts->isSynchronizationNeeded),
 			boolToString(tc->isTriggerDecoderError()),
 			tc->triggerState.totalTriggerErrorCounter,
 			tc->triggerState.orderingErrorCounter,
-			tc->triggerState.getCrankSynchronizationCounter(),
+			tc->triggerState.getSynchronizationCounter(),
 			boolToString(tc->directSelfStimulation));
 
 	if (TRIGGER_WAVEFORM(isSynchronizationNeeded)) {
@@ -988,7 +1033,7 @@ void triggerInfo(void) {
 	efiPrintf("secondary logic input: %s", hwPortname(engineConfiguration->logicAnalyzerPins[1]));
 
 
-	efiPrintf("totalTriggerHandlerMaxTime=%d", triggerMaxDuration);
+	efiPrintf("totalTriggerHandlerMaxTime=%lu", triggerMaxDuration);
 
 #endif /* EFI_PROD_CODE */
 
@@ -1022,8 +1067,9 @@ void onConfigurationChangeTriggerCallback() {
 
 	for (size_t i = 0; i < efi::size(engineConfiguration->triggerInputPins); i++) {
 		changed |= isConfigurationChanged(triggerInputPins[i]);
-		if (engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN && isBrainPinValid(engineConfiguration->camInputs[i])) {
-		    criticalError("Please no physical sensors in CAM by MAP mode");
+		Gpio pin = engineConfiguration->camInputs[i];
+		if (engineConfiguration->vvtMode[0] == VVT_MAP_V_TWIN && isBrainPinValid(pin)) {
+		    criticalError("Please no physical sensors in CAM by MAP mode index=%d %s", i, hwPortname(pin));
 		}
 	}
 
@@ -1044,26 +1090,31 @@ void onConfigurationChangeTriggerCallback() {
 
 	if (changed) {
 	#if EFI_ENGINE_CONTROL
-		engine->updateTriggerWaveform();
+		engine->updateTriggerConfiguration();
 		getTriggerCentral()->noiseFilter.resetAccumSignalData();
 	#endif
 	}
-#if EFI_DEFAILED_LOGGING
+#if EFI_DETAILED_LOGGING
 	efiPrintf("isTriggerConfigChanged=%d", triggerConfigChanged);
-#endif /* EFI_DEFAILED_LOGGING */
+#endif /* EFI_DETAILED_LOGGING */
 
 	// we do not want to miss two updates in a row
 	getTriggerCentral()->triggerConfigChangedOnLastConfigurationChange = getTriggerCentral()->triggerConfigChangedOnLastConfigurationChange || changed;
 }
 
-static void initVvtShape(TriggerWaveform& shape, const TriggerConfiguration& p_config, TriggerDecoderBase &initState) {
-	shape.initializeTriggerWaveform(FOUR_STROKE_CAM_SENSOR, p_config.TriggerType);
+static void initVvtShape(int camIndex, TriggerWaveform& shape, const TriggerConfiguration& p_config, TriggerDecoderBase &initState) {
+	shape.initializeTriggerWaveform(FOUR_STROKE_CAM_SENSOR, p_config.TriggerType, /*isCrank*/ false);
+	if (camIndex == 0) {
+	  // at the moment we only support override of first cam
+	  // nasty code: this implicitly adjusts 'shape' parameter
+	  getTriggerCentral()->applyCamGapOverride();
+	}
 	shape.initializeSyncPoint(initState, p_config);
 }
 
 void TriggerCentral::validateCamVvtCounters() {
-	// micro-optimized 'crankSynchronizationCounter % 256'
-	int camVvtValidationIndex = triggerState.getCrankSynchronizationCounter() & 0xFF;
+	// micro-optimized 'synchronizationCounter % 256'
+	int camVvtValidationIndex = triggerState.getSynchronizationCounter() & 0xFF;
 	if (camVvtValidationIndex == 0) {
 		vvtCamCounter = 0;
 	} else if (camVvtValidationIndex == 0xFE && vvtCamCounter < 60) {
@@ -1099,15 +1150,7 @@ static void calculateTriggerSynchPoint(
 
 TriggerDecoderBase initState("init");
 
-void TriggerCentral::updateWaveform() {
-	// Re-read config in case it's changed
-	primaryTriggerConfiguration.update();
-	for (int camIndex = 0;camIndex < CAMS_PER_BANK;camIndex++) {
-		vvtTriggerConfiguration[camIndex].update();
-	}
-
-	triggerShape.initializeTriggerWaveform(lookupOperationMode(), primaryTriggerConfiguration.TriggerType);
-
+void TriggerCentral::applyTriggerGapOverride() {
 	/**
 	 * this is only useful while troubleshooting a new trigger shape in the field
 	 * in very VERY rare circumstances
@@ -1115,13 +1158,13 @@ void TriggerCentral::updateWaveform() {
 	if (engineConfiguration->overrideTriggerGaps) {
 		int gapIndex = 0;
 
-		engine->triggerCentral.triggerShape.gapTrackingLength = engineConfiguration->gapTrackingLengthOverride;
+		triggerShape.gapTrackingLength = engineConfiguration->gapTrackingLengthOverride;
 
 		// copy however many the user wants
 		for (; gapIndex < engineConfiguration->gapTrackingLengthOverride; gapIndex++) {
 			float gapOverrideFrom = engineConfiguration->triggerGapOverrideFrom[gapIndex];
 			float gapOverrideTo = engineConfiguration->triggerGapOverrideTo[gapIndex];
-			TRIGGER_WAVEFORM(setTriggerSynchronizationGap3(/*gapIndex*/gapIndex, gapOverrideFrom, gapOverrideTo));
+			triggerShape.setTriggerSynchronizationGap3(/*gapIndex*/gapIndex, gapOverrideFrom, gapOverrideTo);
 		}
 
 		// fill the remainder with the default gaps
@@ -1130,6 +1173,39 @@ void TriggerCentral::updateWaveform() {
 			triggerShape.synchronizationRatioTo[gapIndex] = NAN;
 		}
 	}
+}
+
+void TriggerCentral::applyCamGapOverride() {
+    if (engineConfiguration->overrideVvtTriggerGaps) {
+        int gapIndex = 0;
+
+        TriggerWaveform *shape = &vvtShape[0];
+        shape->gapTrackingLength = engineConfiguration->gapVvtTrackingLengthOverride;
+
+		for (; gapIndex < engineConfiguration->gapVvtTrackingLengthOverride; gapIndex++) {
+			float gapOverrideFrom = engineConfiguration->triggerVVTGapOverrideFrom[gapIndex];
+			float gapOverrideTo = engineConfiguration->triggerVVTGapOverrideTo[gapIndex];
+			shape->synchronizationRatioFrom[gapIndex] = gapOverrideFrom;
+			shape->synchronizationRatioTo[gapIndex] = gapOverrideTo;
+		}
+		// fill the remainder with the default gaps
+		for (; gapIndex < VVT_TRACKING_LENGTH; gapIndex++) {
+			shape->synchronizationRatioFrom[gapIndex] = NAN;
+			shape->synchronizationRatioTo[gapIndex] = NAN;
+		}
+    }
+}
+
+void TriggerCentral::applyShapesConfiguration() {
+	// Re-read config in case it's changed
+	primaryTriggerConfiguration.update();
+	for (int camIndex = 0;camIndex < CAMS_PER_BANK;camIndex++) {
+		vvtTriggerConfiguration[camIndex].update();
+	}
+
+	triggerShape.initializeTriggerWaveform(lookupOperationMode(), primaryTriggerConfiguration.TriggerType);
+
+  applyTriggerGapOverride();
 
 	if (!triggerShape.shapeDefinitionError) {
 		int length = triggerShape.getLength();
@@ -1148,28 +1224,13 @@ void TriggerCentral::updateWaveform() {
 				initState);
 	}
 
-    if (engineConfiguration->overrideVvtTriggerGaps) {
-        int gapIndex = 0;
-
-        TriggerWaveform *shape = &vvtShape[0];
-
-		for (; gapIndex < engineConfiguration->gapVvtTrackingLengthOverride; gapIndex++) {
-			float gapOverrideFrom = engineConfiguration->triggerVVTGapOverrideFrom[gapIndex];
-			float gapOverrideTo = engineConfiguration->triggerVVTGapOverrideTo[gapIndex];
-			shape->synchronizationRatioFrom[gapIndex] = gapOverrideFrom;
-			shape->synchronizationRatioTo[gapIndex] = gapOverrideTo;
-		}
-		// fill the remainder with the default gaps
-		for (; gapIndex < VVT_TRACKING_LENGTH; gapIndex++) {
-			shape->synchronizationRatioFrom[gapIndex] = NAN;
-			shape->synchronizationRatioTo[gapIndex] = NAN;
-		}
-    }
+  applyCamGapOverride();
 
 	for (int camIndex = 0; camIndex < CAMS_PER_BANK; camIndex++) {
 		// todo: should 'vvtWithRealDecoder' be used here?
 		if (engineConfiguration->vvtMode[camIndex] != VVT_INACTIVE) {
 			initVvtShape(
+			  camIndex,
 				vvtShape[camIndex],
 				vvtTriggerConfiguration[camIndex],
 				initState
@@ -1200,7 +1261,7 @@ bool TriggerCentral::isTriggerConfigChanged() {
 
 void validateTriggerInputs() {
 	if (!isBrainPinValid(engineConfiguration->triggerInputPins[0]) && isBrainPinValid(engineConfiguration->triggerInputPins[1])) {
-		criticalError("First trigger channel is missing");
+		criticalError("First trigger channel not configured while second one is.");
 	}
 
 	if (!isBrainPinValid(engineConfiguration->camInputs[0]) && isBrainPinValid(engineConfiguration->camInputs[2])) {

@@ -18,7 +18,7 @@ void initPrimaryPins();
 void initMiscOutputPins();
 
 #if EFI_GPIO_HARDWARE
-void turnAllPinsOff(void);
+void turnAllPinsOff();
 #else /* EFI_GPIO_HARDWARE */
 #define turnAllPinsOff() {}
 #endif /* EFI_GPIO_HARDWARE */
@@ -29,8 +29,10 @@ public:
 	void setHigh() override;
 	void setLow() override;
 	void reset();
+	// 6000 RPM is 100Hz we can fit a few years worth of sparks into 32 bits, right?
+	// 2_000_000_000 / 100 = 20_000_000 seconds = 231 days?
+	// [tag:duration_limit]
 	int signalFallSparkId;
-	bool outOfOrder; // https://sourceforge.net/p/rusefi/tickets/319/
 	int8_t coilIndex;
 };
 
@@ -87,6 +89,8 @@ public:
 	// see acRelayPin
 	RegisteredOutputPin acRelay;
 	RegisteredOutputPin fuelPumpRelay;
+	RegisteredOutputPin nitrousRelay;
+	RegisteredOutputPin vvlRelay;
 #if EFI_HD_ACR
 	RegisteredNamedOutputPin harleyAcr;
 	RegisteredOutputPin harleyAcr2;
@@ -131,6 +135,10 @@ public:
 	OutputPin tcuPcSolenoid;
 	OutputPin tcu32Solenoid;
 
+#ifdef EFI_UNIT_TEST
+	void resetForUnitTest();
+#endif
+
 private:
 	void startInjectionPins();
 	void startIgnitionPins();
@@ -161,7 +169,7 @@ private:
 
 ioportmask_t getHwPin(const char *msg, brain_pin_e brainPin);
 ioportid_t getHwPort(const char *msg, brain_pin_e brainPin);
-ioportid_t * getGpioPorts();
+/* Should return valid pointer in any case, not null, return "unknown" if argument is invalid */
 const char *portname(ioportid_t GPIOx);
 
 #endif /* EFI_GPIO_HARDWARE */

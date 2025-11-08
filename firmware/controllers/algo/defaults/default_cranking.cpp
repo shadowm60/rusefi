@@ -8,38 +8,34 @@ void setDefaultCranking() {
 
 	// Fuel
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
-	engineConfiguration->cranking.baseFuel = 27;
 
 	// Ignition
 	engineConfiguration->ignitionDwellForCrankingMs = DEFAULT_CRANKING_DWELL_MS;
 	engineConfiguration->crankingTimingAngle = DEFAULT_CRANKING_ANGLE;
 
 	// IAC
-	engineConfiguration->crankingIACposition = 50;
-	engineConfiguration->afterCrankingIACtaperDuration = 200;
+	setArrayValues(config->cltCrankingCorr, 50);
+	// should be 100 once tune is better
+	setArrayValues(config->afterCrankingIACtaperDuration, 200);
+	setLinearCurve(config->afterCrankingIACtaperDurationBins, CLT_CURVE_RANGE_FROM, 100, 1);
 
 	engineConfiguration->isFasterEngineSpinUpEnabled = true;
 
 	// After start enrichment
 #if !EFI_UNIT_TEST
 	// don't set this for unit tests, as it makes things more complicated to test
-	static const float defaultPostCrankingCLTBins[] = {
-		-20.0f, 0.0f, 20.0f, 40.0f, 60.0f, 80.0f
-	};
-	static const uint16_t defaultPostCrankinDurationBins[] = {
-		0, 15, 35, 65, 100, 150
-	};
-	copyArray(engineConfiguration->postCrankingCLTBins, defaultPostCrankingCLTBins);
-	copyArray(engineConfiguration->postCrankingDurationBins, defaultPostCrankinDurationBins);
-	setTable(engineConfiguration->postCrankingFactor, 1.2f);
+	setLinearCurve(config->postCrankingCLTBins, /*from*/-20, /*to*/80, 20);
+	setLinearCurve(config->postCrankingDurationBins, /*from*/0, /*to*/150, 40);
+	setTable(config->postCrankingFactor, 1.2f);
 #endif
 
 	setLinearCurve(config->crankingTpsCoef, /*from*/1, /*to*/1, 1);
 	setLinearCurve(config->crankingTpsBins, 0, 100, 1);
 
 	setLinearCurve(config->cltCrankingCorrBins, CLT_CURVE_RANGE_FROM, 100, 1);
-	setLinearCurve(config->cltCrankingCorr, 1.0, 1.0, 1);
+	setLinearCurve(config->cltCrankingCorr, 50, 50, 1); // now as % of idle valve/etb
 
+#if CRANKING_CURVE_SIZE == 8
 	// Cranking temperature compensation
 	static const float crankingCoef[] = {
 		2.8,
@@ -66,13 +62,11 @@ void setDefaultCranking() {
 		90
 	};
 	copyArray(config->crankingFuelBins, crankingBins);
-
+#endif
 	// Cranking cycle compensation
 
-	// Whole table is 1.0, except first two values are steeper
-	setArrayValues(config->crankingCycleCoef, 1.0f);
-	config->crankingCycleCoef[0] = 2.0f;
-	config->crankingCycleCoef[1] = 1.3f;
+	setTable(config->crankingCycleBaseFuel, 27.0f);
+	setLinearCurve(config->crankingCycleFuelCltBins, 0, 60, 1);
 
 	// X values are simply counting up cycle number starting at 1
 	for (size_t i = 0; i < efi::size(config->crankingCycleBins); i++) {

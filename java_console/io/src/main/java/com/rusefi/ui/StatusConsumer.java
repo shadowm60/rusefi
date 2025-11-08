@@ -10,9 +10,8 @@ import static com.devexperts.logging.Logging.getLogging;
 public interface StatusConsumer {
     Logging log = getLogging(StatusConsumer.class);
 
-    StatusConsumer ANONYMOUS = log::info;
-    StatusConsumer VOID = s -> {
-    };
+    StatusConsumer ANONYMOUS = (status) -> log.info(status);
+    StatusConsumer VOID = (status) -> {};
 
-    void append(String status);
+    void logLine(String status);
 }

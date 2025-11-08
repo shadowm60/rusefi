@@ -31,29 +31,41 @@ void setHarley() {
 	engineConfiguration->enableAemXSeries = true;
 
   // total 45 degree odd fire, split across two cylinders mostly for fun
-	engineConfiguration->timing_offset_cylinder[0] = HARLEY_V_TWIN / 2;
-	engineConfiguration->timing_offset_cylinder[1] = -HARLEY_V_TWIN / 2;
+	engineConfiguration->timing_offset_cylinder[0] = -HARLEY_V_TWIN / 2;
+	engineConfiguration->timing_offset_cylinder[1] = +HARLEY_V_TWIN / 2;
 
   // work-around for https://github.com/rusefi/rusefi/issues/5894 todo: fix it!
 	engineConfiguration->maximumIgnitionTiming = 90;
   engineConfiguration->minimumIgnitionTiming = -90;
 
-	// for now we need non wired camInput to keep TS field enable/disable logic happy
-	engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_6;
+  engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL_32_2;
+  engineConfiguration->overrideTriggerGaps = true;
+  engineConfiguration->gapTrackingLengthOverride = 3;
+  engineConfiguration->triggerGapOverrideFrom[0] = 0.75;
+  engineConfiguration->triggerGapOverrideTo[0] = 1.25;
+  engineConfiguration->triggerGapOverrideFrom[1] = 0.05; // this one is custom
+  engineConfiguration->triggerGapOverrideTo[1] = 0.5;
+  engineConfiguration->triggerGapOverrideFrom[2] = 1.850; // this one is custom
+  engineConfiguration->triggerGapOverrideTo[2] = 6;
+
 	engineConfiguration->vvtMode[0] = VVT_MAP_V_TWIN;
 
-  engineConfiguration->oddFireEngine = true;
 	engineConfiguration->mainRelayPin = Gpio::Unassigned;
 	engineConfiguration->mapCamDetectionAnglePosition = 50;
 
 	setCustomMap(/*lowValue*/ 20, /*mapLowValueVoltage*/ 0.79, /*highValue*/ 101.3, /*mapHighValueVoltage*/ 4);
 
-#if HW_PROTEUS
+#if HW_PROTEUS && EFI_PROD_CODE
     engineConfiguration->acrPin = Gpio::PROTEUS_IGN_8;
     engineConfiguration->acrPin2 = Gpio::PROTEUS_IGN_9;
 
     engineConfiguration->triggerInputPins[0] = PROTEUS_VR_1;
-    engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_3;
+	// for now we need non wired camInput to keep TS field enable/disable logic happy
+#if EFI_PROD_CODE
+	  engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_6;
+#else
+    engineConfiguration->camInputs[0] = Gpio::Unassigned;
+#endif
 
 	engineConfiguration->luaOutputPins[0] = Gpio::PROTEUS_LS_12;
 

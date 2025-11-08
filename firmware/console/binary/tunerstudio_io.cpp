@@ -19,7 +19,9 @@ size_t TsChannelBase::read(uint8_t* buffer, size_t size) {
 }
 #endif
 
-#define isBigPacket(size) ((size) > BLOCKING_FACTOR + 7)
+bool TsChannelBase::isBigPacket(size_t size) {
+	return ((TS_PACKET_HEADER_SIZE + size + TS_PACKET_TAIL_SIZE) > sizeof(scratchBuffer));
+}
 
 void TsChannelBase::copyAndWriteSmallCrcPacket(uint8_t responseCode, const uint8_t* buf, size_t size) {
 	// don't transmit too large a buffer
@@ -30,7 +32,7 @@ void TsChannelBase::copyAndWriteSmallCrcPacket(uint8_t responseCode, const uint8
 	// tsOutputChannels) during the CRC computation.  Instead compute the CRC on our
 	// local buffer that nobody else will write.
 	if (size) {
-		memcpy(scratchBuffer + SCRATCH_BUFFER_PREFIX_SIZE, buf, size);
+		memcpy(scratchBuffer + TS_PACKET_HEADER_SIZE, buf, size);
 	}
 
 	crcAndWriteBuffer(responseCode, size);
@@ -48,7 +50,8 @@ void TsChannelBase::crcAndWriteBuffer(uint8_t responseCode, size_t size) {
 	uint32_t crc = crc32(&scratchBuffer[2], size + 1); // command part of CRC
 
 	// Place the CRC at the end
-	*reinterpret_cast<uint32_t*>(&scratchBuffer[size + SCRATCH_BUFFER_PREFIX_SIZE]) = SWAP_UINT32(crc);
+	crc = SWAP_UINT32(crc);
+	memcpy(scratchBuffer + size + TS_PACKET_HEADER_SIZE, &crc, sizeof(crc));
 
 	// Write to the underlying stream
 	write(reinterpret_cast<uint8_t*>(scratchBuffer), size + 7, true);
@@ -74,7 +77,6 @@ void TsChannelBase::writeCrcPacketLarge(const uint8_t responseCode, const uint8_
 	// Data part of CRC
 	crc = crc32inc((void*)buf, crc, size);
 	*(uint32_t*)crcBuffer = SWAP_UINT32(crc);
-
 
 	// If data, write that
 	if (size) {

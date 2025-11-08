@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.rusefi.AssertCompatibility.assertEquals;
@@ -23,18 +26,21 @@ public class StateDictionaryGeneratorTest {
                 "  - name: fuel_computer\n" +
                 "    java: FuelComputer.java\n" +
                 "    folder: controllers/algo/fuel\n" +
-                "    constexpr: \"engine->fuelComputer\"\n" +
+                "    constexpr: [\"engine->fuelComputer\", \"x\"]\n" +
+            "    output_name: [ \"wb1\", \"wb2\" ]\n" +
                 "    conditional_compilation: \"EFI_ENGINE_CONTROL\"\n";
 
 
-        Map<String, Object> data = LiveDataProcessor.getStringObjectMap(new StringReader(testYaml));
+        List<LinkedHashMap> data = LiveDataProcessor.getStringObjectMap(new StringReader(testYaml));
 
         TestFileCaptor captor = new TestFileCaptor();
-        LiveDataProcessor liveDataProcessor = new LiveDataProcessor("test", fileName -> new StringReader(""), captor);
+        LiveDataProcessor liveDataProcessor = new LiveDataProcessor("test", fileName -> new StringReader(""), captor, "./");
         liveDataProcessor.handleYaml(data);
-        assertEquals("number of outputs", 14, captor.fileCapture.size());
+        assertEquals("number of outputs", 12, captor.fileCapture.size());
 
-        assertEquals("        stateDictionary.register(live_data_e.LDS_output_channels, TsOutputs.VALUES, \"status_loop\");\n" +
-                "        stateDictionary.register(live_data_e.LDS_fuel_computer, FuelComputer.VALUES, \"fuel_computer\");\n", liveDataProcessor.stateDictionaryGenerator.content.toString());
+        assertEquals("        stateDictionary.register(live_data_e.LDS_output_channels, \"status_loop\");\n" +
+            "        stateDictionary.register(live_data_e.LDS_fuel_computer0, \"fuel_computer\");\n" +
+            "        stateDictionary.register(live_data_e.LDS_fuel_computer1, \"fuel_computer\");\n",
+            liveDataProcessor.stateDictionaryGenerator.content.toString());
     }
 }

@@ -5,10 +5,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
 import java.util.Locale;
+import java.util.Objects;
 
+// careful: JNI is fragile!
 public final class OpenbltJni {
+    // careful: JNI is fragile! interface full name is part of magic API
     public interface OpenbltCallbacks
     {
         void log(String line);
@@ -48,6 +50,7 @@ public final class OpenbltJni {
     }
 
     public static void flashSerial(String filename, String serialPort, OpenbltCallbacks callbacks) {
+        Objects.requireNonNull(filename);
         // On non-Windows, prepend "/dev/" to the serial port name if it's missing
         if (!OS_NAME.contains("win") && !serialPort.startsWith("/dev/")) {
             serialPort = "/dev/" + serialPort;

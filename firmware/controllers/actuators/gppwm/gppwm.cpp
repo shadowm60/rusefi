@@ -7,12 +7,14 @@ static GppwmChannel channels[GPPWM_CHANNELS];
 static OutputPin pins[GPPWM_CHANNELS];
 static SimplePwm outputs[GPPWM_CHANNELS];
 
-static gppwm_Map3D_t table1;
-static gppwm_Map3D_t table2;
-static gppwm_Map3D_t table3;
-static gppwm_Map3D_t table4;
+typedef Map3D<GPPWM_RPM_COUNT, GPPWM_LOAD_COUNT, uint8_t, int16_t, int16_t> gppwm_Map3D_t;
 
-static gppwm_Map3D_t* tables[] = {
+static gppwm_Map3D_t table1{"gppwm1"};
+static gppwm_Map3D_t table2{"gppwm2"};
+static gppwm_Map3D_t table3{"gppwm3"};
+static gppwm_Map3D_t table4{"gppwm4"};
+
+static gppwm_Map3D_t* const tables[] = {
 	&table1,
 	&table2,
 	&table3,
@@ -42,11 +44,11 @@ void initGpPwm() {
 		// Setup pin & pwm
 		pins[i].initPin("gp pwm", cfg.pin);
 		if (usePwm) {
-			startSimplePwm(&outputs[i], channelNames[i], &engine->executor, &pins[i], freq, 0);
+			startSimplePwm(&outputs[i], channelNames[i], &engine->scheduler, &pins[i], freq, 0);
 		}
 
 		// Set up this channel's lookup table
-		tables[i]->init(cfg.table, cfg.loadBins, cfg.rpmBins);
+		tables[i]->initTable(cfg.table, cfg.rpmBins, cfg.loadBins);
 
 		// Finally configure the channel
 		channels[i].init(usePwm, &outputs[i], &pins[i], tables[i], &cfg);
@@ -54,11 +56,8 @@ void initGpPwm() {
 }
 
 void updateGppwm() {
-	// There are only 8 debug float fields, this will overflow if more channels
-	static_assert(efi::size(channels) <= 8);
-
 	for (size_t i = 0; i < efi::size(channels); i++) {
-		auto result = channels[i].update();
+		auto result = channels[i].update(i);
 
 		engine->outputChannels.gppwmOutput[i] = result.Result;
 		engine->outputChannels.gppwmXAxis[i] = result.X;

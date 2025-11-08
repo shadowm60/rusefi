@@ -51,7 +51,7 @@ public:
 		return result;
 	}
 
-	StoredValueSensor(SensorType type, efitick_t timeoutNt)
+	StoredValueSensor(SensorType type, efidur_t timeoutNt)
 		: Sensor(type)
 		, m_result(unexpected)
 		, m_timeoutPeriod(timeoutNt)
@@ -75,7 +75,7 @@ public:
 		m_lastUpdate = timestamp;
 	}
 
-	void showInfo(const char*) const override { }
+	void showInfo(const char* sensorName) const override;
 
 	virtual void setTimeout(int timeoutMs) {
 		m_timeoutPeriod = MS2NT(timeoutMs);
@@ -84,6 +84,6 @@ public:
 private:
 	SensorResult m_result;
 
-	efitick_t m_timeoutPeriod;
+	efidur_t m_timeoutPeriod;
 	efitick_t m_lastUpdate = 0;
 };

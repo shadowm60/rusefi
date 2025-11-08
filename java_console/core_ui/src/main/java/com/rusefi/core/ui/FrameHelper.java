@@ -1,5 +1,6 @@
 package com.rusefi.core.ui;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.core.io.BundleUtil;
 import org.jetbrains.annotations.NotNull;
 
@@ -9,11 +10,14 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.Arrays;
 
+import static com.devexperts.logging.Logging.getLogging;
+
 /**
  * Date: 3/24/13
  * Andrey Belomutskiy, (c) 2013-2020
  */
 public class FrameHelper {
+    private static final Logging log = getLogging(FrameHelper.class);
     private final JFrame frame = new JFrame();
 
     public FrameHelper() {
@@ -21,18 +25,20 @@ public class FrameHelper {
     }
 
     public FrameHelper(int operation) {
+        AutoupdateUtil.assertAwtThread();
         frame.setDefaultCloseOperation(operation);
         AutoupdateUtil.setAppIcon(frame);
     }
 
     @NotNull
     public static String appendBundleName(String title) {
-        String bundleName = BundleUtil.readBundleFullNameNotNull();
+        String bundleName = BundleUtil.readBundleFullNameNotNull().getUiLabel();
         return title + " " + bundleName;
     }
 
+    // note hard-coded 'EXIT_ON_CLOSE' - that's the best choice at the moment
     public static FrameHelper createFrame(String title) {
-        FrameHelper frame = new FrameHelper();
+        FrameHelper frame = new FrameHelper(JDialog.EXIT_ON_CLOSE);
         frame.frame.setTitle(appendBundleName(title));
         return frame;
     }
@@ -41,16 +47,16 @@ public class FrameHelper {
         return frame;
     }
 
-    public void showFrame(JComponent component) {
-        showFrame(component, true);
+    public void showFrame(JComponent content) {
+        showFrame(content, true);
     }
 
-    public void showFrame(JComponent component, final boolean maximizeOnStart) {
-        initFrame(component, maximizeOnStart);
+    public void showFrame(JComponent content, final boolean maximizeOnStart) {
+        initFrame(content, maximizeOnStart);
         frame.setVisible(true);
     }
 
-    public void initFrame(JComponent component, final boolean maximizeOnStart) {
+    public void initFrame(JComponent content, final boolean maximizeOnStart) {
         frame.setSize(800, 500);
         frame.addWindowListener(new WindowAdapter() {
             @Override
@@ -65,12 +71,12 @@ public class FrameHelper {
                 onWindowClosed();
                 for (Thread t : Thread.getAllStackTraces().keySet()) {
                     if (!t.isDaemon())
-                        System.out.println("Non-daemon thread: " + t);
+                       log.info("Non-daemon thread: " + t);
                 }
-                System.out.println(Arrays.toString(Frame.getFrames()));
+                log.info(Arrays.toString(Frame.getFrames()));
             }
         });
-        frame.add(component);
+        frame.add(content);
     }
 
     protected void onWindowOpened() {

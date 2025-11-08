@@ -4,6 +4,8 @@
 
 #pragma once
 
+// fine-grained method to facilitate testing
+void initOverrideSensors();
 
 // Call this once at startup to initialize, configure, and subscribe sensors
 void initNewSensors();
@@ -26,6 +28,7 @@ void initFluidPressure();
 void initThermistors();
 void initCanSensors();
 void initLambda();
+void initEgt();
 void initFlexSensor(bool isFirstTime);
 void initFuelLevel();
 void initBaro();
@@ -34,6 +37,7 @@ void initVehicleSpeedSensor();
 void initTurbochargerSpeedSensor();
 void initAuxSpeedSensors();
 void initInputShaftSpeedSensor();
+void initRangeSensors();
 
 // Sensor reconfiguration
 void deinitVbatt();
@@ -41,10 +45,18 @@ void deinitTps();
 void deinitThermistors();
 void deinitFluidPressure();
 void deInitFlexSensor();
+void deinitAuxSensors();
 void deInitVehicleSpeedSensor();
 void deinitTurbochargerSpeedSensor();
 void deinitMap();
 void deinitAuxSpeedSensors();
 void deinitInputShaftSpeedSensor();
+
+void stopEgt();
+void startEgt();
+
+#if EFI_SENT_SUPPORT
+void sentPressureDecode(SentInput sentCh);
+#endif
 
 void pokeAuxDigital();

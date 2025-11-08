@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include <board_types.h>
 #include <rusefi/rusefi_time_types.h>
 #include "generated_lookup_meta.h"
 #include "rusefi_enums.h"
@@ -22,22 +23,13 @@
 #include "efi_scaled_channel.h"
 #endif
 
-#define DEFAULT_FUEL_LOAD_COUNT 16
-#define DEFAULT_FUEL_RPM_COUNT 16
-#define DEFAULT_IGN_LOAD_COUNT 16
-#define DEFAULT_IGN_RPM_COUNT 16
-
 #define TWO_STROKE_CYCLE_DURATION 360
 #define FOUR_STROKE_CYCLE_DURATION 720
 
 // gasoline E0
+// todo: some usages should be migrated to getStoichiometricRatio()
 #define STOICH_RATIO 14.7f
 #define CONST_PI 3.14159265358979323846
-
-/**
- * 64 bit time in milliseconds (1/1_000 of a second), since boot
- */
-using efitimems64_t = int64_t;
 
 /**
  * integer time in milliseconds (1/1_000 of a second)
@@ -47,16 +39,18 @@ using efitimems64_t = int64_t;
  */
 using efitimems_t = uint32_t;
 
+using efidur_t = efitick_t;
+
 // date-time struct a la ctime struct tm
-typedef struct {
-	uint32_t year = 0;
-	uint8_t month;
-	uint8_t day;
-	uint8_t hour;
-	uint8_t minute;
-	uint8_t second;
+struct efidatetime_t {
+	uint32_t year{};
+	uint8_t month{};
+	uint8_t day{};
+	uint8_t hour{};
+	uint8_t minute{};
+	uint8_t second{};
 	// uint16_t millisecond;
-} efidatetime_t;
+};
 
 using angle_t = float;
 
@@ -90,6 +84,10 @@ using brain_pin_e = Gpio;
 using egt_cs_array_t = brain_pin_e[EGT_CHANNEL_COUNT];
 
 using pwm_freq_t = int16_t;
+
+// special type to represent voltage as if it was readed by 10bit ADC with 5V reference
+// also see convertVoltageTo10bitADC()
+using tps_limit_t = int16_t;
 
 using script_setting_t = float;
 

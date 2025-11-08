@@ -1,11 +1,10 @@
 package com.rusefi.ui.console;
 
 import com.opensr5.ini.DialogModel;
-import com.opensr5.ini.IniFileModel;
 import com.rusefi.config.Field;
 import com.rusefi.config.FieldType;
-import com.rusefi.config.FieldsMap;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
+import com.rusefi.io.LinkManager;
 import com.rusefi.ui.RecentCommands;
 import com.rusefi.ui.UIContext;
 import com.rusefi.ui.config.*;
@@ -19,18 +18,20 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.opensr5.ini.IniFileModel.RUSEFI_INI_PREFIX;
-import static com.opensr5.ini.IniFileModel.RUSEFI_INI_SUFFIX;
+import static com.opensr5.ini.IniFileModelImpl.RUSEFI_INI_PREFIX;
+import static com.opensr5.ini.IniFileModelImpl.RUSEFI_INI_SUFFIX;
 
 /**
  * @see EnumConfigField
  */
+/*
 public class SettingsTab {
     private final JPanel content = new JPanel(new BorderLayout());
     private final JPanel panel = new JPanel(new GridLayout(1, 3));
     private final JButton dialog = new JButton();
     private final JPanel dialogBody = new JPanel();
     private final UIContext uiContext;
+    private LinkManager linkManager;
 
     public SettingsTab(UIContext uiContext) {
         this.uiContext = uiContext;
@@ -41,8 +42,9 @@ public class SettingsTab {
         return content;
     }
 
-    public void showContent() {
-        final Map<String, DialogModel> dialogs = uiContext.getIni().getDialogs();
+    public void showContent(LinkManager linkManager) {
+        this.linkManager = linkManager;
+        final Map<String, DialogModel> dialogs = linkManager.getBinaryProtocol().getIniFile().getDialogs();
         if (dialogs.isEmpty()) {
             content.removeAll();
             content.add(new JLabel("Meta data not found: " + RUSEFI_INI_PREFIX + "*" + RUSEFI_INI_SUFFIX));
@@ -121,7 +123,7 @@ public class SettingsTab {
 
         panel.add(dialogBody);
 
-        panel.add(UiUtils.wrap(RecentCommands.createButton(uiContext, new AtomicBoolean(), Fields.CMD_WRITECONFIG)));
+        panel.add(UiUtils.wrap(RecentCommands.createButton(uiContext, new AtomicBoolean(), Integration.CMD_WRITECONFIG)));
 
         JLabel unusable = new JLabel("This is painfully unusable, TunerStudio works way better for settings!");
         unusable.setForeground(Color.red);
@@ -134,7 +136,7 @@ public class SettingsTab {
         dialog.setText(name);
         dialogBody.removeAll();
 
-        DialogModel m = uiContext.getIni().getDialogs().get(name);
+        DialogModel m = linkManager.getBinaryProtocol().getIniFile().getDialogs().get(name);
 
         dialogBody.setLayout(new GridLayout(m.getFields().size(), 1));
 
@@ -162,3 +164,4 @@ public class SettingsTab {
         UiUtils.trueLayout(dialogBody);
     }
 }
+*/

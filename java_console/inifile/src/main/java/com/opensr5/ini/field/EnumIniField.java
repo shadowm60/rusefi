@@ -10,10 +10,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.management.ObjectName;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.regex.Pattern;
 
 public class EnumIniField extends IniField {
@@ -58,12 +55,15 @@ public class EnumIniField extends IniField {
         ordinal = getBitRange(ordinal, bitPosition, bitSize0 + 1);
 
         if (ordinal >= enums.size())
-            throw new IllegalStateException("Ordinal out of range " + ordinal + " in " + getName());
+            throw new OrdinalOutOfRangeException("Ordinal out of range " + ordinal + " in " + getName() + " while " + enums.size() + " " + type);
         return "\"" + enums.get(ordinal) + "\"";
     }
 
     @NotNull
     private ByteBuffer getByteBuffer(ConfigurationImage image) {
+        Objects.requireNonNull(image, "image enum getter");
+        if (image.getSize() < getOffset() + 4)
+            throw new IllegalArgumentException("OutOfBounds while " + getName() + " " + getOffset());
         return image.getByteBuffer(getOffset(), 4);
     }
 
@@ -75,9 +75,9 @@ public class EnumIniField extends IniField {
     @Override
     public void setValue(ConfigurationImage image, Constant constant) {
         String v = constant.getValue();
-        int ordinal = enums.indexOf(isQuoted(v) ? ObjectName.unquote(v) : v);
+        int ordinal = enums.indexOf(v);
         if (ordinal == -1)
-            throw new IllegalArgumentException("Not found " + v);
+            throw new IllegalArgumentException(constant.getName() + ": Enum name not found " + v);
         int value = getByteBuffer(image).getInt();
         value = setBitRange(value, ordinal, bitPosition, bitSize0 + 1);
         getByteBuffer(image).putInt(value);
@@ -167,6 +167,11 @@ public class EnumIniField extends IniField {
             this.keyValues = keyValues;
         }
 
+        public boolean isBitField() {
+            return (keyValues.size() == 2)
+                && (keyValues.keySet().stream().allMatch(ordinal -> (0 <= ordinal) && (ordinal <= 1)));
+        }
+
         public static EnumKeyValueMap valueOf(String rawText, IniFileModel iniFileModel) {
             Map<Integer, String> keyValues = new TreeMap<>();
 
@@ -182,8 +187,11 @@ public class EnumIniField extends IniField {
 
             } else {
                 String firstValue = tokens[offset];
-                if (firstValue.trim().startsWith("$")) {
-                    List<String> elements = iniFileModel.defines.get(firstValue.substring(1));
+                String trimmed = firstValue.trim();
+                if (trimmed.startsWith("$")) {
+                    String key = trimmed.substring(1);
+                    List<String> elements = iniFileModel.getDefines().get(key);
+                    Objects.requireNonNull(elements, "Elements for " + key);
                     for (int i = 0; i < elements.size(); i++) {
                         keyValues.put(i, elements.get(i));
                     }
@@ -212,11 +220,12 @@ public class EnumIniField extends IniField {
         }
 
         public int indexOf(String value) {
+            final String valueToSearch = isQuoted(value) ? ObjectName.unquote(value) : value;
             for (Map.Entry<Integer, String> e : keyValues.entrySet()) {
-                if (e.getValue().equals(value))
+                if (e.getValue().equals(valueToSearch))
                     return e.getKey();
             }
-            throw new IllegalArgumentException("Nothing for " + value);
+            return -1;
         }
     }
 

@@ -18,8 +18,9 @@ void setHondaK() {
 	engineConfiguration->firingOrder = FO_1_3_4_2;
 	engineConfiguration->engineSyncCam = SC_Exhaust_First;
 	engineConfiguration->trigger.type = trigger_type_e::TT_HONDA_K_CRANK_12_1;
+	engineConfiguration->camSyncOnSecondCrankRevolution = true;
 	int magic = 0; // note that offset and VVT are related
-	engineConfiguration->globalTriggerAngleOffset = 663 - magic;
+	engineConfiguration->globalTriggerAngleOffset = 303 - magic;
 
 	// VVT is here just single tooth? and we do not even use it!?
 	engineConfiguration->vvtMode[0] = VVT_HONDA_K_INTAKE;
@@ -29,7 +30,7 @@ void setHondaK() {
 	engineConfiguration->vvtOffsets[1] = 183 + magic;
 
 	// set cranking_fuel 15
-	engineConfiguration->cranking.baseFuel = 75;
+	setTable(config->crankingCycleBaseFuel, 75);
 
 	engineConfiguration->map.sensor.type = MT_DENSO183;
 // todo: quote some source?
@@ -42,12 +43,12 @@ void setHondaK() {
 	engineConfiguration->crankingInjectionMode = IM_SIMULTANEOUS;
 	engineConfiguration->injectionMode = IM_SEQUENTIAL;
 
-	engineConfiguration->crankingIACposition = 70;
+	setArrayValues(config->cltCrankingCorr, 70);
 	static const uint16_t defaultPostCrankinDurationBins[] = {
 		0, 65, 100, 125, 150, 250
 	};
-	copyArray(engineConfiguration->postCrankingDurationBins, defaultPostCrankinDurationBins);
-	setTable(engineConfiguration->postCrankingFactor, 1.25f);
+	copyArray(config->postCrankingDurationBins, defaultPostCrankinDurationBins);
+	setTable(config->postCrankingFactor, 1.25f);
     engineConfiguration->useRunningMathForCranking = true;
 
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_HONDA);

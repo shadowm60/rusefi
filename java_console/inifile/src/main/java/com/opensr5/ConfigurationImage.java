@@ -4,18 +4,16 @@ import com.rusefi.core.FileUtil;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
+ * mutable presentation of ECU calibrations
+ * in the MCU firmware that's config/engineConfiguration
+ *
  * Andrey Belomutskiy, (c) 2013-2020
  * 3/6/2015
  */
 public class ConfigurationImage {
-    /**
-     * This constant is used
-     * 1) as a header while saving configuration to a binary file
-     * 2) as RomRaider RomID#internalIdString
-     */
-    public final static String BIN_HEADER = "OPEN_SR5_0.1";
     private final byte[] content;
 
     public ConfigurationImage(int size) {
@@ -23,7 +21,7 @@ public class ConfigurationImage {
     }
 
     public ConfigurationImage(byte[] content) {
-        this.content = content;
+        this.content = Objects.requireNonNull(content);
     }
 
     @NotNull
@@ -31,16 +29,12 @@ public class ConfigurationImage {
         return FileUtil.littleEndianWrap(content, offset, size);
     }
 
-    public int getSize() {
-        return content.length;
+    public boolean isEmpty() {
+        return content.length == 0;
     }
 
-    public static byte[] extractContent(byte[] rom) {
-        if (rom.length < BIN_HEADER.length())
-            return null;
-        byte[] result = new byte[rom.length - BIN_HEADER.length()];
-        System.arraycopy(rom, BIN_HEADER.length(), result, 0, result.length);
-        return result;
+    public int getSize() {
+        return content.length;
     }
 
     public byte[] getContent() {

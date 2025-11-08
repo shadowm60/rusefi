@@ -28,6 +28,180 @@ Release template (copy/paste this for new release):
 
 ## Unreleased
 
+### Added
+ - FatFS update to R0.16
+
+## October 2025 "Day 1333"
+
+### Added
+ - OilTempGauge
+ - LUA_USER_HEAP is no longer used
+ - official binaries use gcc14
+ - Jeep EVA 36-2-2 trigger pattern
+ - migration to ChibiOS 21.11
+ - long term fuel trim LTFT using SD card #6223
+ - Add Lua hook for Launch Control request with 'setLaunchTrigger' method #7161
+ - option to use Fahrenheit units #4788
+ - lua editor highlighting #8413
+ - lua: count dropped CAN messages #8225
+ - larger LUA_canFrameCount on F7
+ - native OpenBLT updater should help Mac/Linux #8495
+ - firmware binaries to have detailed file names, older files go into .rusefi/older-fw folder #7830
+ - predictive MAP AE Blend Duration is now a curve #8579
+
+### Fixed
+ - 3000gt 6g72 triggers cam and crank 3-0 more accuracy
+ - unneeded ETB PID reset causes AE and causes AFR dip #8392
+ - Torque reduction while using "Clutch Up Switch" trigger is inverted. #8447
+ - TPS AE Fuel During Cranking #8500
+ - migration fails in case of large diff #8524
+
+## June 2025 "Day 1210"
+
+### Added
+ - SD card mode selection: do not wait for USB if vbatt voltage #7424
+ - SD card mass storage read access performance improvements
+ - migrate injector lag is now a table #7522
+ - Allow fractional tachometer pulse ratio for fine tachometer calibration #7547
+ - separate boost control open loop axis from closed loop axis #7580
+ - verbose CAN PerCylinderKnock
+ - modern Chrysler VVT cam decoder https://github.com/rusefi/rusefi/wiki/All-Supported-Triggers#vvt
+ - SD card formatting indicator
+ - additional status on WBO dialog
+ - default Lua tick rate changed from 10Hz to 200Hz
+ - GMLAN slow single wire baud rate
+
+### Fixed
+ - map window averaging is broken since April 20th #7867
+ - map window averaging does not use crank angle #7869
+
+## February 2025 "Day 1075"
+
+### Added
+ - Flex Fuel sensor settings should be under "Fuel sensor" #7097
+ - GM SENT fuel pressure sensor #6997
+ - ETB calibration automatically enables ETB if needed #7197
+ - Fuel Level Sensor should have a RAW option #6979
+ - SD card bit data points #7227
+ - stm32 build-in watchdog for F7/H7 #1339
+ - improvements to SD card management #7327
+ - FatFS: update to latest R0.15a version #7315
+ - Honda J30 trigger wheel
+
+### Fixed
+ - Critical error when using big values on Boost Control Open Loop with Y axis as MAP #7093
+ - "Baro Correction" axis label
+ - unused "Throttle Up switch" is removed
+ - Lua: fix heap used accumulator calculation: Do not increase if allocation failed #6924
+ - Check Engine output hidden since the whole feature pretty much does not exist
+
+### Breaking Changes
+ - Lua: onCanRx parameter value to be use Lua-indexing #7110
+ - After start enrichment Engine Cycles is now represented with U16 data type
+
+## November 2024 "Day 998"
+
+### Added
+ - Support wasted spark on odd cylinder count 4-stroke engines. Improves startup and allows running without a cam sensor!
+ - CLT/IAT boost duty/target compensation #6424
+ - DFCO MAP condition hysteresis #6915
+ - Add I-term bounds for Alternator Control #6988
+ - knock fuel trim + disable suppression then deceleration #7017
+ - TS runtime rate improvement
+
+### Fixed
+ - Removed questionable MAP sampling trigger index option
+ - boost control load axis range and rename #6840
+ - alphaNUseIat calculations are wrong #6907
+ - TPS/PPS Error Detection Threshold visible twice in same dialog #6922
+ - V-Twin MAP phase sense does not need to always wait for sync #6985
+ - Organize sensor categories #6856
+ - USB serial is sometimes lost #6595
+ - fix detect cylinder for knock then wasted_spark #7062
+ - Change BMW E46 CAN interval to 10 ms #6974
+
+### Breaking Changes
+- Now secondary injectors use `Secondary injector flow compensation mode` and `Secondary injector reference pressure` instead of `Injector flow compensation mode` and `Injector reference pressure` Tuner Studio settings #6972
+
+## August 2024 "Day 898"
+
+### Added
+ - new rusEFI console tab: Knock analyzer #6467
+ - Suzuki K6A (NON VVTI Trigger) #6490
+ - explicit error if 32 bit java is used #6497
+ - configurable Open Loop Boost vertical axis #4778
+ - reduce JRE download complexity #6569
+ - simpler basic firmware updater #5577
+ - prohibit mcu_standby on ECU start-up #6589
+ - Allow to choose lower RPM cutoff for AC Compressor #6597
+ - New TPS/TPS enrichment mode: percent adder #3167
+ - Launch control has a variable ignition cut BEFORE the main Hard cut #6566
+ - Experimental mapExpAverageAlpha filtering #6579
+ - minimum priming delay of 0.1 second
+ - Launch to accept lua-based clutch and brake pedals #6658
+ - Console command `set_sensor_mock` now accepts a sensor by name, instead of index. Example: `set_sensor_mock CLT 85.5`
+ - STM32Cube v2.17
+ - Better validation of thermistor configuration #6724
+ - Full layout vs tuning layout #5154
+ - Usability: turn on boost controller without ECU power cycle #6761
+ - Knock frequency inputs to be bore diameter and checkbox #6767
+ - Nissan HR crank trigger wheel #6773
+
+### Fixed
+ - knock logic not activated until any configuration change via TS #6462
+ - VE Table have wrong units on Y-Axis #6479
+ - General Purpose PWM tables have wrong names on X-axis and Y-axis #6491
+ - Ignition scheduling errors after 40+ hours of uptime #6451
+ - luaSoftSparkSkip/luaHardSparkSkip probably bug #6528
+ - improved 4G63/4G9x cam wheel definition #6544
+ - Launch RPM + Launch Control window is not correct #6533
+ - MAX3185X_REFRESH_TIME is now 0.1 sec.
+ - ADC array out of bounds when using analog muxes #6376
+ - DFCO without a MAP sensor #6771
+
+### Breaking Changes
+ - "60/2 VW" trigger wheel renamed to "60-2 Wrong Polarity" #988
+ - exhaust VVTs now use it's own Edge Select setting
+ - removing weird 1+16 trigger wheel #6418
+ - critical error in case of unneeded second channel #6419
+ - Open Loop Boost vertical axis needs to be configured #4778
+ - Cranking Cycle Multiplier is now a Map with Coolant Temp as the additional axis. #6584
+ - Now we use "Alternator Voltage Target Table" instead of "Target(Volts)" setting on "Alternator Settings" area to calculate alternator voltage target. #6523
+ - Now console generates current_configuration.binary_image in new format instead of current_configuration.rusefi_binary #6863
+
+## April 2024 "Day 785"
+
+### Added
+ - Boost Open Loop gear-based modifier takes negative values #6189
+ - "12 tooth crank" renamed to "12crank/24cam" #6192
+ - second CAN WBO channel detailed logging #6306
+ - Make sure TUNERSTUDIO IS DISCONNECTED FROM ECU #6325
+ - 1_6_5_10_2_7_3_8_4_9 firing order BMW S85, also Audi 5.2 R8 and huracan GDI
+ - boost duty gauge is now clamped to match actuator #6339
+ - "MAP estimate table" is only available in speed density mode #6344
+ - 1-8-6-2-7-3-4-5 Ferrari-Maserati F136 firing order
+
+### Fixed
+ - ETB traction control drop is affected by not-highlighted cell #5952
+ - Aux Speed sensors stopped working on calibration change #6157
+ - EGO renamed to O2 sensor to reduce confusion #6159
+ - Disabling slow connectivity mode for now #6170
+ - hellen128 better ETB pin choice between rev A/B and C
+ - Base map values for Open Loop Boost Duty should be 0% #6188
+ - HPFP control on cam with variable timing #6245
+ - Negative timing is not displayed correctly fix #5250
+ - update-ts-cacerts work-around is no longer needed #6327
+ - uaEFI board knock configuration #6338
+ - Fix a scenario where noisy trigger can cause overdwell #6349
+ - knock retard calibration lookup #6370
+
+### Breaking Changes
+ - wrong trigger naming for missing teeth #6258
+ - flipping timing_offset_cylinder direction #6095
+ - clutch and flex inputs inverted options renamed #2808
+
+## March 2024 "Day 740"
+
 ### Breaking Changes
  - Trigger Edge settings renamed from "true"/"false" to "Falling"/"Rising"
 
@@ -41,6 +215,7 @@ Release template (copy/paste this for new release):
  - LIS2DW12TR on-board Accelerometer support #4870
  - Wheel slip ratio using aux speed inputs #5897
  - 4 cylinder daihatsu cam sensor decoder #5925
+ - allow inverted flex input #6131
 
 ### Fixed
  - Honda CBR 600 cam decoder #5909

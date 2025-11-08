@@ -6,39 +6,39 @@ pins:
     function: Injector 1
     class: outputs
     type: inj
-    ts_name: 1D - Injector 1
-    color: purple
+    ts_name: ___ - Injector 1
+    color: green
 
   - pin: 2D
     meta: MM176_INJ2
     function: Injector 2
     class: outputs
     type: inj
-    ts_name: 2D - Injector 2
-    color: purple
+    ts_name: ___ - Injector 2
+    color: white
 
   - pin: 3D
     meta: MM176_INJ3
     function: Injector 3
     class: outputs
     type: inj
-    ts_name: 3D - Injector 3
-    color: green
+    ts_name: ___ - Injector 3
+    color: blue
 
   - pin: 4D
     meta: MM176_INJ4
     function: Injector 4
     class: outputs
     type: inj
-    ts_name: 4D - Injector 4
-    color: green
+    ts_name: ___ - Injector 4
+    color: orange/brown
 
   - pin: 5D
     meta: MM176_INJ5
     function: Injector 5
     class: outputs
     type: inj
-    ts_name: 5D - Injector 5
+    ts_name: ___ - Injector 5
     color: green
 
   - pin: 6D
@@ -46,50 +46,51 @@ pins:
     function: Injector 6
     class: outputs
     type: inj
-    ts_name: 6D - Injector 6
-    color: green
+    ts_name: ___ - Injector 6
+    color: white
 
   - pin: 7D
     meta: MM176_INJ7
     function: Injector 7
     class: outputs
     type: inj
-    ts_name: 7D - Injector 7
-
+    ts_name: ___ - Injector 7
+    color: blue
 
   - pin: 8D
     function: VVT 1
     meta: MM176_OUT_PWM1
     class: outputs
-    ts_name: 8D - VVT 1
+    type: ls
+    ts_name: ___ - VVT 1
     color: purple
 
   - pin: 9D
     function: Fuel Pump Relay Output (low)
     meta: MM176_GP3
     class: outputs
-    ts_name: 9D - Fuel Pump
+    ts_name: ___ - Fuel Pump
     color: purple
 
   - pin: 10D
     function: Fan Relay Output (low)
     meta: MM176_GP2
     class: outputs
-    ts_name: 10D - Fan
+    ts_name: ___ - Fan
     color: purple
 
   - pin: 11D
     function: Main Relay Output (low)
     meta: MM176_GP1
     class: outputs
-    ts_name: 11D - Main Relay
-    color: purple
+    ts_name: ___ - Main Relay
+    color: grey
 
   - pin: 12D
     function: NOS Relay Output (low)
     meta: MM176_OUT_IO8
     class: outputs
-    ts_name: 12D - NOS
+    ts_name: ___ - NOS
     color: purple
 
   - pin: 13D
@@ -97,14 +98,15 @@ pins:
     function: Injector 8
     class: outputs
     type: inj
-    ts_name: 13D - Injector 8
-    color: purple
+    ts_name: ___ - Injector 8
+    color: orange/brown
 
 
   - pin: 14D
     function: VVT 2
     meta: MM176_OUT_PWM2
     class: outputs
+    type: ls
     ts_name: 14D - VVT 2
     color: orange
 
@@ -112,26 +114,26 @@ pins:
     function: Tachometer Output (low)
     meta: MM176_OUT_IO13
     class: outputs
-    ts_name: 15D - Tachometer
+    ts_name: ___ - Tachometer
     color: orange
 
   - pin: 16D
     function: Low Side 1
     meta: MM176_OUT_PWM6
     class: outputs
-    ts_name: 16C - Low Side 1
+    ts_name: ___ - Low Side 1
     color: orange
-    
+
   - pin: 17D
     function: Power GND
     type: gnd
     color: purple
-    
+
   - pin: 18D
     function: Power GND
     type: gnd
     color: purple
-    
+
   - pin: 19D
     meta: MM176_GP17
     function: Injector 9
@@ -144,29 +146,31 @@ pins:
   - pin: 20D
     function: VVT 3
     meta: MM176_OUT_PWM3
+    type: ls
     class: outputs
-    ts_name: 20D - VVT 3
+    ts_name: ___ - VVT 3
     color: purple
 
   - pin: 21D
     function: VVT 4
     meta: MM176_OUT_PWM4
+    type: ls
     class: outputs
-    ts_name: 21D - VVT 4
+    ts_name: ___ - VVT 4
     color: purple
-    
+
   - pin: 22D
     function: Boost (low)
     meta: MM176_OUT_PWM5
     class: outputs
-    ts_name: 22C - Boost
+    ts_name: ___ - Boost
     color: purple
 
   - pin: 23D
     function: Low Side 2
     meta: MM176_OUT_PWM7
     class: outputs
-    ts_name: 23C - Low Side 2
+    ts_name: ___ - Low Side 2
 
   - pin: 24D
     meta: MM176_GP20
@@ -174,7 +178,7 @@ pins:
     class: outputs
     type: inj
     ts_name: ___ - Injector 12
-    
+
   - pin: 25D
     meta: MM176_GP19
     function: Injector 11
@@ -188,11 +192,13 @@ pins:
     class: outputs
     type: inj
     ts_name: 26D - Injector 10
+    color: yellow
 
 info:
-  title: AlphaX 8chan
-  directory: hellen/alphax-8chan
-  name: AlphaX 8chan
+  title: rusEFI Huge
+  cid: d
+  directory: hellen/alphax-platinum
+  name: AlphaX Platinum
   image:
     file: 26pins-4k.jpg
   pins:

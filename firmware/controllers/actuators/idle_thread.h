@@ -10,10 +10,11 @@
 
 #include "engine_module.h"
 #include "rusefi_types.h"
-#include "periodic_task.h"
 #include "efi_pid.h"
 #include "sensor.h"
 #include "idle_state_generated.h"
+#include "closed_loop_idle.h"
+#include "biquad.h"
 
 struct IIdleController {
 	enum class Phase : uint8_t {
@@ -24,50 +25,76 @@ struct IIdleController {
 		Running,	// On throttle
 	};
 
-	virtual Phase determinePhase(int rpm, int targetRpm, SensorResult tps, float vss, float crankingTaperFraction) = 0;
-	virtual int getTargetRpm(float clt) = 0;
+		struct TargetInfo {
+ 		// Target speed for closed loop control
+ 		float ClosedLoopTarget;
+
+ 		// If below this speed, enter idle
+ 		float IdleEntryRpm;
+
+    // If above this speed, exit idle
+ 		float IdleExitRpm;
+
+ 		bool operator==(const TargetInfo& other) const {
+        return ClosedLoopTarget == other.ClosedLoopTarget && IdleEntryRpm == other.IdleEntryRpm && IdleExitRpm == other.IdleExitRpm;
+ 		}
+ 	};
+
+ 	virtual Phase determinePhase(float rpm, TargetInfo targetRpm, SensorResult tps, float vss, float crankingTaperFraction) = 0;
+ 	virtual TargetInfo getTargetRpm(float clt) = 0;
 	virtual float getCrankingOpenLoop(float clt) const = 0;
 	virtual float getRunningOpenLoop(IIdleController::Phase phase, float rpm, float clt, SensorResult tps) = 0;
 	virtual float getOpenLoop(Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction) = 0;
-	virtual float getClosedLoop(Phase phase, float tps, int rpm, int target) = 0;
-	virtual float getCrankingTaperFraction() const = 0;
+	virtual float getClosedLoop(Phase phase, float tps, float rpm, float target) = 0;
+	virtual float getCrankingTaperFraction(float clt) const = 0;
 	virtual bool isIdlingOrTaper() const = 0;
-	virtual float getIdleTimingAdjustment(int rpm) = 0;
+	virtual bool isCoastingAdvance() const = 0;
+	virtual float getIdleTimingAdjustment(float rpm) = 0;
+	virtual Phase getCurrentPhase() const = 0;
 };
 
 class IdleController : public IIdleController, public EngineModule, public idle_state_s {
 public:
 	// Mockable<> interface
-	using interface_t = IIdleController;
+	using interface_t = IdleController;
 
 	void init();
 
 	float getIdlePosition(float rpm);
 
 	// TARGET DETERMINATION
-	int getTargetRpm(float clt) override;
+	TargetInfo getTargetRpm(float clt) override;
 
 	// PHASE DETERMINATION: what is the driver trying to do right now?
-	Phase determinePhase(int rpm, int targetRpm, SensorResult tps, float vss, float crankingTaperFraction) override;
-	float getCrankingTaperFraction() const override;
+	Phase determinePhase(float rpm, TargetInfo targetRpm, SensorResult tps, float vss, float crankingTaperFraction) override;
+	float getCrankingTaperFraction(float clt) const override;
 
 	// OPEN LOOP CORRECTIONS
 	percent_t getCrankingOpenLoop(float clt) const override;
 	percent_t getRunningOpenLoop(IIdleController::Phase phase, float rpm, float clt, SensorResult tps) override;
 	percent_t getOpenLoop(Phase phase, float rpm, float clt, SensorResult tps, float crankingTaperFraction) override;
 
-	float getIdleTimingAdjustment(int rpm) override;
-	float getIdleTimingAdjustment(int rpm, int targetRpm, Phase phase);
+	float getIdleTimingAdjustment(float rpm) override;
+	float getIdleTimingAdjustment(float rpm, float targetRpm, Phase phase);
 
 	// CLOSED LOOP CORRECTION
-	float getClosedLoop(IIdleController::Phase phase, float tpsPos, int rpm, int targetRpm) override;
+	float getClosedLoop(IIdleController::Phase phase, float tpsPos, float rpm, float targetRpm) override;
 
-	void onConfigurationChange(engine_configuration_s const * previousConfig) final;
-	void onSlowCallback() final;
+	void onConfigurationChange(engine_configuration_s const * previousConfig) override final;
+	void onFastCallback() override final;
+	void onEngineStop() override final;
 
 	// Allow querying state from outside
 	bool isIdlingOrTaper() const override {
 		return m_lastPhase == Phase::Idling || (engineConfiguration->useSeparateIdleTablesForCrankingTaper && m_lastPhase == Phase::CrankToIdleTaper);
+	}
+
+	bool isCoastingAdvance() const override {
+		return m_lastPhase == Phase::Coasting && engineConfiguration->useIdleAdvanceWhileCoasting;
+	}
+
+	Phase getCurrentPhase() const override {
+		return m_lastPhase;
 	}
 
 	PidIndustrial industrialWithOverrideIdlePid;
@@ -86,12 +113,13 @@ public:
 		return &industrialWithOverrideIdlePid;
 	}
 
+  void updateLtit(float rpm, float clt, bool acActive, bool fan1Active, bool fan2Active, float idleIntegral);
+  void onIgnitionStateChanged(bool ignitionOn) override;
 
 private:
 
 	// These are stored by getIdlePosition() and used by getIdleTimingAdjustment()
 	Phase m_lastPhase = Phase::Cranking;
-	int m_lastTargetRpm = 0;
 	efitimeus_t restoreAfterPidResetTimeUs = 0;
 	// used by 'dashpot' (hold+decay) logic for iacByTpsTaper
 	efitimeus_t lastTimeRunningUs = 0;
@@ -99,10 +127,14 @@ private:
 	float m_crankTaperEndTime = 0.0f;
 	float m_idleTimingSoftEntryEndTime = 0.0f;
 
+  Timer m_timeInIdlePhase;
+
 	// This is stored by getClosedLoop and used in case we want to "do nothing"
 	float m_lastAutomaticPosition = 0;
 
 	Pid m_timingPid;
+	float m_modeledFlowIdleTiming = 0;
+	Biquad m_timingHpf;
 };
 
 percent_t getIdlePosition();
@@ -113,7 +145,6 @@ void setManualIdleValvePosition(int positionPercent);
 void startIdleThread();
 void setDefaultIdleParameters();
 void startIdleBench(void);
-void setIdleMode(idle_mode_e value);
 void setTargetIdleRpm(int value);
 void startSwitchPins();
 void stopSwitchPins();

@@ -4,10 +4,13 @@ import com.rusefi.output.ConfigStructure;
 import com.rusefi.output.ConfigurationConsumer;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 
 public interface ReaderState {
+    int getDefaultBitNameCounter();
+
+    void intDefaultBitNameCounter();
+
     void setWithC_Defines(boolean withC_Defines);
 
     EnumsReader getEnumsReader();
@@ -21,6 +24,10 @@ public interface ReaderState {
     void addCHeaderDestination(String cHeader);
 
     void addPrepend(String fileName);
+
+    void addSoftPrepend(String fileName);
+
+    void addPostponedPrependNotInput(String fileName);
 
     void addDestination(ConfigurationConsumer... consumers);
 
@@ -37,8 +44,6 @@ public interface ReaderState {
     String getTsFileOutputName();
 
     void setTsFileOutputName(String tsFileOutputName);
-
-    List<String> getPrependFiles();
 
     boolean isStackEmpty();
 

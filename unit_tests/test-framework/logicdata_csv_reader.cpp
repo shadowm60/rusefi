@@ -7,6 +7,7 @@
 
 #include "pch.h"
 #include "logicdata_csv_reader.h"
+#include "unit_test_logger.h"
 
 static char* trim(char *str) {
 	while (str != nullptr && str[0] == ' ') {
@@ -30,6 +31,9 @@ void CsvReader::open(const char *fileName, const int* triggerColumnIndeces, cons
 }
 
 bool CsvReader::haveMore() {
+	if (fp == nullptr) {
+		throw std::runtime_error("No file");
+	}
 	bool result = fgets(buffer, sizeof(buffer), fp) != nullptr;
 	m_lineIndex++;
 	if (m_lineIndex == 0) {
@@ -40,42 +44,52 @@ bool CsvReader::haveMore() {
 	return result;
 }
 
+static const char COMMA_SEPARATOR[2] = ",";
+
+#define readFirstTokenAndRememberInputString(input) trim(strtok(input, COMMA_SEPARATOR))
+#define readNextToken() trim(strtok(nullptr, COMMA_SEPARATOR))
+
 /**
  * @param values reference of values array to modify
  * @return timestamp of current line
  */
 double CsvReader::readTimestampAndValues(double *values) {
-	const char s[2] = ",";
-	char *line = buffer;
-
-	char *timeStampstr = trim(strtok(line, s));
+	char *timeStampstr = readFirstTokenAndRememberInputString(buffer);
 	double timeStamp = std::stod(timeStampstr);
 
 	for (size_t i = 0; i < m_triggerCount; i++) {
-		char *triggerToken = trim(strtok(nullptr, s));
+		char *triggerToken = readNextToken();
 		values[i] = std::stod(triggerToken);
 	}
 
 	return timeStamp;
 }
 
-// todo: separate trigger handling from csv file processing
+// this is about TS logs generated during trigger tests and viewing these files by humans.
+// Emulate 500Hz refresh rate
+#define TIME_DELTA	(1.0/500.0)
+
+// todo: separate trigger handling from csv file processing, maybe reuse 'readTimestampAndValues'?
 void CsvReader::processLine(EngineTestHelper *eth) {
 	Engine *engine = &eth->engine;
 
 	const char s[2] = ",";
-	char *timeStampstr = trim(strtok(buffer, s));
+	char *timeStampstr = readFirstTokenAndRememberInputString(buffer);
+
+  for (int i = 0;i<readingOffset;i++) {
+    readNextToken();
+  }
 
 	bool newTriggerState[TRIGGER_INPUT_PIN_COUNT];
 	bool newVvtState[CAM_INPUTS_COUNT];
 
 	for (size_t i = 0;i<m_triggerCount;i++) {
-		char * triggerToken = trim(strtok(nullptr, s));
+		char * triggerToken = readNextToken();
 		newTriggerState[triggerColumnIndeces[i]] = triggerToken[0] == '1';
 	}
 
 	for (size_t i = 0;i<m_vvtCount;i++) {
-		char *vvtToken = trim(strtok(nullptr, s));
+		char *vvtToken = readNextToken();
 		if (vvtToken == nullptr) {
 			criticalError("Null token in [%s]", buffer);
 		}
@@ -89,8 +103,18 @@ void CsvReader::processLine(EngineTestHelper *eth) {
 	}
 
 	double timeStamp = std::stod(timeStampstr);
+	history.add(timeStamp);
 
 	timeStamp += m_timestampOffset;
+
+#ifdef TIME_DELTA
+	// Fill the gap
+	while (lastTimeStamp + TIME_DELTA < timeStamp) {
+		lastTimeStamp += TIME_DELTA;
+		eth->setTimeAndInvokeEventsUs(1'000'000 * lastTimeStamp);
+		writeUnitTestLogLine();
+	}
+#endif
 
 	eth->setTimeAndInvokeEventsUs(1'000'000 * timeStamp);
 	for (size_t index = 0; index < m_triggerCount; index++) {
@@ -99,12 +123,7 @@ void CsvReader::processLine(EngineTestHelper *eth) {
 		}
 
 		efitick_t nowNt = getTimeNowNt();
-        bool state;
-		if (index == 0) {
-		    state = newTriggerState[index] ^ flipOnRead ^ engineConfiguration->invertPrimaryTriggerSignal;
-		} else {
-		    state = newTriggerState[index] ^ flipOnRead ^ engineConfiguration->invertSecondaryTriggerSignal;
-		}
+		bool state = newTriggerState[index] ^ flipOnRead;
 		hwHandleShaftSignal(index, state, nowNt);
 
 		currentState[index] = newTriggerState[index];
@@ -116,7 +135,8 @@ void CsvReader::processLine(EngineTestHelper *eth) {
 		}
 
 		efitick_t nowNt = getTimeNowNt();
-		TriggerValue event = newVvtState[vvtIndex] ^ engineConfiguration->invertCamVVTSignal ? TriggerValue::RISE : TriggerValue::FALL;
+		bool state = newVvtState[vvtIndex] ^ flipVvtOnRead;
+
 		// todo: configurable selection of vvt mode - dual bank or dual cam single bank
 		int bankIndex;
 		int camIndex;
@@ -127,15 +147,18 @@ void CsvReader::processLine(EngineTestHelper *eth) {
 			bankIndex = vvtIndex / 2;
 			camIndex = vvtIndex % 2;
 		}
-		hwHandleVvtCamSignal(event, nowNt, bankIndex *2 + camIndex);
+		hwHandleVvtCamSignal(state, nowNt, bankIndex *2 + camIndex);
 
 		currentVvtState[vvtIndex] = newVvtState[vvtIndex];
 
 	}
+	writeUnitTestLogLine();
+	lastTimeStamp = timeStamp;
 }
 
 void CsvReader::readLine(EngineTestHelper *eth) {
 	if (!haveMore())
 		return;
 	processLine(eth);
+	engine->periodicSlowCallback();
 }

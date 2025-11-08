@@ -17,9 +17,11 @@ const char *getTrigger_value_e(TriggerValue value);
 
 struct TriggerStateListener {
 #if EFI_SHAFT_POSITION_INPUT
-	virtual void OnTriggerStateProperState(efitick_t nowNt) = 0;
+	virtual void OnTriggerStateProperState(efitick_t nowNt, size_t triggerStateIndex) = 0;
 	virtual void OnTriggerSynchronization(bool wasSynchronized, bool isDecodingError) = 0;
 	virtual void OnTriggerSynchronizationLost() = 0;
+	// todo: replace this dirty hack with proper collection (linked list?) of listeners
+	virtual TriggerStateListener* nextListener() = 0;
 #endif // EFI_SHAFT_POSITION_INPUT
 };
 
@@ -34,6 +36,7 @@ public:
 
 protected:
 	virtual bool isVerboseTriggerSynchDetails() const = 0;
+public:
 	virtual trigger_config_s getType() const = 0;
 };
 
@@ -82,11 +85,16 @@ struct TriggerDecodeResult {
 class TriggerDecoderBase : public trigger_state_s {
 public:
 	TriggerDecoderBase(const char* name);
+
+  void printGaps(const char * prefix,
+    const TriggerConfiguration& triggerConfiguration,
+    const TriggerWaveform& triggerShape);
+
 	/**
 	 * current trigger processing index, between zero and #size
 	 */
 	int getCurrentIndex() const;
-	int getCrankSynchronizationCounter() const;
+	int getSynchronizationCounter() const;
 	/**
 	 * this is important for crank-based virtual trigger and VVT magic
 	 */
@@ -94,7 +102,7 @@ public:
 
 #if EFI_UNIT_TEST
 	/**
-	 * used for trigger export only
+	 * used only for trigger export
 	 */
 	float gapRatio[PWM_PHASE_MAX_COUNT * 6];
 #endif // EFI_UNIT_TEST
@@ -119,7 +127,7 @@ public:
 	/**
 	 * TRUE if we know where we are
 	 */
-	bool shaft_is_synchronized;
+	bool shaft_is_synchronized = false;
 	efitick_t mostRecentSyncTime;
 
 	Timer previousEventTimer;
@@ -142,7 +150,7 @@ public:
 
 	virtual void resetState();
 	void setShaftSynchronized(bool value);
-	bool getShaftSynchronized();
+	bool getShaftSynchronized() const;
 
 	/**
 	 * this is start of real trigger cycle
@@ -156,7 +164,7 @@ public:
 			);
 
 	bool someSortOfTriggerError() const {
-		return !m_timeSinceDecodeError.hasElapsedSec(1);
+		return !m_timeSinceDecodeError.hasElapsedSec(0.3);
 	}
 
 protected:
@@ -174,7 +182,7 @@ private:
 	void resetCurrentCycleState();
 	bool isSyncPoint(const TriggerWaveform& triggerShape, trigger_type_e triggerType) const;
 
-	bool validateEventCounters(const TriggerWaveform& triggerShape) const;
+	int getEventCountersError(const TriggerWaveform& triggerShape) const;
 
 	trigger_event_e prevSignal;
 	int64_t totalEventCountBase;
@@ -197,11 +205,14 @@ public:
 		m_hasSynchronizedPhase = !m_needsDisambiguation;
 	}
 
+	/**
+	  * returns zero if we were lucky to have correct engine phase, otherwise angle of engine phase correction which was applied.
+	  */
 	angle_t syncEnginePhase(int divider, int remainder, angle_t engineCycle);
 
 	// Returns true if syncEnginePhase has been called,
 	// i.e. if we have enough VVT information to have full sync on
-	// an indeterminite crank pattern
+	// an indeterminate crank pattern
 	bool hasSynchronizedPhase() const {
 		return m_hasSynchronizedPhase;
 	}

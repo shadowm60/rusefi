@@ -150,9 +150,9 @@ void initIdleHardware() {
 		 */
 		// todo: even for double-solenoid mode we can probably use same single SimplePWM
 		startSimplePwm(&idleSolenoidOpen, "Idle Valve Open",
-			&engine->executor,
+			&engine->scheduler,
 			&enginePins.idleSolenoidPin,
-			engineConfiguration->idle.solenoidFrequency, PERCENT_TO_DUTY(engineConfiguration->manIdlePosition));
+			engineConfiguration->idle.solenoidFrequency, PERCENT_TO_DUTY(config->cltIdleCorrTable[0][0]));
 
 		if (engineConfiguration->isDoubleSolenoidIdle) {
 			if (!isBrainPinValid(engineConfiguration->secondSolenoidPin)) {
@@ -161,9 +161,9 @@ void initIdleHardware() {
 			}
 
 			startSimplePwm(&idleSolenoidClose, "Idle Valve Close",
-				&engine->executor,
+				&engine->scheduler,
 				&enginePins.secondIdleSolenoidPin,
-				engineConfiguration->idle.solenoidFrequency, PERCENT_TO_DUTY(engineConfiguration->manIdlePosition));
+				engineConfiguration->idle.solenoidFrequency, PERCENT_TO_DUTY(config->cltIdleCorrTable[0][0]));
 		}
 	}
 }

@@ -10,8 +10,7 @@
 #define ADC_LOGIC_INTAKE_AIR 0
 #define ADC_LOGIC_COOLANT 0
 
-int getAdcValue(const char *msg, int channel);
-#define getSlowAdcCounter() 0
+int adcGetRawValue(const char *msg, int channel);
 #define waitForSlowAdc(x) {}
 
 

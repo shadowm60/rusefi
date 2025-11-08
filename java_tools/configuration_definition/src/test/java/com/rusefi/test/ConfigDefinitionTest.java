@@ -18,7 +18,7 @@ public class ConfigDefinitionTest {
     @Test
     public void testEnumIntoType() throws IOException {
         EnumsReader enumsReader = new EnumsReader();
-        enumsReader.read(new FileReader(FIRMWARE + File.separator + "controllers/algo/engine_types.h"));
+        enumsReader.read(new FileReader(FIRMWARE + File.separator + "controllers/algo/engine_type_e.h"));
 
         VariableRegistry variableRegistry = readRealConfig();
 
@@ -31,10 +31,10 @@ public class ConfigDefinitionTest {
     }
 
     @NotNull
-    public static VariableRegistry readRealConfig() throws IOException {
+    public static VariableRegistry readRealConfig() {
         VariableRegistry variableRegistry = new VariableRegistry();
 
-        variableRegistry.readPrependValues(FIRMWARE + File.separator + "integration/rusefi_config.txt");
+        variableRegistry.readPrependValues(FIRMWARE + File.separator + "integration/rusefi_config.txt", true);
         return variableRegistry;
     }
 }

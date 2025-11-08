@@ -1,15 +1,18 @@
 package com.rusefi.parse;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.ReaderState;
-import com.rusefi.util.SystemOut;
 
 import java.util.Objects;
+
+import static com.devexperts.logging.Logging.getLogging;
 
 /**
  * TODO: migrate to Type?
  * 1/22/15
  */
 public class TypesHelper {
+    private static final Logging log = getLogging(TypesHelper.class);
     private static final String INT8_T = "int8_t";
     public static final String UINT8_T = "uint8_t";
     public static final String UINT_16_T = "uint16_t";
@@ -31,6 +34,55 @@ public class TypesHelper {
         if (primitiveSize != null)
             return primitiveSize;
         throw new IllegalArgumentException("Unknown type " + type);
+    }
+
+    public static boolean withRange(String type) {
+        if (type == null)
+            return false;
+        switch (type) {
+            case INT8_T:
+            case UINT8_T:
+            case INT_16_T:
+            case UINT_16_T:
+            case INT_32_T:
+            case UINT_32_T:
+                return true;
+        }
+        return false;
+    }
+
+    public static long getMinValue(String type) {
+        switch (type) {
+            case UINT8_T:
+            case UINT_16_T:
+            case UINT_32_T:
+                return 0;
+            case INT8_T:
+                return Byte.MIN_VALUE;
+            case INT_16_T:
+                return Short.MIN_VALUE;
+            case INT_32_T:
+                return Integer.MIN_VALUE;
+        }
+        throw new IllegalArgumentException("No range for " + type);
+    }
+
+    public static long getMaxValue(String type) {
+        switch (type) {
+            case UINT8_T:
+                return 0xff;
+            case UINT_16_T:
+                return 0xffff;
+            case UINT_32_T:
+                return 0xffffffffL;
+            case INT8_T:
+                return Byte.MAX_VALUE;
+            case INT_16_T:
+                return Short.MAX_VALUE;
+            case INT_32_T:
+                return Integer.MAX_VALUE;
+        }
+        throw new IllegalArgumentException("No range for " + type);
     }
 
     public static Integer getPrimitiveSize(String type) {
@@ -60,9 +112,9 @@ public class TypesHelper {
 
     private static boolean isPrimitive4byte(String type) {
         return type.equals(INT_32_T) || type.equals(UINT_32_T)
-                // todo: something smarter with dynamic type definition?
-                || type.equals("idle_state_e")
-                || isFloat(type);
+            // todo: something smarter with dynamic type definition?
+            || type.equals("idle_state_e")
+            || isFloat(type);
     }
 
     public static String convertToTs(String type) {
@@ -80,7 +132,7 @@ public class TypesHelper {
             return "S08";
         if (UINT8_T.equals(type))
             return "U08";
-        SystemOut.println("No TS type conversion for " + type);
+        log.info("No TS type conversion for " + type);
         return type;
     }
 
@@ -90,9 +142,9 @@ public class TypesHelper {
 
     public static boolean isFloat(String type) {
         return FLOAT_T.equals(type) ||
-                // todo: something smarter with dynamic type definition?
-                type.equalsIgnoreCase("floatms_t") ||
-                type.equalsIgnoreCase("percent_t") ||
-                type.equalsIgnoreCase("angle_t");
+            // todo: something smarter with dynamic type definition?
+            type.equalsIgnoreCase("floatms_t") ||
+            type.equalsIgnoreCase("percent_t") ||
+            type.equalsIgnoreCase("angle_t");
     }
 }

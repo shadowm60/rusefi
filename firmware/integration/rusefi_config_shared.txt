@@ -4,6 +4,7 @@
 #define PACK_MULT_HIGH_PRESSURE 10
 #define PACK_MULT_PERCENT 100
 #define PACK_MULT_FLEX 2
+#define PACK_MULT_EGTEMPERATURE 4
 #define PACK_MULT_TEMPERATURE 100
 #define PACK_ADD_TEMPERATURE 40
 #define PACK_MULT_MS 300
@@ -20,6 +21,15 @@
 #define PACK_MULT_FUEL_FLOW 200
 #define PACK_MULT_VSS 100
 
+! technically that's PWM_PHASE_MAX_WAVE_PER_PWM * 2
+#define HW_EVENT_TYPES 4
+
+! Short and Long term fuel corrections
+#define FT_BANK_COUNT 2
+
+#define VE_RPM_COUNT 16
+#define VE_LOAD_COUNT 16
+
 #define TCU_GEAR_COUNT 10
 #define EGT_CHANNEL_COUNT 8
 
@@ -35,24 +45,27 @@
 #define IGN_BLEND_COUNT 4
 #define VE_BLEND_COUNT 4
 #define BOOST_BLEND_COUNT 2
-#define LUA_GAUGE_COUNT 2
+#define TARGET_AFR_BLEND_COUNT 2
+#define LUA_GAUGE_COUNT 8
 
 
 #define GAUGE_NAME_VERSION "firmware"
 #define GAUGE_NAME_UPTIME "Uptime"
+! WARNING! THIS GAUGE NAME IS PART of REO integration API
 #define GAUGE_NAME_TRG_ERR "Trigger Error Counter"
-#define GAUGE_NAME_TRG_GAP "Trigger Sync Latest Ratio"
-#define GAUGE_NAME_ADJUSTED_TIMING "Timing: ignition"
+#define GAUGE_NAME_TRG_GAP "Sync: Trigger Latest Ratio"
 
 #define GAUGE_NAME_CAN_READ_OK "CAN: Rx"
 #define GAUGE_NAME_CAN_WRITE_OK "CAN: Tx OK"
 #define GAUGE_NAME_CAN_WRITE_ERR "CAN: Tx err"
 
+! todo: technical debt: which file is correct for gauge CATEGORY names?
 #define GAUGE_CATEGORY_TIMING "Timing"
 #define GAUGE_CATEGORY_SYNC "Sync"
 #define GAUGE_CATEGORY_FUEL_MATH "Fuel: math"
 #define GAUGE_CATEGORY_BOOST_CONTROL "Boost Control"
 #define GAUGE_CATEGORY_ETB "ETB more"
+#define GAUGE_CATEGORY_SENT "Sensors - SENT"
 
 #define GAUGE_NAME_VVT_B1I "VVT: bank 1 intake"
 #define GAUGE_NAME_VVT_B1E "VVT: bank 1 exhaust"
@@ -65,7 +78,7 @@
 #define GAUGE_NAME_VVT_TARGET_B2E "VVT: bank 2 exhaust target"
 
 #define GAUGE_NAME_DESIRED_GEAR "TCU: Desired Gear"
-#define GAUGE_NAME_CURRENT_GEAR "Current Gear"
+#define GAUGE_NAME_CURRENT_GEAR "TCU: Current Gear"
 #define GAUGE_NAME_ISS "TCU: Input Shaft Speed"
 #define GAUGE_NAME_TC_RATIO "TCU: Torque Converter Ratio"
 
@@ -84,16 +97,16 @@
 #define GAUGE_NAME_TPS2 "TPS2"
 #define GAUGE_NAME_MAP "MAP"
 #define GAUGE_NAME_MAF "MAF"
-#define GAUGE_NAME_CPU_TEMP "CPU Temperature"
+#define GAUGE_NAME_CPU_TEMP "ECU: CPU Temperature"
 #define GAUGE_NAME_ETB_TARGET "ETB: position target"
 #define GAUGE_NAME_WG_POSITION "Wastegate position sensor"
 #define GAUGE_NAME_ETB_ERROR "ETB: position error"
 #define GAUGE_NAME_ETB_DUTY "ETB: Duty"
 #define GAUGE_NAME_IDLE_POSITION "Idle: Position sensor"
-#define GAUGE_NAME_LAST_ERROR "Last error"
+#define GAUGE_NAME_LAST_ERROR "Warning: last"
 #define GAUGE_NAME_TUNE_CRC16 "Tune CRC16"
 #define GAUGE_NAME_ENGINE_CRC16 "Engine CRC16"
-#define GAUGE_NAME_FW_VERSION "ECU Software Version"
+#define GAUGE_NAME_FW_VERSION "ECU: Software Version"
 
 #define GAUGE_NAME_RAW_FUEL_PRESSURE_LOW "Fuel pressure raw (low)"
 #define GAUGE_NAME_FUEL_PRESSURE_LOW "Fuel pressure (low)"
@@ -114,11 +127,16 @@
 
 #define GAUGE_NAME_OIL_PRESSURE "Oil Pressure"
 #define GAUGE_NAME_OIL_PRESSURE_UNITS "kPa"
+#define GAUGE_NAME_OIL_TEMPERATURE "Oil Temperature"
 
 #define GAUGE_NAME_ECU_TEMPERATURE "ECU temperature"
 
+#define GAUGE_NAME_AC_PRESSURE "A/C pressure"
+
 #define GAUGE_NAME_AUX_LINEAR_1 "Aux linear #1"
 #define GAUGE_NAME_AUX_LINEAR_2 "Aux linear #2"
+#define GAUGE_NAME_AUX_LINEAR_3 "Aux linear #3"
+#define GAUGE_NAME_AUX_LINEAR_4 "Aux linear #4"
 
 #define GAUGE_NAME_BOOST_OUTPUT "Boost: Output"
 #define GAUGE_NAME_BOOST_CLOSED_LOOP "Boost: Closed loop"
@@ -142,13 +160,14 @@
 #define GAUGE_NAME_KNOCK_LEVEL "Knock: Current level"
 #define GAUGE_NAME_KNOCK_COUNTER "Knock: Count"
 #define GAUGE_NAME_KNOCK_RETARD "Knock: Retard"
+#define GAUGE_NAME_KNOCK_FREQ "knock: frequency"
 
 #define GAUGE_NAME_INJECTION_MODE "Fuel: Injection mode"
 #define GAUGE_NAME_FUEL_BARO_CORR "Fuel: Barometric pressure mult"
 #define GAUGE_NAME_THROTTLE_PEDAL "Throttle pedal position"
 #define GAUGE_NAME_INJECTOR_LAG "Fuel: injector lag"
 #define GAUGE_NAME_FUEL_CHARGE_TEMP "Fuel: Estimated charge temperature"
-#define GAUGE_NAME_FUEL_TPS_EXTRA "Fuel: TPS AE add fuel ms"
+#define GAUGE_NAME_FUEL_TPS_EXTRA "Fuel: TPS acceleration add fuel ms"
 #define GAUGE_NAME_FUEL_CLT_CORR "Fuel: CLT correction"
 #define GAUGE_NAME_FUEL_IAT_CORR "Fuel: IAT correction"
 #define GAUGE_NAME_FUEL_VE "Fuel: VE"
@@ -156,14 +175,23 @@
 #define GAUGE_NAME_FUEL_RUNNING "Fuel: running"
 #define GAUGE_NAME_FUEL_LAST_INJECTION "Fuel: Last inj pulse width"
 #define GAUGE_NAME_FUEL_LAST_INJECTION_STAGE_2 "Fuel: Last inj pulse width stg 2"
+#define GAUGE_NAME_FUEL_LAST_INJECTION_RATIO "Fuel: Last inj pulse growth"
+#define GAUGE_NAME_FUEL_LAST_INJECTION_RATIO_STAGE_2 "Fuel: Last inj pulse growth stg 2"
 #define GAUGE_NAME_FUEL_BASE "Fuel: base cycle mass"
-#define GAUGE_NAME_FUEL_TRIM "Fuel: fuel trim"
-#define GAUGE_NAME_FUEL_TRIM_2 "Fuel: fuel trim 2"
+#define GAUGE_NAME_FUEL_STFT_1 "Short Term Fuel Trim: Bank 1"
+#define GAUGE_NAME_FUEL_STFT_2 "Short Term Fuel Trim: Bank 2"
+#define GAUGE_NAME_FUEL_STFT_INPUT_1 "STFT input lambda error: Bank 1"
+#define GAUGE_NAME_FUEL_STFT_INPUT_2 "STFT input lambda error: Bank 2"
+#define GAUGE_NAME_FUEL_LTFT_1 "Long Term Fuel Trim: Bank 1"
+#define GAUGE_NAME_FUEL_LTFT_2 "Long Term Fuel Trim: Bank 2"
+#define GAUGE_NAME_FUEL_LTFT_ACC_1 "LTFT learned accumulator: Bank 1"
+#define GAUGE_NAME_FUEL_LTFT_ACC_2 "LTFT learned accumulator: Bank 2"
 #define GAUGE_NAME_FUEL_WALL_AMOUNT "Fuel: wall amount"
 #define GAUGE_NAME_FUEL_WALL_CORRECTION "Fuel: wall correction"
 #define GAUGE_NAME_FUEL_LOAD "Fuel: Load"
 #define GAUGE_NAME_FUEL_CONSUMPTION "Fuel: Total consumed"
 #define GAUGE_NAME_FUEL_FLOW "Fuel: Flow rate"
+#define GAUGE_NAME_FUEL_CORRECTION_REFERENCE_PRESSURE "Fuel: corr reference pressure"
 
 #define GAUGE_NAME_FUEL_INJ_DUTY "Fuel: injector duty cycle"
 #define GAUGE_NAME_FUEL_INJ_DUTY_STAGE_2 "Fuel: injector duty cycle stage 2"
@@ -173,13 +201,28 @@
 #define GAUGE_NAME_FUEL_INJECTION_TIMING "Fuel: Injection timing SOI"
 #define GAUGE_NAME_AFR "Air/Fuel Ratio"
 #define GAUGE_NAME_AFR2 "Air/Fuel Ratio 2"
+#define SMOOTHED_GAUGE_NAME_AFR "Smoothed Air/Fuel Ratio"
+#define SMOOTHED_GAUGE_NAME_AFR2 "Smoothed Air/Fuel Ratio 2"
 #define GAUGE_NAME_AFR_GAS_SCALE "Air/Fuel Ratio (Gas Scale)"
 #define GAUGE_NAME_AFR2_GAS_SCALE "Air/Fuel Ratio 2 (Gas Scale)"
 #define GAUGE_NAME_LAMBDA "Lambda"
 #define GAUGE_NAME_LAMBDA2 "Lambda 2"
 #define GAUGE_NAME_IAC "Idle: Position"
+#define GAUGE_LONG_NAME_AAT "Ambient Temperature"
+#define GAUGE_LONG_NAME_CLT "Coolant temp"
+#define GAUGE_LONG_NAME_IAT "Intake air temp"
+#define UNITS_CELSIUS "C"
+#define UNITS_FAHRENHEIT "F"
+#define UNITS_KPA "kPa"
+#define UNITS_PSI "psi"
+#define UNITS_KMH "kmh"
+#define UNITS_MPH "mph"
 
-#define GAUGE_NAME_TIMING_ADVANCE "Ignition: Timing"
+#define GAUGE_PRECISION_TEMPERATURE_C 1,1
+#define GAUGE_PRECISION_TEMPERATURE_F 1,2
+
+#define GAUGE_NAME_ADJUSTED_TIMING "Timing: ignition"
+#define GAUGE_NAME_TIMING_ADVANCE "Timing: base ignition"
 #define GAUGE_NAME_DWELL_DUTY "Ignition: coil duty cycle"
 #define GAUGE_COIL_DWELL_TIME "Ignition: coil charge time"
 #define GAUGE_NAME_IGNITION_LOAD "Ignition: load"

@@ -110,18 +110,18 @@ int adcTriggerTurnOnInputPin(const char *msg, int index, bool isTriggerShaft) {
 	brain_pin_e brainPin = isTriggerShaft ?
 		engineConfiguration->triggerInputPins[index] : engineConfiguration->camInputs[index];
 
-	if (!isBrainPinValid(brainPin))
-		return 0;
-
 	trigAdcState.init();
 
 	triggerInputPort = getHwPort("trg", brainPin);
 	triggerInputPin = getHwPin("trg", brainPin);
 
 	ioline_t pal_line = PAL_LINE(triggerInputPort, triggerInputPin);
-	efiPrintf("turnOnTriggerInputPin %s l=%d", hwPortname(brainPin), pal_line);
+	efiPrintf("turnOnTriggerInputPin %s l=%ld", hwPortname(brainPin), pal_line);
 
-	efiExtiEnablePin(msg, brainPin, PAL_EVENT_MODE_BOTH_EDGES, isTriggerShaft ? shaft_callback : cam_callback, (void *)pal_line);
+	if (efiExtiEnablePin(msg, brainPin, PAL_EVENT_MODE_BOTH_EDGES,
+		isTriggerShaft ? shaft_callback : cam_callback, (void *)pal_line) < 0) {
+		return -1;
+	}
 
 	// ADC mode is default, because we don't know if the wheel is already spinning
 	setTriggerAdcMode(TRIGGER_ADC_ADC);
@@ -158,7 +158,7 @@ adc_channel_e getAdcChannelForTrigger(void) {
 void addAdcChannelForTrigger(void) {
 	adc_channel_e channel = getAdcChannelForTrigger();
 	if (isAdcChannelValid(channel)) {
-		addChannel("TRIG", channel, ADC_FAST);
+		addFastAdcChannel("TRIG", channel);
 	}
 }
 
@@ -385,7 +385,7 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 		efitimeus_t deltaTimeUs = NT2US(stamp - prevStamp);
 		if (deltaTimeUs > 200) {	// 200 us = ~2500 RPM (we don't need this correction for large RPM)
 			triggerAdcITerm = 1.0f / (triggerAdcITermCoef * deltaTimeUs);
-			triggerAdcITerm = maxF(triggerAdcITerm, triggerAdcITermMin);
+			triggerAdcITerm = std::max(triggerAdcITerm, triggerAdcITermMin);
 		}
 #endif // 0
 
@@ -420,6 +420,8 @@ void TriggerAdcDetector::analogCallback(efitick_t stamp, triggerAdcSample_t valu
 #endif // EFI_SHAFT_POSITION_INPUT
 
 	prevStamp = stamp;
+#else
+	UNUSED(stamp); UNUSED(value);
 #endif // ! EFI_SIMULATOR && ((HAL_TRIGGER_USE_ADC && HAL_USE_ADC) || EFI_UNIT_TEST)
 }
 

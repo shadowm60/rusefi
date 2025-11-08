@@ -25,7 +25,7 @@ static bool getAcrState() {
 		return false;
 	}
 
-	int revCount = getTriggerCentral()->triggerState.getCrankSynchronizationCounter();
+	int revCount = getTriggerCentral()->triggerState.getSynchronizationCounter();
 	if (revCount > engineConfiguration->acrRevolutions) {
 		// Enough revs have elapsed that we're done with ACR
 		return false;
@@ -53,8 +53,7 @@ void HarleyAcr::onSlowCallback() {
 	}
 
 	bool acrState = getAcrState();
-	engine->engineState.acrStateDup = acrState;
-	engine->outputChannels.acrActive = acrState;
+	engine->engineState.acrActive = acrState;
 	enginePins.harleyAcr.setValue(acrState);
 	enginePins.harleyAcr2.setValue(acrState);
 	m_active = acrState;

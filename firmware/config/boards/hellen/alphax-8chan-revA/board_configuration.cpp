@@ -11,9 +11,7 @@
 #include "pch.h"
 #include "hellen_meta.h"
 #include "defaults.h"
-
-// mm176 matches mm144 in terms of LED pinout
-#include "hellen_leds_144.cpp"
+#include "board_overrides.h"
 
 static OutputPin alphaTachPullUp;
 static OutputPin alphaTempPullUp;
@@ -36,30 +34,6 @@ static void setInjectorPins() {
 	engineConfiguration->clutchDownPinMode = PI_PULLDOWN;
 	engineConfiguration->launchActivationMode = CLUTCH_INPUT_LAUNCH;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::Unassigned;
-}
-
-static void setupEtb() {
-	// TLE9201 driver
-	// This chip has three control pins:
-	// DIR - sets direction of the motor
-	// PWM - pwm control (enable high, coast low)
-	// DIS - disables motor (enable low)
-
-	// PWM pin
-	engineConfiguration->etbIo[0].controlPin = Gpio::H144_OUT_PWM2;
-	// DIR pin
-	engineConfiguration->etbIo[0].directionPin1 = Gpio::H144_GP_IO1;
-	// Disable pin
-	engineConfiguration->etbIo[0].disablePin = Gpio::H144_GP_IO5;
-
-	// PWM pin
-	engineConfiguration->etbIo[1].controlPin = Gpio::H144_GP_IO4;
-	// DIR pin
-	engineConfiguration->etbIo[1].directionPin1 = Gpio::H144_GP_IO3;
-	// Disable pin
-	engineConfiguration->etbIo[1].disablePin = Gpio::Unassigned;
-	// we only have pwm/dir, no dira/dirb
-	engineConfiguration->etb_use_two_wires = false;
 }
 
 static void setIgnitionPins() {
@@ -95,7 +69,7 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->iat.adcChannel = H144_IN_IAT;
 }
 
-void boardInitHardware() {
+static void alphax_8chan_reva_boardInitHardware() {
 	setHellenEnPin(Gpio::H144_OUT_IO3);
 
 	alphaTempPullUp.initPin("a-temp", Gpio::H144_OUT_IO4);
@@ -108,24 +82,21 @@ void boardInitHardware() {
 	alphaD3PullDown.initPin("a-d3", H_SPI3_MISO);
 	alphaD4PullDown.initPin("a-d4", H_SPI3_MOSI);
 	//alphaD5PullDown.initPin("a-d5", Gpio::H144_LS_8);
-	boardOnConfigurationChange(nullptr);
 }
 
-void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
-	alphaTachPullUp.setValue(engineConfiguration->boardUseTachPullUp);
-	alphaTempPullUp.setValue(engineConfiguration->boardUseTempPullUp);
-	alphaCrankPPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alpha2stepPullDown.setValue(engineConfiguration->boardUse2stepPullDown);
-	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
-	//alphaCamVrPullUp.setValue(engineConfiguration->boardUseCamVrPullUp);
+static void customBoardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
+	alphaTachPullUp.setValue(config->boardUseTachPullUp);
+	alphaTempPullUp.setValue(config->boardUseTempPullUp);
+	alphaCrankPPullUp.setValue(config->boardUseCrankPullUp);
+	alpha2stepPullDown.setValue(config->boardUse2stepPullDown);
+	alphaCamPullDown.setValue(config->boardUseCamPullDown);
 
-	alphaD2PullDown.setValue(engineConfiguration->boardUseD2PullDown);
-	alphaD3PullDown.setValue(engineConfiguration->boardUseD3PullDown);
-	alphaD4PullDown.setValue(engineConfiguration->boardUseD4PullDown);
-	//alphaD5PullDown.setValue(engineConfiguration->boardUseD5PullDown);
+	alphaD2PullDown.setValue(config->boardUseD2PullDown);
+	alphaD3PullDown.setValue(config->boardUseD3PullDown);
+	alphaD4PullDown.setValue(config->boardUseD4PullDown);
 }
 
-void setBoardConfigOverrides() {
+static void alphax_8chan_reva_boardConfigOverrides() {
 	setHellenVbatt();
 
 	setHellenSdCardSpi2();
@@ -133,19 +104,19 @@ void setBoardConfigOverrides() {
     setDefaultHellenAtPullUps();
 
 	setHellenCan();
+	setHellenCan2();
 }
 
-/**
- * @brief   Board-specific configuration defaults.
- *
- * See also setDefaultEngineConfiguration
- *
+void set8chanDefaultETBPins() {
+	setupTLE9201IncludingStepper(/*controlPin*/Gpio::H144_OUT_PWM2, Gpio::H144_GP_IO1, Gpio::H144_GP_IO5);
+	setupTLE9201IncludingStepper(/*controlPin*/Gpio::H144_GP_IO4, Gpio::H144_GP_IO3, Gpio::Unassigned, 1);
+}
 
- */
-void setBoardDefaultConfiguration() {
+static void alphax_8chan_reva_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-	setupEtb();
+
+  set8chanDefaultETBPins();
 	engineConfiguration->vvtPins[0] = Gpio::H144_OUT_PWM7;
 	engineConfiguration->vvtPins[1] = Gpio::H144_OUT_PWM8;
 
@@ -191,4 +162,12 @@ int getBoardMetaOutputsCount() {
 
 Gpio* getBoardMetaOutputs() {
     return OUTPUTS;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_InitHardware = alphax_8chan_reva_boardInitHardware;
+	custom_board_DefaultConfiguration = alphax_8chan_reva_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = alphax_8chan_reva_boardConfigOverrides;
+
+	custom_board_OnConfigurationChange = customBoardOnConfigurationChange;
 }

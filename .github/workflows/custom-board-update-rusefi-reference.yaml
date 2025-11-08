@@ -12,17 +12,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Git Checkout Submodules
         run: |
           git submodule update --init --depth=1 ext/rusefi
 
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+
+      - name: Fetch remote lts-* branches of rusefi submodule
+        working-directory: ext/rusefi
+        run: |
+          git fetch --depth=1 origin '+refs/heads/lts-*:refs/remotes/origin/lts-*'
+          git branch -r
+
       - name: Git Update Submodules
         run: |
           git submodule update --remote
 
-      - name: Commit fresh submodules
+      - name: Commit fresh 'ext/rusefi' submodule
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
         run: |
@@ -36,7 +47,6 @@ jobs:
             exit 0
           elif echo "$OUT" | grep 'changed'; then
             echo "submodule: looks like something has changed"
-            exit 0
           else
             echo "submodule: looks like something unexpected"
             exit 1
@@ -48,3 +58,4 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ github.token }}
+          branch: ${{ github.ref }}

@@ -264,7 +264,7 @@ static int rtcStartTime;
 
 static void timeInfo() {
 	efiPrintf("chTimeNow as seconds = %d", getTimeNowS());
-	efiPrintf("hal seconds = %d", halTime.get() / (long)CORE_CLOCK);
+	efiPrintf("hal seconds = %d", halTime.get() / (long)STM32_SYSCLK);
 
 #if EFI_RTC
 	int unix = rtcGetTimeUnixSec(&RTCD1) - rtcStartTime;
@@ -280,7 +280,6 @@ static void runChibioTest() {
 	print("EFI_MAP_AVERAGING=%d\r\n", EFI_MAP_AVERAGING);
 	print("EFI_LOGIC_ANALYZER=%d\r\n", EFI_LOGIC_ANALYZER);
 	print("EFI_ENGINE_SNIFFER=%d\r\n", EFI_ENGINE_SNIFFER);
-	print("EFI_SENSOR_CHART=%d\r\n", EFI_SENSOR_CHART);
 	print("EFI_SHAFT_POSITION_INPUT=%d\r\n", EFI_SHAFT_POSITION_INPUT);
 	print("EFI_ENGINE_CONTROL=%d\r\n", EFI_ENGINE_CONTROL);
 	print("CH_DBG_SYSTEM_STATE_CHECK=%d\r\n", CH_DBG_SYSTEM_STATE_CHECK);

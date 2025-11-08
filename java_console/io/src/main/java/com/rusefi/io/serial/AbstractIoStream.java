@@ -4,14 +4,19 @@ import com.rusefi.binaryprotocol.IncomingDataBuffer;
 import com.rusefi.io.IoStream;
 
 import java.io.IOException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class AbstractIoStream implements IoStream {
     private boolean isClosed;
 
+    // todo: this ioLock needs better documentation!
+    private final Object ioLock = new Object();
+
     protected final StreamStats streamStats = new StreamStats();
     private final AtomicInteger bytesOut = new AtomicInteger();
     private long latestActivity;
+    private final CopyOnWriteArrayList<Runnable> closeListeners = new CopyOnWriteArrayList<>();
 
     public IncomingDataBuffer createDataBuffer() {
         IncomingDataBuffer incomingData = new IncomingDataBuffer(getClass().getSimpleName(), getStreamStats());
@@ -26,7 +31,21 @@ public abstract class AbstractIoStream implements IoStream {
 
     @Override
     public void close() {
+        if (isClosed)
+            return;
         isClosed = true;
+        for (Runnable listener : closeListeners)
+            listener.run();
+    }
+
+    @Override
+    public void addCloseListener(Runnable listener) {
+        closeListeners.add(listener);
+    }
+
+    @Override
+    public Object getIoLock() {
+        return ioLock;
     }
 
     @Override
@@ -86,7 +105,7 @@ public abstract class AbstractIoStream implements IoStream {
     public int getBytesIn() {
         return streamStats.totalBytesArrived.get();
     }
-    
+
     @Override
     public int getBytesOut() {
         return bytesOut.get();

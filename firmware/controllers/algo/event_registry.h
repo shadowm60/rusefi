@@ -14,7 +14,7 @@
 #include "trigger_structure.h"
 
 struct AngleBasedEvent {
-	scheduling_s scheduling;
+	scheduling_s eventScheduling;
 	action_s action;
 	/**
 	 * Trigger-based scheduler maintains a linked list of all pending tooth-based events.
@@ -36,11 +36,21 @@ private:
 	angle_t enginePhase;
 };
 
+// this is related to wasted spark idea where engines fire each spark twice per 4 stroke 720 degree cycle of operations
+// first spark is happens on intake stroke and actually ignites fuel mixture, that's the useful one
+// the other spark 360 degrees later happens during exhaust stroke meaning there is nothing to ignite, that spark is known as "wasted" spark
+// historically this was about sharing ignition coils between opposite cylinders and having two high voltage wire coming from one physical coil
+// more recently same idea happens with two individual physical coils (meaning two outputs) since wasted spark of operation is useful
+// while exact engine phase is either not known YET (cranking) or just not known (broken cam sensor)
+// so, while in wasted spark we manage half of cylinder count _events_ potentially with each event having two outputs
+//
+// an interesting corner case is when we transition from wasted spark mode into individual/sequential mode
 #define MAX_OUTPUTS_FOR_IGNITION 2
 
 class IgnitionEvent {
 public:
 	IgnitionEvent();
+	// IgnitionEvent to IgnitionOutputPin is either 1 to 1 or 1 to 2 relationship, see large comment at 'MAX_OUTPUTS_FOR_IGNITION'
 	IgnitionOutputPin *outputs[MAX_OUTPUTS_FOR_IGNITION];
 	scheduling_s dwellStartTimer;
 	AngleBasedEvent sparkEvent;
@@ -55,15 +65,17 @@ public:
 	// Track whether coil charge was intentionally skipped (spark limiter)
 	bool wasSparkLimited = false;
 
+	// Track whether coil charge was canceled due to overcharge
+	bool wasSparkCanceled = false;
+
 	/**
 	 * Desired timing advance
 	 */
 	angle_t sparkAngle = NAN;
 	floatms_t sparkDwell = 0;
-	/**
-	 * this timestamp allows us to measure actual dwell time
-	 */
-	uint32_t actualStartOfDwellNt = 0;
+
+	// this timer allows us to measure actual dwell time
+	Timer actualDwellTimer;
 
 	float dwellAngle = 0;
 
@@ -71,11 +83,12 @@ public:
 	 * Sequential number of currently processed spark event
 	 * @see engineState.globalSparkCounter
 	 */
-	int sparkCounter = 0;
+	uint32_t sparkCounter = 0;
 	/**
 	 * [0, cylindersCount)
 	 */
 	int cylinderIndex = 0;
+	// previously known as cylinderNumber
 	int8_t coilIndex = 0;
 	char *name = nullptr;
 	IgnitionOutputPin *getOutputForLoggins();

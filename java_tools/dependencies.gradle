@@ -8,7 +8,7 @@ ext {
           jsr305         : "com.google.code.findbugs:jsr305:3.0.2",
           antlr          : "org.antlr:antlr4:4.13.0",
           json           : "com.googlecode.json-simple:json-simple:1.1.1",
-          mockito        : "org.mockito:mockito-all:1.10.19",
+          mockito        : "org.mockito:mockito-core:4.11.0",
           javaxJson      : "javax.json:javax.json-api:1.1.4",
           snakeyaml      : "org.yaml:snakeyaml:1.26",
           commons_logging: "commons-logging:commons-logging:1.2",
@@ -17,9 +17,8 @@ ext {
   ]
 
   ts_plugin_libs = [
-          httpclient  : "org.apache.httpcomponents:httpclient:4.5.13",
-          httpcore    : "org.apache.httpcomponents:httpcore:4.4.13",
-          httpmime    : "org.apache.httpcomponents:httpmime:4.5.12",
+          httpclient  : "org.apache.httpcomponents.client5:httpclient5:5.4.2",
+          httpcore    : "org.apache.httpcomponents.core5:httpcore5:5.3.3",
           launcher_api: fileTree( dir: "lib", include: "TunerStudioPluginAPI.jar" )
   ]
 }

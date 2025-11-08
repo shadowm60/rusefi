@@ -9,10 +9,7 @@
 
 #if EFI_ANTILAG_SYSTEM
 #include "antilag_system.h"
-#include "periodic_task.h"
-#include "advance_map.h"
 #include "engine_state.h"
-#include "advance_map.h"
 #include "fuel_math.h"
 
 bool AntilagSystemBase::isInsideALSSwitchCondition() {
@@ -21,23 +18,27 @@ bool AntilagSystemBase::isInsideALSSwitchCondition() {
 	if (isALSSwitchActivated) {
 		if (isBrainPinValid(engineConfiguration->ALSActivatePin)) {
 #if EFI_PROD_CODE
-			ALSActivatePinState = engineConfiguration->ALSActivateInverted ^ efiReadPin(engineConfiguration->ALSActivatePin);
+			ALSActivatePinState = efiReadPin(engineConfiguration->ALSActivatePin, engineConfiguration->ALSActivatePinMode);
 #else
 			ALSActivatePinState = false;
 #endif
 		}
 		return ALSActivatePinState;
-	} else {
-		// ALWAYS_ACTIVE_ANTILAG
+	} else if (engineConfiguration->antiLagActivationMode == LUA_ANTILAG) {
+	  return luaAntilagState;
+	} else if (engineConfiguration->antiLagActivationMode == ALWAYS_ON_ANTILAG) {
 		return true;
+	} else {
+	  criticalError("Unexpected antiLagActivationMode");
+		return false;
 	}
 }
 
-bool AntilagSystemBase::isALSMinRPMCondition(int rpm) const {
+bool AntilagSystemBase::isALSMinRPMCondition(float rpm) const {
 	return engineConfiguration->ALSMinRPM < rpm;
 }
 
-bool AntilagSystemBase::isALSMaxRPMCondition(int rpm) const {
+bool AntilagSystemBase::isALSMaxRPMCondition(float rpm) const {
 	return engineConfiguration->ALSMaxRPM > rpm;
 }
 
@@ -65,7 +66,7 @@ bool AntilagSystemBase::isInsideALSTimerCondition() {
 	return ALStime < engineConfiguration->ALSMaxDuration;
 }
 
-bool AntilagSystemBase::isAntilagConditionMet(int rpm) {
+bool AntilagSystemBase::isAntilagConditionMet(float rpm) {
 
 
 	ALSMinRPMCondition = isALSMinRPMCondition(rpm);
@@ -90,7 +91,7 @@ todo: looking for a hero to figure out unit test part of this
 }
 
 void AntilagSystemBase::update() {
-	int rpm = Sensor::getOrZero(SensorType::Rpm);
+	float rpm = Sensor::getOrZero(SensorType::Rpm);
     isAntilagCondition = engineConfiguration->antiLagEnabled && isAntilagConditionMet(rpm);
 
 	if (!ALSMaxRPMCondition) {

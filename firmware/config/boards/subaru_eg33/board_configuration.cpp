@@ -11,6 +11,7 @@
 #include "smart_gpio.h"
 #include "drivers/gpio/mc33810.h"
 #include "device_mpu_util.h"
+#include "board_overrides.h"
 
 Gpio getCommsLedPin() {
 	return Gpio::G6;	/* LD1 - green */
@@ -39,7 +40,7 @@ static void setSerialConfigurationOverrides() {
  * @brief   Board-specific configuration defaults.
 
  */
-void setBoardDefaultConfiguration() {
+static void subaru_eg33_boardDefaultConfiguration() {
 	setSerialConfigurationOverrides();
 
 	/* Battery voltage */
@@ -50,7 +51,7 @@ void setBoardDefaultConfiguration() {
 	/* Throttle position */
 	engineConfiguration->tps1_1AdcChannel = EFI_ADC_12;
 
-	/* MAP: stock car dows not have MAP
+	/* MAP: stock car does not have MAP
 	 * but EFI_ADC_10 is reserved for this purpose */
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_NONE;
 
@@ -159,41 +160,30 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 
 	/* SPIs */
-	engineConfiguration->is_enabled_spi_1 = true;
-	engineConfiguration->is_enabled_spi_2 = false;
-	engineConfiguration->is_enabled_spi_3 = true;
-	engineConfiguration->is_enabled_spi_4 = true;
-
+	/* SPI4, 5 are always enabled and its configuration is set in setBoardConfigOverrides() */
+	engineConfiguration->is_enabled_spi_1 = false;
+	engineConfiguration->is_enabled_spi_3 = false;
+	engineConfiguration->is_enabled_spi_6 = false;
 	engineConfiguration->spi1mosiPin = Gpio::Unassigned;
 	engineConfiguration->spi1misoPin = Gpio::Unassigned;
 	engineConfiguration->spi1sckPin = Gpio::Unassigned;
+	engineConfiguration->spi3mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi3misoPin = Gpio::Unassigned;
+	engineConfiguration->spi3sckPin = Gpio::Unassigned;
+	engineConfiguration->spi6mosiPin = Gpio::Unassigned;
+	engineConfiguration->spi6misoPin = Gpio::Unassigned;
+	engineConfiguration->spi6sckPin = Gpio::Unassigned;
+	/* Use PP mode as default for optional display SPI bus */
+	engineConfiguration->spi2SckMode = PO_DEFAULT;
+	engineConfiguration->spi2MosiMode = PO_DEFAULT;
+	engineConfiguration->spi2MisoMode = PO_DEFAULT;
+	/* User can disable this bus */
+	engineConfiguration->is_enabled_spi_2 = true;
 
-	engineConfiguration->spi3mosiPin = Gpio::C12;
-	engineConfiguration->spi3misoPin = Gpio::C11;
-	engineConfiguration->spi3sckPin = Gpio::C10;
+	/* SD card is located on SDIO interface */
+	engineConfiguration->isSdCardEnabled = true;
+	engineConfiguration->sdCardCsPin = Gpio::Unassigned;
 
-	engineConfiguration->is_enabled_spi_1 = false;
-	engineConfiguration->sdCardSpiDevice = SPI_DEVICE_1;
-	engineConfiguration->sdCardCsPin = Gpio::A2;
-	engineConfiguration->isSdCardEnabled = false;
-
-	/* TODO: add settings for SPI4 */
-
-	/* Knock sensor */
-	/* Interface settings */
-	engineConfiguration->hip9011SpiDevice = SPI_DEVICE_4;
-	engineConfiguration->hip9011CsPin = Gpio::E11;	/* SPI4_NSS1 */
-	engineConfiguration->hip9011CsPinMode = OM_OPENDRAIN;
-	engineConfiguration->hip9011IntHoldPin = Gpio::H8;
-	engineConfiguration->hip9011IntHoldPinMode = OM_OPENDRAIN;
-	engineConfiguration->hipOutputChannel = EFI_ADC_7; /* PA7 */
-	engineConfiguration->isHip9011Enabled = true;
-	/* this board has TPIC8101, that supports advanced mode */
-	engineConfiguration->useTpicAdvancedMode = true;
-	/* Chip settings */
-	engineConfiguration->hip9011PrescalerAndSDO = (0x6 << 1); //HIP_16MHZ_PRESCALER;
-	engineConfiguration->hip9011Gain = 1.0;
-	engineConfiguration->knockBandCustom = 0.0;
 	engineConfiguration->cylinderBore = 96.9;
 
 	/* Cylinder to knock bank mapping */
@@ -219,18 +209,53 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->triggerSimulatorPins[0] = Gpio::H2;
 	engineConfiguration->triggerSimulatorPins[1] = Gpio::H3;
 
-	if (engineConfiguration->fuelAlgorithm == LM_REAL_MAF)
-		setAlgorithm(LM_SPEED_DENSITY);
-	if (engineConfiguration->fuelAlgorithm == LM_ALPHA_N)
-		setAlgorithm(LM_ALPHA_N);
+	if (engineConfiguration->fuelAlgorithm == engine_load_mode_e::LM_REAL_MAF)
+		setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
+	if (engineConfiguration->fuelAlgorithm == engine_load_mode_e::LM_ALPHA_N)
+		setAlgorithm(engine_load_mode_e::LM_ALPHA_N);
+}
+
+static void subaru_eg33_boardConfigOverrides() {
+	/* Optional SPI display */
+	engineConfiguration->spi2sckPin = Gpio::I1;
+	engineConfiguration->spi2misoPin = Gpio::I2;
+	engineConfiguration->spi2mosiPin = Gpio::I3;
+	/* User can disable this bus and change pin mode, but not pins itself */
+
+	/* Smart chip */
+	engineConfiguration->spi4sckPin = Gpio::E12;
+	engineConfiguration->spi4misoPin = Gpio::E13;
+	engineConfiguration->spi4mosiPin = Gpio::E14;
+	engineConfiguration->spi4SckMode = PO_DEFAULT;
+	engineConfiguration->spi4MosiMode = PO_OPENDRAIN;
+	engineConfiguration->spi4MisoMode = PO_DEFAULT;
+	/* This is mandatory to have this bus enabled */
+	engineConfiguration->is_enabled_spi_4 = true;
+
+	/* Smart ignition chips */
+	engineConfiguration->spi5sckPin = Gpio::F7;
+	engineConfiguration->spi5misoPin = Gpio::F8;
+	engineConfiguration->spi5mosiPin = Gpio::F9;
+	engineConfiguration->spi5SckMode = PO_DEFAULT;
+	engineConfiguration->spi5MosiMode = PO_DEFAULT;
+	engineConfiguration->spi5MisoMode = PO_DEFAULT;
+	/* This is mandatory to have this bus enabled */
+	engineConfiguration->is_enabled_spi_5 = true;
+
 }
 
 /* Schematic RefDef DA3 */
 static const struct mc33810_config mc33810_odd = {
 	.spi_bus = &SPID5,
 	.spi_config = {
-		.circular = false,
-		.end_cb = NULL,
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = nullptr,
+#else
+	.slave = false,
+	.data_cb = nullptr,
+	.error_cb = nullptr,
+#endif
 		.ssport = GPIOF,
 		.sspad = 1,
 		.cr1 =
@@ -240,7 +265,10 @@ static const struct mc33810_config mc33810_odd = {
 			((3 << SPI_CR1_BR_Pos) & SPI_CR1_BR) |	/* div = 16 */
 			SPI_CR1_MSTR |
 			/* SPI_CR1_CPOL | */ // = 0
+			/*
+			https://github.com/rusefi/rusefi/issues/6538 says that should be zero
 			SPI_CR1_CPHA | // = 1
+			*/
 			0,
 		.cr2 = //SPI_CR2_16BIT_MODE |
 			SPI_CR2_DS_3 | SPI_CR2_DS_2 | SPI_CR2_DS_1 | SPI_CR2_DS_0
@@ -258,15 +286,27 @@ static const struct mc33810_config mc33810_odd = {
 		[7] = {.port = GPIOB, .pad = 8},	/* IGN 5 */
 	},
 	/* en shared between two chips */
-	.en = {.port = GPIOI, .pad = 7}
+	.en = {.port = GPIOI, .pad = 7},
+	// TODO: pick from engineConfiguration->spi5sckPin or whatever SPI is used
+	.sck = {.port = GPIOF, .pad = 7},
+	/* TODO: */
+	.spkdur = Gpio::Unassigned,
+	.nomi = Gpio::Unassigned,
+	.maxi = Gpio::Unassigned
 };
 
 /* Schematic RefDef DA22 */
 static const struct mc33810_config mc33810_even = {
 	.spi_bus = &SPID5,
 	.spi_config = {
-		.circular = false,
-		.end_cb = NULL,
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = nullptr,
+#else
+	.slave = false,
+	.data_cb = nullptr,
+	.error_cb = nullptr,
+#endif
 		.ssport = GPIOF,
 		.sspad = 2,
 		.cr1 =
@@ -276,7 +316,10 @@ static const struct mc33810_config mc33810_even = {
 			((3 << SPI_CR1_BR_Pos) & SPI_CR1_BR) |	/* div = 16 */
 			SPI_CR1_MSTR |
 			/* SPI_CR1_CPOL | */ // = 0
+			/*
+			https://github.com/rusefi/rusefi/issues/6538 says that should be zero
 			SPI_CR1_CPHA | // = 1
+			*/
 			0,
 		.cr2 = SPI_CR2_16BIT_MODE
 	},
@@ -293,7 +336,13 @@ static const struct mc33810_config mc33810_even = {
 		[7] = {.port = GPIOC, .pad = 13},	/* IGN 1 */
 	},
 	/* en shared between two chips */
-	.en = {.port = nullptr, .pad = 0}
+	.en = {.port = nullptr, .pad = 0},
+	// TODO: pick from engineConfiguration->spi5sckPin or whatever SPI is used
+	.sck = {.port = GPIOF, .pad = 7},
+	/* TODO: */
+	.spkdur = Gpio::Unassigned,
+	.nomi = Gpio::Unassigned,
+	.maxi = Gpio::Unassigned
 };
 
 static void board_init_ext_gpios()
@@ -314,9 +363,12 @@ static void board_init_ext_gpios()
 
 /**
  * @brief Board-specific initialization code.
- * @todo  Add your board-specific code, if any.
  */
-void boardInit(void)
-{
+void boardInit() {
 	board_init_ext_gpios();
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = subaru_eg33_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = subaru_eg33_boardConfigOverrides;
 }

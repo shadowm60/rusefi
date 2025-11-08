@@ -27,15 +27,12 @@
 #include "trigger_central.h"
 #include "script_impl.h"
 #include "idle_thread.h"
-#include "hardware.h"
-#include "advance_map.h"
 #include "main_trigger_callback.h"
 #include "flash_main.h"
 #include "bench_test.h"
 #include "mmc_card.h"
 #include "electronic_throttle.h"
 #include "trigger_emulator_algo.h"
-#include "map_averaging.h"
 #include "high_pressure_fuel_pump.h"
 #include "malfunction_central.h"
 #include "malfunction_indicator.h"
@@ -45,6 +42,7 @@
 #include "can_bench_test.h"
 #include "engine_emulator.h"
 #include "fuel_math.h"
+#include "defaults.h"
 #include "spark_logic.h"
 #include "status_loop.h"
 #include "aux_valves.h"
@@ -52,7 +50,6 @@
 #include "vvt.h"
 #include "boost_control.h"
 #include "launch_control.h"
-#include "tachometer.h"
 #include "speedometer.h"
 #include "gppwm.h"
 #include "date_stamp.h"
@@ -64,10 +61,6 @@
 #include "adc_subscription.h"
 #include "gc_generic.h"
 
-#if EFI_SENSOR_CHART
-#include "sensor_chart.h"
-#endif /* EFI_SENSOR_CHART */
-
 #if EFI_TUNER_STUDIO
 #include "tunerstudio.h"
 #endif /* EFI_TUNER_STUDIO */
@@ -76,25 +69,20 @@
 #include "logic_analyzer.h"
 #endif /* EFI_LOGIC_ANALYZER */
 
-#if HAL_USE_ADC
-#include "AdcConfiguration.h"
-#endif /* HAL_USE_ADC */
-
 #if defined(EFI_BOOTLOADER_INCLUDE_CODE)
 #include "bootloader/bootloader.h"
 #endif /* EFI_BOOTLOADER_INCLUDE_CODE */
 
 #include "periodic_task.h"
 
+#ifdef MODULE_MAP_AVERAGING
+#include "map_averaging.h"
+#endif
 
 #if ! EFI_UNIT_TEST
 #include "init.h"
 #include "mpu_util.h"
 #endif /* EFI_UNIT_TEST */
-
-#if EFI_PROD_CODE
-#include "pwm_tester.h"
-#endif /* EFI_PROD_CODE */
 
 #if !EFI_UNIT_TEST
 
@@ -109,11 +97,19 @@ Engine * engine;
 
 #endif /* EFI_UNIT_TEST */
 
+using namespace rusefi::stringutil;
 
 void initDataStructures() {
 #if EFI_ENGINE_CONTROL
 	initFuelMap();
 	initSpeedDensity();
+	IgnitionEventList &events = engine->ignitionEvents;
+	for (size_t i=0;i<efi::size(events.elements);i++) {
+	  // above-zero value helps distinguish events
+	  events.elements[i].sparkCounter = 1;
+	}
+  // above-zero value helps distinguish events
+	engine->engineState.globalSparkCounter = 1;
 #endif // EFI_ENGINE_CONTROL
 }
 
@@ -161,7 +157,7 @@ class EngineStateBlinkingTask : public PeriodicTimerController {
 			// blink in running mode
 			enginePins.runningLedPin.toggle();
 		} else {
-			int is_cranking = engine->rpmCalculator.isCranking();
+			bool is_cranking = engine->rpmCalculator.isCranking();
 			enginePins.runningLedPin.setValue(is_cranking);
 		}
 	}
@@ -170,7 +166,8 @@ class EngineStateBlinkingTask : public PeriodicTimerController {
 static EngineStateBlinkingTask engineStateBlinkingTask;
 
 static void resetAccel() {
-	engine->tpsAccelEnrichment.resetAE();
+	engine->module<TpsAccelEnrichment>()->resetAE();
+
 #if EFI_ENGINE_CONTROL
 	for (size_t i = 0; i < efi::size(engine->injectionEvents.elements); i++)
 	{
@@ -189,31 +186,9 @@ static void doPeriodicSlowCallback() {
 	if (engine->rpmCalculator.isStopped()) {
 		resetAccel();
 	}
-
-	if (engine->versionForConfigurationListeners.isOld(engine->getGlobalConfigurationVersion())) {
-		updateAccelParameters();
-	}
 #endif /* EFI_SHAFT_POSITION_INPUT */
 
 	engine->periodicSlowCallback();
-
-#if EFI_SHAFT_POSITION_INPUT
-	if (engine->triggerCentral.directSelfStimulation || engine->rpmCalculator.isStopped()) {
-		/**
-		 * rusEfi usually runs on hardware which halts execution while writing to internal flash, so we
-		 * postpone writes to until engine is stopped. Writes in case of self-stimulation are fine.
-		 *
-		 * todo: allow writing if 2nd bank of flash is used
-		 */
-#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
-		writeToFlashIfPending();
-#endif /* (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE) */
-	}
-#else /* if EFI_SHAFT_POSITION_INPUT */
-	#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
-		writeToFlashIfPending();
-	#endif /* (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE) */
-#endif /* EFI_SHAFT_POSITION_INPUT */
 
 #if EFI_TCU
 	if (engineConfiguration->tcuEnabled && engineConfiguration->gearControllerMode != GearControllerMode::None) {
@@ -234,24 +209,21 @@ void initPeriodicEvents() {
 	fastController.start();
 }
 
-char * getPinNameByAdcChannel(const char *msg, adc_channel_e hwChannel, char *buffer) {
+char * getPinNameByAdcChannel(const char *msg, adc_channel_e hwChannel, char *buffer, size_t bufferSize) {
 #if HAL_USE_ADC
 	if (!isAdcChannelValid(hwChannel)) {
-		strcpy(buffer, "NONE");
+		snprintf(buffer, bufferSize, "NONE");
 	} else {
-		strcpy(buffer, portname(getAdcChannelPort(msg, hwChannel)));
-		itoa10(&buffer[2], getAdcChannelPin(hwChannel));
+		const char *name = portname(getAdcChannelPort(msg, hwChannel));
+		snprintf(buffer, bufferSize, "%s%d", name ? name : "null", getAdcChannelPin(hwChannel));
 	}
 #else
-	strcpy(buffer, "NONE");
+	snprintf(buffer, bufferSize, "NONE");
 #endif /* HAL_USE_ADC */
 	return buffer;
 }
 
-#if HAL_USE_ADC
-extern AdcDevice fastAdc;
-#endif /* HAL_USE_ADC */
-
+#if EFI_PROD_CODE
 static void printSensorInfo() {
 #if HAL_USE_ADC
 	// Print info about analog mappings
@@ -261,6 +233,7 @@ static void printSensorInfo() {
 	// Print info about all sensors
 	Sensor::showAllSensorInfo();
 }
+#endif // EFI_PROD_CODE
 
 #define isOutOfBounds(offset) ((offset<0) || (offset) >= (int) sizeof(engine_configuration_s))
 
@@ -383,7 +356,7 @@ static void setFloat(const char *offsetStr, const char *valueStr) {
 	if (isOutOfBounds(offset))
 		return;
 	float value = atoff(valueStr);
-	if (cisnan(value)) {
+	if (std::isnan(value)) {
 		efiPrintf("invalid value [%s]", valueStr);
 		return;
 	}
@@ -416,8 +389,6 @@ void commonInitEngineController() {
 	addConsoleAction("reset_accel", resetAccel);
 #endif /* EFI_PROD_CODE */
 
-	initInterpolation();
-
 #if EFI_SIMULATOR || EFI_UNIT_TEST
 	printf("commonInitEngineController\n");
 #endif
@@ -436,9 +407,6 @@ void commonInitEngineController() {
 	engine->injectionEvents.addFuelEvents();
 #endif // EFI_ENGINE_CONTROL
 
-#if EFI_SENSOR_CHART
-	initSensorChart();
-#endif /* EFI_SENSOR_CHART */
 
 #if EFI_PROD_CODE || EFI_SIMULATOR
 	initSettings();
@@ -492,10 +460,10 @@ void commonInitEngineController() {
 	initElectronicThrottle();
 #endif /* EFI_ELECTRONIC_THROTTLE_BODY */
 
-#if EFI_MAP_AVERAGING
-	if (engineConfiguration->isMapAveragingEnabled) {
-		initMapAveraging();
-	}
+#if EFI_MAP_AVERAGING && defined (MODULE_MAP_AVERAGING)
+	engine->module<MapAveragingModule>()->init();
+#else
+	efiPrintf("No MapAveraging support!");
 #endif /* EFI_MAP_AVERAGING */
 
 #if EFI_BOOST_CONTROL
@@ -512,22 +480,87 @@ void commonInitEngineController() {
 	engine->rpmCalculator.Register();
 #endif /* EFI_UNIT_TEST */
 
-#if (EFI_ENGINE_CONTROL && EFI_SHAFT_POSITION_INPUT) || EFI_SIMULATOR || EFI_UNIT_TEST
+#if EFI_AUX_VALVES
 	initAuxValves();
-#endif /* EFI_ENGINE_CONTROL */
+#endif /* EFI_AUX_VALVES */
 
-	initTachometer();
+#ifdef MODULE_TACHOMETER
+	engine->module<TachometerModule>()->init();
+#endif
+
 	initSpeedometer();
+
+	initStft();
+#if EFI_LTFT_CONTROL
+	initLtft();
+#endif
+}
+
+PUBLIC_API_WEAK bool validateBoardConfig() {
+  return true;
+}
+
+static bool validateGdi() {
+	auto lobes = engineConfiguration->hpfpCamLobes;
+	if (!lobes) {
+		return true;
+	}
+	int expectedLastLobeProfileAngle = 360 / lobes;
+  float actualLastAngle = config->hpfpLobeProfileAngle[efi::size(config->hpfpLobeProfileAngle) - 1];
+	if (expectedLastLobeProfileAngle != actualLastAngle) {
+		criticalError("Last HPFP angle expected %d got %f", expectedLastLobeProfileAngle, actualLastAngle);
+		return false;
+	}
+
+	return true;
 }
 
 // Returns false if there's an obvious problem with the loaded configuration
-bool validateConfig() {
+bool validateConfigOnStartUpOrBurn() {
+  if (!validateBoardConfig()) {
+    return false;
+  }
+#if defined(HW_HELLEN_UAEFI)
+  // todo: make this board-specific validation callback!
+  pickEtbOrStepper();
+#endif
+  if (!validateGdi()) {
+    return false;
+  }
+  if (engineConfiguration->etbMinimumPosition + 1 >= engineConfiguration->etbMaximumPosition) {
+		criticalError("Broken ETB min/max %d %d",
+		  engineConfiguration->etbMinimumPosition,
+		  engineConfiguration->etbMaximumPosition);
+		return false;
+  }
+
+  defaultsOrFixOnBurn();
 	if (engineConfiguration->cylindersCount > MAX_CYLINDER_COUNT) {
 		criticalError("Invalid cylinder count: %d", engineConfiguration->cylindersCount);
 		return false;
 	}
+#if EFI_PROD_CODE && (BOARD_MC33810_COUNT > 0)
+    float maxConfiguredCorr = config->dwellVoltageCorrValues[0];
+    for (size_t i = 0;i<efi::size(config->dwellVoltageCorrValues);i++) {
+        maxConfiguredCorr = std::max(maxConfiguredCorr, (float)config->dwellVoltageCorrValues[i]);
+    }
+    float maxConfiguredDwell = config->sparkDwellValues[0];
+    for (size_t i = 0;i<efi::size(config->sparkDwellValues);i++) {
+        maxConfiguredDwell = std::max(maxConfiguredDwell, (float)config->sparkDwellValues[i]);
+    }
+    int maxAllowedDwell = getMc33810maxDwellTimer(engineConfiguration->mc33810maxDwellTimer);
+        if (maxConfiguredCorr * maxConfiguredDwell > maxAllowedDwell) {
+            criticalError("Dwell=%.2f/corr=%.2f while 33810 limit %d", maxConfiguredDwell, maxConfiguredCorr, maxAllowedDwell);
+        }
 
-	ensureArrayIsAscending("Batt Lag", engineConfiguration->injector.battLagCorrBins);
+#endif // EFI_PROD_CODE && (BOARD_MC33810_COUNT > 0)
+	if (engineConfiguration->adcVcc > 5.0f || engineConfiguration->adcVcc < 1.0f) {
+    criticalError("Invalid adcVcc: %f", engineConfiguration->adcVcc);
+		return false;
+	}
+
+	ensureArrayIsAscending("Injector deadtime vBATT", engineConfiguration->injector.battLagCorrBattBins);
+	ensureArrayIsAscending("Injector deadtime Pressure", engineConfiguration->injector.battLagCorrPressBins);
 
 #if EFI_ENGINE_CONTROL
 	// Fueling
@@ -541,12 +574,16 @@ bool validateConfig() {
 		ensureArrayIsAscending("Fuel CLT mult", config->cltFuelCorrBins);
 		ensureArrayIsAscending("Fuel IAT mult", config->iatFuelCorrBins);
 
+		ensureArrayIsAscendingOrDefault("Boost CLT mult", config->cltBoostCorrBins);
+		ensureArrayIsAscendingOrDefault("Boost IAT mult", config->iatBoostCorrBins);
+
 		ensureArrayIsAscending("Injection phase load", config->injPhaseLoadBins);
 		ensureArrayIsAscending("Injection phase RPM", config->injPhaseRpmBins);
 
-		ensureArrayIsAscendingOrDefault("Fuel Level Sensor", engineConfiguration->fuelLevelBins);
-		ensureArrayIsAscendingOrDefault("Fuel Trim Rpm", config->fuelTrimRpmBins);
-		ensureArrayIsAscendingOrDefault("Fuel Trim Load", config->fuelTrimLoadBins);
+		ensureArrayIsAscendingOrDefault("Fuel Level Sensor", config->fuelLevelBins);
+
+		ensureArrayIsAscendingOrDefault("STFT Rpm", config->fuelTrimRpmBins);
+		ensureArrayIsAscendingOrDefault("STFT Load", config->fuelTrimLoadBins);
 
 		ensureArrayIsAscendingOrDefault("TC slip", engineConfiguration->tractionControlSlipBins);
 		ensureArrayIsAscendingOrDefault("TC speed", engineConfiguration->tractionControlSpeedBins);
@@ -554,7 +591,7 @@ bool validateConfig() {
 		ensureArrayIsAscending("TPS/TPS AE from", config->tpsTpsAccelFromRpmBins);
 		ensureArrayIsAscending("TPS/TPS AE to", config->tpsTpsAccelToRpmBins);
 
-		ensureArrayIsAscendingOrDefault("TPS TPS RPM correction", engineConfiguration->tpsTspCorrValuesBins);
+		ensureArrayIsAscendingOrDefault("TPS TPS RPM correction", config->tpsTspCorrValuesBins);
 
 		ensureArrayIsAscendingOrDefault("Staging Load", config->injectorStagingLoadBins);
 		ensureArrayIsAscendingOrDefault("Staging RPM", config->injectorStagingRpmBins);
@@ -569,7 +606,8 @@ bool validateConfig() {
 		ensureArrayIsAscendingOrDefault("Ign Trim Rpm", config->ignTrimRpmBins);
    		ensureArrayIsAscendingOrDefault("Ign Trim Load", config->ignTrimLoadBins);
 
-		ensureArrayIsAscending("Ignition CLT corr", config->cltTimingBins);
+		ensureArrayIsAscending("Ignition CLT corr CLT", config->ignitionCltCorrTempBins);
+  		ensureArrayIsAscending("Ignition CLT corr Load", config->ignitionCltCorrLoadBins);
 
 		ensureArrayIsAscending("Ignition IAT corr IAT", config->ignitionIatCorrTempBins);
 		ensureArrayIsAscending("Ignition IAT corr Load", config->ignitionIatCorrLoadBins);
@@ -588,16 +626,18 @@ bool validateConfig() {
 
 // todo: huh? why does this not work on CI?	ensureArrayIsAscendingOrDefault("Dwell Correction Voltage", engineConfiguration->dwellVoltageCorrVoltBins);
 
-	ensureArrayIsAscending("MAF decoding", config->mafDecodingBins);
+	ensureArrayIsAscending("MAF transfer function", config->mafDecodingBins);
 
 	// Cranking tables
 	ensureArrayIsAscending("Cranking fuel mult", config->crankingFuelBins);
 	ensureArrayIsAscending("Cranking duration", config->crankingCycleBins);
+	ensureArrayIsAscending("Cranking Fuel CLT", config->crankingCycleFuelCltBins);
 	ensureArrayIsAscending("Cranking TPS", config->crankingTpsBins);
 
 	// Idle tables
 	ensureArrayIsAscending("Idle target RPM", config->cltIdleRpmBins);
-	ensureArrayIsAscending("Idle warmup mult", config->cltIdleCorrBins);
+	ensureArrayIsAscending("Idle warmup mult CLT", config->cltIdleCorrBins);
+	ensureArrayIsAscending("Idle warmup mult RPM", config->rpmIdleCorrBins);
 	ensureArrayIsAscendingOrDefault("Idle coasting RPM", config->iacCoastingRpmBins);
 	ensureArrayIsAscendingOrDefault("Idle VE RPM", config->idleVeRpmBins);
 	ensureArrayIsAscendingOrDefault("Idle VE Load", config->idleVeLoadBins);
@@ -609,13 +649,14 @@ bool validateConfig() {
 		if (cfg.pin == Gpio::Unassigned) {
 			continue;
 		}
-		ensureArrayIsAscending("VR Bins", cfg.rpmBins);
+		ensureArrayIsAscending("VR threshold", cfg.rpmBins);
 	}
 
 #if EFI_BOOST_CONTROL
 	// Boost
-	ensureArrayIsAscending("Boost control TPS", config->boostTpsBins);
-	ensureArrayIsAscending("Boost control RPM", config->boostRpmBins);
+	ensureArrayIsAscending("Boost control Load [open loop]", config->boostOpenLoopLoadBins);
+	ensureArrayIsAscending("Boost control Load [closed loop]", config->boostClosedLoopLoadBins);
+	ensureArrayIsAscending("Boost control RPM [open+closed loop]", config->boostRpmBins);
 #endif // EFI_BOOST_CONTROL
 
 #if EFI_ANTILAG_SYSTEM
@@ -633,11 +674,15 @@ bool validateConfig() {
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
 
 	if (isGdiEngine()) {
-		ensureArrayIsAscending("HPFP compensation", engineConfiguration->hpfpCompensationRpmBins);
-		ensureArrayIsAscending("HPFP deadtime", engineConfiguration->hpfpDeadtimeVoltsBins);
-		ensureArrayIsAscending("HPFP lobe profile", engineConfiguration->hpfpLobeProfileQuantityBins);
-		ensureArrayIsAscending("HPFP target rpm", engineConfiguration->hpfpTargetRpmBins);
-		ensureArrayIsAscending("HPFP target load", engineConfiguration->hpfpTargetLoadBins);
+		ensureArrayIsAscending("HPFP compensation", config->hpfpCompensationRpmBins);
+		ensureArrayIsAscending("HPFP deadtime", config->hpfpDeadtimeVoltsBins);
+		ensureArrayIsAscending("HPFP lobe profile", config->hpfpLobeProfileQuantityBins);
+		ensureArrayIsAscending("HPFP target rpm", config->hpfpTargetRpmBins);
+		ensureArrayIsAscending("HPFP target load", config->hpfpTargetLoadBins);
+
+		ensureArrayIsAscending("HPFP fuel mass compensation fuel pressure", config->hpfpFuelMassCompensationFuelPressure);
+		ensureArrayIsAscending("HPFP fuel mass compensation fuel mass", config->hpfpFuelMassCompensationFuelMass);
+
 	}
 
 	// VVT
@@ -652,6 +697,10 @@ bool validateConfig() {
 		ensureArrayIsAscending("VVT exhaust RPM", config->vvtTable2RpmBins);
 	}
 #endif
+
+	if (engineConfiguration->enableOilPressureProtect) {
+		ensureArrayIsAscending("Oil pressure protection", config->minimumOilPressureBins);
+	}
 
 	return true;
 }
@@ -691,11 +740,6 @@ void commonEarlyInit() {
 	startCanConsole();
 #endif /* EFI_CAN_SERIAL */
 
-#if HW_CHECK_ALWAYS_STIMULATE
-	// we need a special binary for final assembly check. We cannot afford to require too much software or too many steps
-	// to be executed at the place of assembly
-	enableTriggerStimulator(/*incGlobalConfiguration*/false);
-#endif // HW_CHECK_ALWAYS_STIMULATE
 }
 
 // one-time start-up
@@ -716,38 +760,12 @@ void initRealHardwareEngineController() {
 	engineStateBlinkingTask.start();
 
 	initVrThresholdPwm();
-
-#if EFI_PWM_TESTER
-	initPwmTester();
-#endif /* EFI_PWM_TESTER */
-
 }
 
 /**
- * these two variables are here only to let us know how much RAM is available, also these
- * help to notice when RAM usage goes up - if a code change adds to RAM usage these variables would fail
- * linking process which is the way to raise the alarm
- *
- * You get "cannot move location counter backwards" linker error when you run out of RAM. When you run out of RAM you shall reduce these
- * UNUSED_SIZE constants.
+ * See also SIGNATURE_HASH
  */
-#ifndef RAM_UNUSED_SIZE
-#define RAM_UNUSED_SIZE 30000
-#endif
-#ifndef CCM_UNUSED_SIZE
-#define CCM_UNUSED_SIZE 512
-#endif
-static volatile char UNUSED_RAM_SIZE[RAM_UNUSED_SIZE];
-static volatile char UNUSED_CCM_SIZE[CCM_UNUSED_SIZE] CCM_OPTIONAL;
-
-/**
- * See also VCS_VERSION
- */
-int getRusEfiVersion(void) {
-	if (UNUSED_RAM_SIZE[0] != 0)
-		return 123; // this is here to make the compiler happy about the unused array
-	if (UNUSED_CCM_SIZE[0] * 0 != 0)
-		return 3211; // this is here to make the compiler happy about the unused array
+int getRusEfiVersion() {
 #if defined(EFI_BOOTLOADER_INCLUDE_CODE)
 	// make bootloader code happy too
 	if (initBootloader() != 0)

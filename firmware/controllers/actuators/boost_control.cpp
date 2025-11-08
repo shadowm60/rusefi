@@ -10,21 +10,39 @@
 
 #include "boost_control.h"
 #include "electronic_throttle.h"
-
-#define NO_PIN_PERIOD 500
+#include "gppwm_channel_reader.h"
 
 #if defined(HAS_OS_ACCESS)
 #error "Unexpected OS ACCESS HERE"
 #endif
 
-static boostOpenLoop_Map3D_t boostMapOpen;
-static boostOpenLoop_Map3D_t boostMapClosed;
-static SimplePwm boostPwmControl("boost");
+namespace {
+    Map3D<BOOST_RPM_COUNT, BOOST_LOAD_COUNT, uint8_t, uint8_t, uint16_t> boostMapOpen{"bo"};
+    Map3D<BOOST_RPM_COUNT, BOOST_LOAD_COUNT, uint8_t, uint8_t, uint16_t> boostMapClosed{"bc"};
+    Map2D<BOOST_CURVE_SIZE, float, float> boostCltCorr { "clt" };
+    Map2D<BOOST_CURVE_SIZE, float, float> boostIatCorr { "iat" };
+    Map2D<BOOST_CURVE_SIZE, float, float> boostCltAdder { "clt (adder)" };
+    Map2D<BOOST_CURVE_SIZE, float, float> boostIatAdder { "iat (adder)" };
+    SimplePwm boostPwmControl("boost");
+}
 
-void BoostController::init(IPwm* pwm, const ValueProvider3D* openLoopMap, const ValueProvider3D* closedLoopTargetMap, pid_s* pidParams) {
+void BoostController::init(
+    IPwm* const pwm,
+    const ValueProvider3D* const openLoopMap,
+    const ValueProvider3D* const closedLoopTargetMap,
+    const ValueProvider2D& cltMultiplierProvider,
+    const ValueProvider2D& iatMultiplierProvider,
+    const ValueProvider2D& cltAdderProvider,
+    const ValueProvider2D& iatAdderProvider,
+    pid_s* const pidParams
+) {
 	m_pwm = pwm;
 	m_openLoopMap = openLoopMap;
 	m_closedLoopTargetMap = closedLoopTargetMap;
+    m_cltBoostCorrMap = &cltMultiplierProvider;
+    m_iatBoostCorrMap = &iatMultiplierProvider;
+    m_cltBoostAdderMap = &cltAdderProvider;
+    m_iatBoostAdderMap = &iatAdderProvider;
 
 	m_pid.initPidClass(pidParams);
 	resetLua();
@@ -39,7 +57,11 @@ void BoostController::resetLua() {
 }
 
 void BoostController::onConfigurationChange(engine_configuration_s const * previousConfig) {
-	if (!m_pid.isSame(&previousConfig->boostPid)) {
+#if EFI_PROD_CODE
+  initBoostCtrl();
+#endif
+
+	if (!previousConfig || !m_pid.isSame(&previousConfig->boostPid)) {
 		m_shouldResetPid = true;
 	}
 }
@@ -83,12 +105,19 @@ expected<float> BoostController::getSetpoint() {
 		engine->outputChannels.boostClosedLoopBlendParameter[i] = result.BlendParameter;
 		engine->outputChannels.boostClosedLoopBlendBias[i] = result.Bias;
 		engine->outputChannels.boostClosedLoopBlendOutput[i] = result.Value;
+		engine->outputChannels.boostClosedLoopBlendYAxis[i] = result.TableYAxis;
 
 		target += result.Value;
 	}
 #endif //EFI_ENGINE_CONTROL
 
-	return target * luaTargetMult + luaTargetAdd;
+	target *= luaTargetMult;
+	target += luaTargetAdd;
+	const std::optional<float> temperatureAdder = getBoostControlTargetTemperatureAdder();
+	if (temperatureAdder.has_value()) {
+		target += temperatureAdder.value();
+	}
+	return target;
 }
 
 expected<percent_t> BoostController::getOpenLoop(float target) {
@@ -96,7 +125,7 @@ expected<percent_t> BoostController::getOpenLoop(float target) {
 	UNUSED(target);
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
-	auto driverIntent = Sensor::get(SensorType::DriverThrottleIntent);
+	auto driverIntent = readGppwmChannel(engineConfiguration->boostOpenLoopYAxis);
 
 	isTpsInvalid = !driverIntent.Valid;
 
@@ -105,8 +134,11 @@ expected<percent_t> BoostController::getOpenLoop(float target) {
 	}
 
 	efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_openLoopMap != nullptr, "boost open loop", unexpected);
+    efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_cltBoostCorrMap != nullptr, "boost CLT multiplier", unexpected);
+    efiAssert(ObdCode::OBD_PCM_Processor_Fault, m_iatBoostCorrMap != nullptr, "boost IAT multiplier", unexpected);
 
-	float openLoop = luaOpenLoopAdd + m_openLoopMap->getValue(rpm, driverIntent.Value);
+	percent_t openLoop = luaOpenLoopAdd + getBoostControlDutyCycleWithTemperatureCorrections(rpm, driverIntent.Value);
+	openLoopYAxis = driverIntent.Value;
 
 #if EFI_ENGINE_CONTROL
 	// Add any blends if configured
@@ -116,6 +148,7 @@ expected<percent_t> BoostController::getOpenLoop(float target) {
 		engine->outputChannels.boostOpenLoopBlendParameter[i] = result.BlendParameter;
 		engine->outputChannels.boostOpenLoopBlendBias[i] = result.Bias;
 		engine->outputChannels.boostOpenLoopBlendOutput[i] = result.Value;
+		engine->outputChannels.boostOpenLoopBlendYAxis[i] = result.TableYAxis;
 
 		openLoop += result.Value;
 	}
@@ -160,6 +193,50 @@ percent_t BoostController::getClosedLoopImpl(float target, float manifoldPressur
 	return m_pid.getOutput(target, manifoldPressure, FAST_CALLBACK_PERIOD_MS / 1000.0f);
 }
 
+float BoostController::getBoostControlDutyCycleWithTemperatureCorrections(
+    const float rpm,
+    const float driverIntent
+) const {
+    float result = m_openLoopMap->getValue(rpm, driverIntent);
+    std::optional<float> cltBoostMultiplier = getBoostTemperatureCorrection(SensorType::Clt, *m_cltBoostCorrMap);
+    if (cltBoostMultiplier.has_value()) {
+        result *= cltBoostMultiplier.value();
+    }
+    std::optional<float> iatBoostMultiplier = getBoostTemperatureCorrection(SensorType::Iat, *m_iatBoostCorrMap);
+    if (iatBoostMultiplier.has_value()) {
+        result *= iatBoostMultiplier.value();
+    }
+    return result;
+}
+
+std::optional<float> BoostController::getBoostControlTargetTemperatureAdder() const {
+    std::optional<float> result = getBoostTemperatureCorrection(SensorType::Clt, *m_cltBoostAdderMap);
+    const std::optional<float> iatBoostAdder = getBoostTemperatureCorrection(SensorType::Iat, *m_iatBoostAdderMap);
+    if (iatBoostAdder.has_value()) {
+        if (result.has_value()) {
+            result.value() += iatBoostAdder.value();
+        } else {
+            result = iatBoostAdder;
+        }
+    }
+    return result;
+}
+
+std::optional<float> BoostController::getBoostTemperatureCorrection(
+    const SensorType sensorType,
+    const ValueProvider2D& correctionCurve
+) const {
+    const SensorResult temperature = Sensor::get(sensorType);
+    if (temperature.Valid) {
+        const std::optional<float> boostCorrection = correctionCurve.getValue(temperature.Value);
+        if (boostCorrection.has_value()) {
+            return std::make_optional<float>(boostCorrection.value());
+        }
+    }
+    return {};
+}
+
+
 expected<percent_t> BoostController::getClosedLoop(float target, float manifoldPressure) {
 	boostControllerClosedLoopPart = getClosedLoopImpl(target, manifoldPressure);
 
@@ -170,8 +247,13 @@ expected<percent_t> BoostController::getClosedLoop(float target, float manifoldP
 	return (float)boostControllerClosedLoopPart;
 }
 
+bool isBoostControlSolenoidMode() {
+	return isBrainPinValid(engineConfiguration->boostControlPin);
+}
+
 void BoostController::setOutput(expected<float> output) {
-	boostOutput = output.value_or(engineConfiguration->boostControlSafeDutyCycle);
+	// this clamping is just for happier gauge #6339
+	boostOutput = clampPercentValue(output.value_or(engineConfiguration->boostControlSafeDutyCycle));
 
 	if (!engineConfiguration->isBoostControlEnabled) {
 		// If not enabled, force 0% output
@@ -180,15 +262,15 @@ void BoostController::setOutput(expected<float> output) {
 
 	float duty = PERCENT_TO_DUTY(boostOutput);
 
-	if (m_pwm) {
+	if (m_pwm && isBoostControlSolenoidMode()) {
 		m_pwm->setSimplePwmDutyCycle(duty);
-	}
-
+	} else {
 #if EFI_ELECTRONIC_THROTTLE_BODY
 	// inject wastegate position into DC controllers, pretty weird workflow to be honest
 	// todo: should it be DC controller pulling?
 	setEtbWastegatePosition(boostOutput);
 #endif // EFI_ELECTRONIC_THROTTLE_BODY
+	}
 }
 
 void BoostController::onFastCallback() {
@@ -223,12 +305,12 @@ void setDefaultBoostParameters() {
 	engineConfiguration->boostControlPinMode = OM_DEFAULT;
 
 	setRpmTableBin(config->boostRpmBins);
-	setLinearCurve(config->boostTpsBins, 0, 100, 1);
+	setLinearCurve(config->boostOpenLoopLoadBins, 0, 100, 1);
+	setLinearCurve(config->boostClosedLoopLoadBins, 0, 100, 1);
 
 	for (int loadIndex = 0; loadIndex < BOOST_LOAD_COUNT; loadIndex++) {
 		for (int rpmIndex = 0; rpmIndex < BOOST_RPM_COUNT; rpmIndex++) {
-			config->boostTableOpenLoop[loadIndex][rpmIndex] = (float)config->boostTpsBins[loadIndex];
-			config->boostTableClosedLoop[loadIndex][rpmIndex] = (float)config->boostTpsBins[loadIndex];
+			config->boostTableClosedLoop[loadIndex][rpmIndex] = (float)config->boostClosedLoopLoadBins[loadIndex];
 		}
 	}
 
@@ -248,7 +330,7 @@ void startBoostPin() {
 	startSimplePwm(
 		&boostPwmControl,
 		"Boost",
-		&engine->executor,
+		&engine->scheduler,
 		&enginePins.boostPin,
 		engineConfiguration->boostPwmFrequency,
 		/*dutyCycle*/0
@@ -258,6 +340,10 @@ void startBoostPin() {
 
 void initBoostCtrl() {
 #if EFI_PROD_CODE
+	if (engine->module<BoostController>().unmock().hasInitBoost) {
+    // already initialized - nothing to do here
+	  return;
+	}
 	// todo: why do we have 'isBoostControlEnabled' setting exactly?
 	// 'initVvtActuators' is an example of a subsystem without explicit enable
 	if (!engineConfiguration->isBoostControlEnabled) {
@@ -277,15 +363,36 @@ void initBoostCtrl() {
 #endif
 
 	// Set up open & closed loop tables
-	boostMapOpen.init(config->boostTableOpenLoop, config->boostTpsBins, config->boostRpmBins);
-	boostMapClosed.init(config->boostTableClosedLoop, config->boostTpsBins, config->boostRpmBins);
+	boostMapOpen.initTable(config->boostTableOpenLoop, config->boostRpmBins, config->boostOpenLoopLoadBins);
+	boostMapClosed.initTable(config->boostTableClosedLoop, config->boostRpmBins, config->boostClosedLoopLoadBins);
+	boostCltCorr.initTable(config->cltBoostCorr, config->cltBoostCorrBins);
+	boostIatCorr.initTable(config->iatBoostCorr, config->iatBoostCorrBins);
+	boostCltAdder.initTable(config->cltBoostAdder, config->cltBoostAdderBins);
+	boostIatAdder.initTable(config->iatBoostAdder, config->iatBoostAdderBins);
 
 	// Set up boost controller instance
-	engine->module<BoostController>().unmock().init(&boostPwmControl, &boostMapOpen, &boostMapClosed, &engineConfiguration->boostPid);
+	engine->module<BoostController>().unmock().init(
+        &boostPwmControl,
+        &boostMapOpen,
+        &boostMapClosed,
+        boostCltCorr,
+        boostIatCorr,
+        boostCltAdder,
+        boostIatAdder,
+        &engineConfiguration->boostPid
+    );
 
 #if !EFI_UNIT_TEST
 	startBoostPin();
 #endif
+}
+
+void BoostController::setDefaultConfiguration(){
+	engineConfiguration->boostCutPressure = 300;
+	engineConfiguration->boostCutPressureHyst = 20;
+	engineConfiguration->boostControlMinRpm = 2000;
+	engineConfiguration->boostControlMinTps = 30;
+	engineConfiguration->boostControlMinMap = 110;
 }
 
 #endif // EFI_BOOST_CONTROL

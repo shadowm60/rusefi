@@ -54,6 +54,11 @@ private:
 
 	Pid m_pid;
 
+  // todo: live data?
+	bool m_engineRunningLongEnough = false;
+	bool m_isRpmHighEnough = false;
+	bool m_isCltWarmEnough = false;
+
 	const ValueProvider3D* m_targetMap = nullptr;
 	IPwm* m_pwm = nullptr;
 };

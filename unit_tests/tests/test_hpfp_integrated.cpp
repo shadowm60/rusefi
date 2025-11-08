@@ -8,15 +8,18 @@
 #include "pch.h"
 using ::testing::_;
 
-static size_t hpfpTotalToggle = 0;
+static int hpfpTotalToggle = 0;
 
-static void assertToggleCounterExtra(EngineTestHelper *eth, size_t extra) {
+static void assertToggleCounterExtra(EngineTestHelper *eth, int extra, const char *msg) {
 	eth->smartFireTriggerEvents2(/*count*/4, /*delay*/ 16);
-	ASSERT_EQ(hpfpTotalToggle + extra, enginePins.hpfpValve.pinToggleCounter);
+	ASSERT_EQ(hpfpTotalToggle + extra, enginePins.hpfpValve.pinToggleCounter) << msg;
 	hpfpTotalToggle += extra;
 }
 
+#if FUEL_RPM_COUNT == 16
 TEST(HPFP, IntegratedSchedule) {
+	extern bool unitTestTaskPrecisionHack;
+	unitTestTaskPrecisionHack = true;
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE, [](engine_configuration_s* engineConfiguration) {
 		engineConfiguration->hpfpValvePin = Gpio::A2; // arbitrary
 	});
@@ -39,23 +42,23 @@ TEST(HPFP, IntegratedSchedule) {
 	ASSERT_EQ(937, round(Sensor::getOrZero(SensorType::Rpm)));
 
 
-	hpfpTotalToggle = 10;
+	hpfpTotalToggle = 6;
 	/**
 	 * overall this is a pretty lame test but helps to know that the whole on/off/on dance does in fact happen for HPFP
 	 */
 	ASSERT_EQ(hpfpTotalToggle, enginePins.hpfpValve.pinToggleCounter);
 
-	assertToggleCounterExtra(&eth, 6);
+	assertToggleCounterExtra(&eth, 4, "#1");
 
-	engine->triggerCentral.vvtPosition[0][0] = -50; // Bank 0
+	engine->triggerCentral.vvtPosition[0][0] = -100; // Bank 0
 
-	assertToggleCounterExtra(&eth, 8);
+	assertToggleCounterExtra(&eth, 7, "#2");
 
-	assertToggleCounterExtra(&eth, 6);
+	assertToggleCounterExtra(&eth, 6, "#3");
 
-	assertToggleCounterExtra(&eth, 6);
+	assertToggleCounterExtra(&eth, 6, "#4");
 
-	assertToggleCounterExtra(&eth, 6);
+	assertToggleCounterExtra(&eth, 6, "#5");
 }
-
+#endif //FUEL_RPM_COUNT == 16
 

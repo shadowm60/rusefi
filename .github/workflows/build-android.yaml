@@ -1,36 +1,29 @@
 name: Android
 
 #on: [push,pull_request]
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Checkout Submodules
+      - name: Checkout Submodules Without ChibiOS
         run: |
-          git submodule update --init --depth=1 unit_tests/googletest
-          git submodule update --init --depth=1 firmware/libfirmware
-          git submodule update --init --depth=1 firmware/ext/lua
-          git submodule update --init --depth=1 firmware/controllers/lua/luaaa
-          git submodule update --init --depth=1 firmware/controllers/can/wideband_firmware
+          misc/git_scripts/common_submodule_init_without_chibios.sh
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
       - name: Install Tools
         run: |
           sudo bash misc/actions/add-ubuntu-latest-apt-mirrors.sh
           sudo apt-get install mtools
-
-      - name: Generate Configs, Enums & Live Documentation
-        working-directory: ./firmware/
-        run: ./gen_default_everything.sh
 
       - name: Test Java Compiler
         run: javac -version
@@ -38,11 +31,6 @@ jobs:
       - name: Print GCC version
         working-directory: .
         run: gcc -v
-
-      - name: Build Native Unit Tests as shared library
-        working-directory: ./unit_tests/
-        # we have a unit test of JNI thus we need to build shared library
-        run: make -j4 SANITIZE=no build/lib_rusefi_test
 
       - name: Build Android
         env:
@@ -57,14 +45,14 @@ jobs:
 
       - name: Upload APK - release
         if: ${{ github.event_name == 'push' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rusEFI-release
           path: ./android/app/build/outputs/apk/release/rusEFI-release.apk
 
       - name: Upload APK - unsigned
         if: ${{ github.event_name != 'push' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rusEFI-release-unsigned
           path: ./android/app/build/outputs/bundle/debug/rusEFI-debug.aab

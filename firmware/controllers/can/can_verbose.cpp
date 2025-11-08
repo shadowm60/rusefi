@@ -18,6 +18,13 @@
 #include "fuel_math.h"
 #include "spark_logic.h"
 
+#ifdef HW_HELLEN
+#include "hellen_meta.h"
+#endif // HW_HELLEN
+
+#define CAN_PEDAL_TPS_OFFSET 2
+#define CAN_SENSOR_1_OFFSET 3
+
 struct Status {
 	uint16_t warningCounter;
 	uint16_t lastErrorCode;
@@ -41,7 +48,7 @@ static void populateFrame(Status& msg) {
 	msg.warningCounter = engine->engineState.warnings.warningCounter;
 	msg.lastErrorCode = static_cast<uint16_t>(engine->engineState.warnings.lastErrorCode);
 
-	msg.revLimit = Sensor::getOrZero(SensorType::Rpm) > engineConfiguration->rpmHardLimit;
+	msg.revLimit = !engine->module<LimpManager>()->allowInjection() || !engine->module<LimpManager>()->allowIgnition();
 	msg.mainRelay = enginePins.mainRelay.getLogicValue();
 	msg.fuelPump = enginePins.fuelPumpRelay.getLogicValue();
 	msg.checkEngine = enginePins.checkEnginePin.getLogicValue();
@@ -54,8 +61,10 @@ static void populateFrame(Status& msg) {
 
 	msg.gear = Sensor::getOrZero(SensorType::DetectedGear);
 
+#ifdef MODULE_ODOMETER
 	// scale to units of 0.1km
 	msg.distanceTraveled = engine->module<TripOdometer>()->getDistanceMeters() / 100;
+#endif // MODULE_ODOMETER
 }
 
 struct Speeds {
@@ -162,19 +171,21 @@ struct Fueling2 {
 };
 
 static void populateFrame(Fueling2& msg) {
+#ifdef MODULE_ODOMETER
 	msg.fuelConsumedGram = engine->module<TripOdometer>()->getConsumedGrams();
 	msg.fuelFlowRate = engine->module<TripOdometer>()->getConsumptionGramPerSecond();
+#endif // MODULE_ODOMETER
 
-	for (size_t i = 0; i < 2; i++) {
-		msg.fuelTrim[i] = 100.0f * (engine->stftCorrection[i] - 1.0f);
+	for (size_t i = 0; i < FT_BANK_COUNT; i++) {
+		msg.fuelTrim[i] = 100.0f * (engine->engineState.stftCorrection[i] - 1.0f);
 	}
 }
 
 struct Fueling3 {
 	scaled_channel<uint16_t, 10000> Lambda;
 	scaled_channel<uint16_t, 10000> Lambda2;
-	scaled_channel<int16_t, 30> FuelPressureLow;
-	scaled_channel<int16_t, 10> FuelPressureHigh;
+	scaled_channel<uint16_t, 30> FuelPressureLow;
+	scaled_channel<uint16_t, 10> FuelPressureHigh;
 };
 
 static void populateFrame(Fueling3& msg) {
@@ -182,6 +193,16 @@ static void populateFrame(Fueling3& msg) {
 	msg.Lambda2 = Sensor::getOrZero(SensorType::Lambda2);
 	msg.FuelPressureLow = Sensor::getOrZero(SensorType::FuelPressureLow);
 	msg.FuelPressureHigh = KPA2BAR(Sensor::getOrZero(SensorType::FuelPressureHigh));
+}
+
+struct PerCylinderKnock {
+  int8_t knock[8];
+};
+
+static void populateFrame(PerCylinderKnock& msg) {
+  for (size_t index = 0;index<std::min(8, MAX_CYLINDER_COUNT);index++) {
+	  msg.knock[index] = engine->module<KnockController>()->m_knockCyl[index];
+  }
 }
 
 struct Cams {
@@ -210,7 +231,22 @@ static void populateFrame(Cams& msg) {
 	msg.Bank2ExhaustTarget = engine->outputChannels.vvtTargets[3];
 }
 
+struct Egts {
+	uint8_t egt[8];
+};
+
+static void populateFrame(Egts& msg) {
+	msg.egt[0] = Sensor::getOrZero(SensorType::EGT1) / 5;
+	msg.egt[1] = Sensor::getOrZero(SensorType::EGT2) / 5;
+	// DBC Defines signals Egt3 through Egt8 but we do not have the code
+}
+
 void sendCanVerbose() {
+#if HW_HELLEN && EFI_PROD_CODE
+        if (!getHellenBoardEnabled()) {
+            return;
+        }
+#endif // HW_HELLEN
 	auto base = engineConfiguration->verboseCanBaseAddress;
 	auto isExt = engineConfiguration->rusefiVerbose29b;
 	auto canChannel = engineConfiguration->canBroadcastUseChannelTwo;
@@ -224,6 +260,9 @@ void sendCanVerbose() {
 	transmitStruct<Fueling2>	(CanCategory::VERBOSE, base + 6, isExt, canChannel);
 	transmitStruct<Fueling3>	(CanCategory::VERBOSE, base + 7, isExt, canChannel);
 	transmitStruct<Cams>		(CanCategory::VERBOSE, base + 8, isExt, canChannel);
+
+	transmitStruct<Egts>	(CanCategory::VERBOSE, base + 9, isExt, canChannel);
+	transmitStruct<PerCylinderKnock>	(CanCategory::VERBOSE, base + 10, isExt, canChannel);
 }
 
 #endif // EFI_CAN_SUPPORT

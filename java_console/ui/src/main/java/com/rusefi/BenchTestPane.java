@@ -1,7 +1,8 @@
 package com.rusefi;
 
 import com.rusefi.binaryprotocol.BinaryProtocol;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
+import com.rusefi.config.generated.VariableRegistryValues;
 import com.rusefi.core.preferences.storage.PersistentConfiguration;
 import com.rusefi.ui.MessagesView;
 import com.rusefi.ui.UIContext;
@@ -13,7 +14,8 @@ import java.awt.*;
 import java.awt.event.ActionListener;
 
 import static com.rusefi.CommandControl.TEST;
-import static com.rusefi.config.generated.Fields.*;
+import static com.rusefi.config.generated.Integration.CMD_STARTER_BENCH;
+import static com.rusefi.config.generated.Integration.*;
 
 public class BenchTestPane {
     private final JPanel content = new JPanel(new GridLayout(2, 5));
@@ -36,13 +38,13 @@ public class BenchTestPane {
         content.add(new CommandControl(uiContext, "Reboot", "", "Reboot") {
             @Override
             protected String getCommand() {
-                return Fields.CMD_REBOOT;
+                return Integration.CMD_REBOOT;
             }
         }.getContent());
         content.add(new CommandControl(uiContext,"Reboot to DFU", "", "Reboot to DFU") {
             @Override
             protected String getCommand() {
-                return Fields.CMD_REBOOT_DFU;
+                return Integration.CMD_REBOOT_DFU;
             }
         }.getContent());
         content.add(new MessagesView(config.getRoot()).messagesScroll);
@@ -62,7 +64,7 @@ public class BenchTestPane {
         CommandControl panel = new CommandControl(uiContext,"MIL", "check_engine.jpg", TEST) {
             @NotNull
             protected String getCommand() {
-                return Fields.CMD_MIL_BENCH;
+                return Integration.CMD_MIL_BENCH;
             }
         };
         return panel.getContent();
@@ -99,7 +101,7 @@ public class BenchTestPane {
     }
 
     private Component createSparkTest() {
-        final JComboBox<Integer> indexes = createIndexCombo(Fields.MAX_CYLINDER_COUNT);
+        final JComboBox<Integer> indexes = createIndexCombo(VariableRegistryValues.MAX_CYLINDER_COUNT);
         CommandControl panel = new CommandControl(uiContext,"Spark #", "spark.jpg", TEST, indexes) {
             @Override
             protected String getCommand() {
@@ -110,7 +112,7 @@ public class BenchTestPane {
     }
 
     private Component createInjectorTest() {
-        final JComboBox<Integer> indexes = createIndexCombo(Fields.MAX_CYLINDER_COUNT);
+        final JComboBox<Integer> indexes = createIndexCombo(VariableRegistryValues.MAX_CYLINDER_COUNT);
         CommandControl panel = new CommandControl(uiContext,"Injector #", "injector.png", TEST, indexes) {
             @Override
             protected String getCommand() {
@@ -121,7 +123,7 @@ public class BenchTestPane {
     }
 
     private Component createSolenoidTest() {
-        final JComboBox<Integer> indexes = createIndexCombo(Fields.TCU_SOLENOID_COUNT);
+        final JComboBox<Integer> indexes = createIndexCombo(VariableRegistryValues.TCU_SOLENOID_COUNT);
         CommandControl panel = new CommandControl(uiContext,"TCU Solenoid #", "solenoid.jpg", TEST, indexes) {
             @Override
             protected String getCommand() {

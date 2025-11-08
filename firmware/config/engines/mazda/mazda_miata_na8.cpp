@@ -12,6 +12,7 @@
 #include "mazda_miata_na8.h"
 #include "custom_engine.h"
 #include "mazda_miata_1_6.h"
+#include "table_helper.h"
 
 void setMazdaMiata96() {
 	miataNAcommonEngineSettings();
@@ -21,14 +22,11 @@ void setMazdaMiata96() {
 	 */
 	engineConfiguration->injector.flow = 265;
 	engineConfiguration->cylinderBore = 83;
-	engineConfiguration->knockBandCustom = 13.81;
 
-	engineConfiguration->idleMode = IM_AUTO;
+	engineConfiguration->idleMode = idle_mode_e::IM_AUTO;
 	// below 20% this valve seems to be opening for fail-safe idle air
 	engineConfiguration->idleRpmPid.pFactor = 0.0065;
 	engineConfiguration->idleRpmPid.iFactor = 0.3;
-	engineConfiguration->idle_derivativeFilterLoss = 0.08;
-	engineConfiguration->idle_antiwindupFreq = 0.03;
 	engineConfiguration->idleRpmPid.dFactor = 0.002;
 	engineConfiguration->idleRpmPid.minValue = -20;
 	engineConfiguration->idleRpmPid.maxValue = 20;
@@ -40,12 +38,11 @@ void setMazdaMiata96() {
 
 	engineConfiguration->iacByTpsTaper = 6;
 	engineConfiguration->useIdleTimingPidControl = true;
-	engineConfiguration->engineChartSize = 300;
 
 	engineConfiguration->wwaeTau = 0.1;
-	engineConfiguration->targetVBatt = 14.2;
-	engineConfiguration->crankingIACposition = 36;
-	engineConfiguration->afterCrankingIACtaperDuration = 189;
+	setTable(config->alternatorVoltageTargetTable, 14.2);
+	setArrayValues(config->cltCrankingCorr, 36);
+	setArrayValues(config->afterCrankingIACtaperDuration, 189);
 
 	engineConfiguration->crankingTimingAngle = 6;
 	engineConfiguration->ignitionDwellForCrankingMs = 4;

@@ -2,14 +2,20 @@
  * file defaults.h
  */
 
+#pragma once
+
 void setLeftRightBanksNeedBetterName();
 void setDefaultBaseEngine();
 void setDefaultFuel();
 void setDefaultIgnition();
 void setDefaultCranking();
 void setGDIFueling();
+void setHpfpLobeProfileAngle(int lobes);
 void setGdiWallWetting();
 void setInline4();
+void setDynoDefaults();
+void setupTLE9201(Gpio controlPin, Gpio direction, Gpio disable, int dcIndex = 0);
+void setupTLE9201IncludingStepper(Gpio controlPin, Gpio direction, Gpio disable, int dcIndex = 0);
 
 #define DEFAULT_CRANKING_DWELL_MS 6
 #define DEFAULT_CRANKING_ANGLE 6
@@ -31,8 +37,4 @@ void setTPS1Calibration(uint16_t tpsMin, uint16_t tpsMax, uint16_t tps1Secondary
 void setCustomMap(float lowValue, float mapLowValueVoltage, float highValue, float mapHighValueVoltage);
 
 void setEtbPID(float p, float i, float d);
-
-// split threshold
-#ifndef MAX_TPS_PPS_DISCREPANCY
-#define MAX_TPS_PPS_DISCREPANCY 5.0f
-#endif
+void defaultsOrFixOnBurn();

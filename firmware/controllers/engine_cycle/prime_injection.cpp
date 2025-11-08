@@ -7,6 +7,9 @@
 #include "injection_gpio.h"
 #include "sensor.h"
 #include "backup_ram.h"
+#if EFI_PROD_CODE
+#include "microsecond_timer.h"
+#endif
 
 floatms_t PrimeController::getPrimeDuration() const {
 	auto clt = Sensor::get(SensorType::Clt);
@@ -19,6 +22,8 @@ floatms_t PrimeController::getPrimeDuration() const {
 	auto primeMass =
 		0.001f *	// convert milligram to gram
 		interpolate2d(clt.Value, engineConfiguration->primeBins, engineConfiguration->primeValues);
+
+	efiPrintf("Priming pulse mass: %.4f g", primeMass);
 
 	return engine->module<InjectorModelPrimary>()->getInjectionDuration(primeMass);
 }
@@ -57,12 +62,14 @@ void PrimeController::onIgnitionStateChanged(bool ignitionOn) {
 
 	// start prime injection if this is a 'fresh start'
 	if (ignSwitchCounter == 0) {
-		auto primeDelayMs = engineConfiguration->primingDelay * 1000;
+		// Give sensors long enough to wake up before priming
+		constexpr float minimumPrimeDelayMs = 100;
+		int32_t primeDelayNt = assertFloatFitsInto32BitsAndCast("primingDelay", MSF2NT(engineConfiguration->primingDelay * 1000 + minimumPrimeDelayMs));
 
-		auto startTime = getTimeNowNt() + MS2NT(primeDelayMs);
-		getExecutorInterface()->scheduleByTimestampNt("prime", nullptr, startTime, { PrimeController::onPrimeStartAdapter, this });
+		auto startTime = getTimeNowNt() + primeDelayNt;
+		getScheduler()->schedule("primingDelay", nullptr, startTime, action_s::make<onPrimeStartAdapter>( this ));
 	} else {
-		efiPrintf("Skipped priming pulse since ignSwitchCounter = %d", ignSwitchCounter);
+		efiPrintf("Skipped priming pulse since ignSwitchCounter = %lu", ignSwitchCounter);
 	}
 
 	// we'll reset it later when the engine starts
@@ -91,15 +98,21 @@ void PrimeController::onPrimeStart() {
 		efiPrintf("Skipped zero-duration priming pulse.");
 		return;
 	}
+#if EFI_PROD_CODE
+	if (durationMs >= TOO_FAR_INTO_FUTURE_MS) {
+	  criticalError("Priming duration too long %dms", durationMs);
+	}
+#endif
 
 	efiPrintf("Firing priming pulse of %.2f ms", durationMs);
+	engine->outputChannels.injectionPrimingCounter++;
 
-	auto endTime = getTimeNowNt() + MS2NT(durationMs);
+	auto endTime = sumTickAndFloat(getTimeNowNt(), MSF2NT(durationMs));
 
 	// Open all injectors, schedule closing later
 	m_isPriming = true;
 	startSimultaneousInjection();
-	getExecutorInterface()->scheduleByTimestampNt("prime", nullptr, endTime, { onPrimeEndAdapter, this });
+	getScheduler()->schedule("onPrimeStart", nullptr, endTime, action_s::make<onPrimeEndAdapter>( this ));
 }
 
 void PrimeController::onPrimeEnd() {

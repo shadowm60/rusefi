@@ -1,7 +1,7 @@
 package com.rusefi.f4discovery;
 
-import com.rusefi.config.generated.Fields;
 import com.rusefi.RusefiTestBase;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.enums.SensorType;
@@ -14,7 +14,7 @@ import java.util.Arrays;
 
 import static com.rusefi.IoUtil.getEnableCommand;
 import static com.rusefi.TestingUtils.assertNull;
-import static com.rusefi.config.generated.Fields.CMD_SET_SENSOR_MOCK;
+import static com.rusefi.config.generated.Integration.CMD_SET_SENSOR_MOCK;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -115,7 +115,7 @@ public class CommonFunctionalTest extends RusefiTestBase {
         // Alpha-N mode so that we actually inject some fuel (without mocking tons of sensors)
         ecu.sendCommand("set algorithm 2");
         // Set tps to 25% - make alpha-n happy
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Tps1.ordinal() + " 25");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Tps1.name() + " 25");
         ecu.sendCommand("set rpm_hard_limit 2500");
 
         {
@@ -170,30 +170,18 @@ public class CommonFunctionalTest extends RusefiTestBase {
     }
 
     @Test
-    public void testAuxValveNissan() {
-        ecu.setEngineType(engine_type_e.NISSAN_PRIMERA);
-        ecu.changeRpm(1200);
-    }
-
-    @Test
-    public void testMazdaMiata2003() {
-        ecu.setEngineType(engine_type_e.FRANKENSO_MAZDA_MIATA_2003);
-        ecu.sendCommand("get cranking_dwell"); // just test coverage
-//        sendCommand("get nosuchgettersdfsdfsdfsdf"); // just test coverage
-    }
-
-    @Test
     public void testTwoStrokeSachs() {
         ecu.setEngineType(engine_type_e.SACHS);
         ecu.changeRpm(1200);
     }
+
     @Test
     public void test2003DodgeNeon() {
         ecu.setEngineType(engine_type_e.DODGE_NEON_2003_CRANK);
         ecu.sendCommand("set wwaeTau 0");
         ecu.sendCommand("set wwaeBeta 0");
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.ordinal() + " 69.12");
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.ordinal() + " 12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.name() + " 69.12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.name() + " 12");
         ecu.sendCommand("disable cylinder_cleanup");
         EngineChart chart;
         String msg = "2003 Neon cranking ";
@@ -203,13 +191,11 @@ public class CommonFunctionalTest extends RusefiTestBase {
         EcuTestHelper.assertSomewhatClose("VBatt", 12, SensorCentral.getInstance().getValue(Sensor.VBATT));
 
         chart = nextChart();
-        double x = 100;
         assertWaveNotNull(msg, chart, EngineChart.SPARK_1);
         assertWaveNull(msg, chart, EngineChart.SPARK_2);
         assertWaveNotNull(msg, chart, EngineChart.SPARK_3);
         assertWaveNull(msg, chart, EngineChart.SPARK_4);
 
-        x = 176.856;
         // todo: why is width precision so low here? is that because of loaded Windows with 1ms precision?
         double widthRatio = 0.25;
         // WAT? this was just 0.009733333333333387?
@@ -223,14 +209,12 @@ public class CommonFunctionalTest extends RusefiTestBase {
         ecu.changeRpm(2700);
         ecu.changeRpm(2000);
         chart = nextChart();
-        x = 104.0;
         assertWaveNotNull(msg, chart, EngineChart.SPARK_1);
         assertWaveNull(msg, chart, EngineChart.SPARK_2);
         assertWaveNotNull(msg, chart, EngineChart.SPARK_3);
         assertWaveNull(msg, chart, EngineChart.SPARK_4);
 
         chart = nextChart();
-        x = 74;
         assertWaveNotNull(msg, chart, EngineChart.INJECTOR_1);
         assertWaveNotNull(msg, chart, EngineChart.INJECTOR_2);
         assertWaveNotNull(msg, chart, EngineChart.INJECTOR_3);
@@ -245,12 +229,10 @@ public class CommonFunctionalTest extends RusefiTestBase {
 
         ecu.sendCommand("set_whole_timing_map 520");
         chart = nextChart();
-        x = 328;
         assertWaveNotNull(msg, chart, EngineChart.SPARK_1);
 
         ecu.sendCommand("set_whole_timing_map 0");
         chart = nextChart();
-        x = 128;
         assertWaveNotNull(msg, chart, EngineChart.SPARK_1);
     }
 
@@ -258,12 +240,12 @@ public class CommonFunctionalTest extends RusefiTestBase {
     public void testMazdaProtege() {
         ecu.setEngineType(engine_type_e.FORD_ESCORT_GT);
         EngineChart chart;
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.ordinal() + " 12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.name() + " 12");
 
         // Alpha-N mode so that we actually inject some fuel (without mocking tons of sensors)
         ecu.sendCommand("set algorithm 2");
         // Set tps to 25% - make alpha-n happy
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Tps1.ordinal() + " 25");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Tps1.name() + " 25");
 
         ecu.changeRpm(200);
         ecu.changeRpm(260);
@@ -288,7 +270,7 @@ public class CommonFunctionalTest extends RusefiTestBase {
     public void test1995DodgeNeon() {
         ecu.setEngineType(engine_type_e.DODGE_NEON_1995);
         EngineChart chart;
-        sendComplexCommand(Fields.CMD_INDIVIDUAL_INJECTION);
+        sendComplexCommand(Integration.CMD_INDIVIDUAL_INJECTION);
         /**
          * note that command order matters - RPM change resets wave chart
          */
@@ -307,7 +289,7 @@ public class CommonFunctionalTest extends RusefiTestBase {
         assertWaveNotNull(msg, chart, EngineChart.SPARK_3);
 
         // switching to Speed Density
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.ordinal() + " 69.12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.name() + " 69.12");
         sendComplexCommand("set algorithm 0");
         ecu.changeRpm(2600);
         ecu.changeRpm(2000);
@@ -336,8 +318,8 @@ public class CommonFunctionalTest extends RusefiTestBase {
     public void testFordAspire() {
         ecu.setEngineType(engine_type_e.FORD_ASPIRE_1996);
         ecu.sendCommand("disable cylinder_cleanup");
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.ordinal() + " 69.12");
-        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.ordinal() + " 12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.Map.name() + " 69.12");
+        ecu.sendCommand(CMD_SET_SENSOR_MOCK + " " + SensorType.BatteryVoltage.name() + " 12");
         String msg;
         EngineChart chart;
         // todo: interesting changeRpm(100);
@@ -411,7 +393,7 @@ public class CommonFunctionalTest extends RusefiTestBase {
         assertWaveNotNull(chart, EngineChart.SPARK_1);
 
         // let's enable more channels dynamically
-        sendComplexCommand(Fields.CMD_INDIVIDUAL_INJECTION);
+        sendComplexCommand(Integration.CMD_INDIVIDUAL_INJECTION);
         chart = nextChart();
         assertWaveNotNull("Switching Aspire into INDIVIDUAL_COILS mode", chart, EngineChart.SPARK_2);
         assertWaveNotNull(chart, EngineChart.SPARK_3);
@@ -425,7 +407,7 @@ public class CommonFunctionalTest extends RusefiTestBase {
         ecu.changeRpm(2400);
         ecu.changeRpm(2000);
         chart = nextChart();
-        EcuTestHelper.assertSomewhatClose("MAP", 69.12, SensorCentral.getInstance().getValue(Sensor.MAP));
+        EcuTestHelper.assertSomewhatClose("MAP", 69.12, SensorCentral.getInstance().getValue(Sensor.MAPVALUE));
         //assertEquals(1, SensorCentral.getInstance().getValue(Sensor.));
 
         assertWaveNotNull(msg + " fuel SD #1", chart, EngineChart.INJECTOR_1);

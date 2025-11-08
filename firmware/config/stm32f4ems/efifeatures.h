@@ -2,12 +2,15 @@
  * @file efifeatures.h
  *
  * @brief In this header we can configure which firmware modules are used.
+ * See config/boards which are often overriding some of the defaults via .mk and/or .env files
  *
  * @date Aug 29, 2013
  * @author Andrey Belomutskiy, (c) 2012-2020
  */
 
 #pragma once
+
+#include <rusefi/true_false.h>
 
 #define EFI_GPIO_HARDWARE TRUE
 
@@ -19,6 +22,18 @@
 #define EFI_BOOST_CONTROL TRUE
 #endif
 
+#ifndef EFI_BOSCH_YAW
+#define EFI_BOSCH_YAW FALSE
+#endif
+
+#ifndef EFI_WIFI
+#define EFI_WIFI FALSE
+#endif
+
+#ifndef EFI_WS2812
+#define EFI_WS2812 FALSE
+#endif
+
 #ifndef EFI_DAC
 #define EFI_DAC FALSE
 #endif
@@ -27,12 +42,26 @@
 #define EFI_LAUNCH_CONTROL TRUE
 #endif
 
+/* Long Term Fuel Trims */
+#ifndef EFI_LTFT_CONTROL
+#define EFI_LTFT_CONTROL TRUE
+#endif
+
+#ifndef EFI_STORAGE_SD
+// Lets try saving LTFT trims on SD card by default
+#define EFI_STORAGE_SD TRUE
+#endif
+
 #ifndef EFI_ANTILAG_SYSTEM
 #define EFI_ANTILAG_SYSTEM TRUE
 #endif
 
 #ifndef EFI_BACKUP_SRAM
 #define EFI_BACKUP_SRAM TRUE
+#endif
+
+#ifndef EFI_HELLA_OIL
+#define EFI_HELLA_OIL FALSE
 #endif
 
 #ifndef EFI_USE_OPENBLT
@@ -67,8 +96,6 @@
 #define EFI_TEXT_LOGGING TRUE
 #endif
 
-#define EFI_PWM_TESTER FALSE
-
 #define EFI_ACTIVE_CONFIGURATION_IN_FLASH FALSE
 
 #ifndef EFI_MC33816
@@ -83,9 +110,6 @@
 #define EFI_HD_ACR FALSE
 #endif
 
-#ifndef SC_BUFFER_SIZE
-#define SC_BUFFER_SIZE 4000
-#endif
 
 /**
  * if you have a 60-2 trigger, or if you just want better performance, you
@@ -127,6 +151,10 @@
 #define EFI_TUNER_STUDIO TRUE
 #endif
 
+#ifndef EFI_TS_SCATTER
+#define EFI_TS_SCATTER TRUE
+#endif
+
 /**
  * Bluetooth UART setup support.
  */
@@ -139,7 +167,7 @@
  */
 #define EFI_TUNER_STUDIO_VERBOSE TRUE
 
-#define EFI_DEFAILED_LOGGING FALSE
+#define EFI_DETAILED_LOGGING FALSE
 
 /**
  * Dev console support.
@@ -169,14 +197,40 @@
 
 #define TRIGGER_EXTREME_LOGGING FALSE
 
+/**
+ * Store configuration as raw binary to internal flash (two copies if there is enough flash)
+ * No wear leveling, one copy occupie whole sector erased on each update
+ * Legacy, should be replaced with EFI_STORAGE_MFS
+ */
 #ifndef EFI_STORAGE_INT_FLASH
+// historically we've started with low-level flash access with our own redundancy logic
+// todo: migrate to EFI_STORAGE_MFS which provides same functionality and more!
 #define EFI_STORAGE_INT_FLASH   TRUE
 #endif
 
+/**
+ * ChibiOS Managed Flash Storage
+ * Can store finite number of records, can update/add while there is free space in bank.
+ * Recover from power loss
+ */
 #ifndef EFI_STORAGE_MFS
+// todo: this higher level API should replace EFI_STORAGE_INT_FLASH legacy implementation
 #define EFI_STORAGE_MFS         FALSE
 #endif
 
+/**
+ * Store settings/calibrations/learning to SD card as a files
+ */
+#ifndef EFI_STORAGE_SD
+#define EFI_STORAGE_SD	        FALSE
+#endif
+
+/**
+ * Controlled defined to TRUE by USE_FATFS=yes in board mk file
+ */
+#ifndef EFI_SUPPORT_FATFS
+#define EFI_SUPPORT_FATFS		FALSE
+#endif
 
 /**
  * Usually you need shaft position input, but maybe you do not need it?
@@ -229,6 +283,10 @@
 #define BOARD_TLE9104_COUNT 0
 #endif
 
+#ifndef BOARD_TLE9201_COUNT
+#define BOARD_TLE9201_COUNT 0
+#endif
+
 #define EFI_ANALOG_SENSORS TRUE
 
 #ifndef EFI_MAX_31855
@@ -236,11 +294,6 @@
 #endif
 
 #define EFI_MCP_3208 FALSE
-
-#ifndef EFI_HIP_9011
-// disabling for now - DMA conflict with SPI1
-#define EFI_HIP_9011 FALSE
-#endif
 
 #if !defined(EFI_ONBOARD_MEMS)
  #define EFI_ONBOARD_MEMS FALSE
@@ -265,10 +318,8 @@
 #define EFI_CAN_GPIO TRUE
 #endif
 
+#ifndef EFI_WIDEBAND_FIRMWARE_UPDATE
 #define EFI_WIDEBAND_FIRMWARE_UPDATE TRUE
-
-#ifndef EFI_AUX_SERIAL
-#define EFI_AUX_SERIAL TRUE
 #endif
 
 #ifndef EFI_IDLE_CONTROL
@@ -283,7 +334,7 @@
  * Control the main power relay based on measured ignition voltage (Vbatt)
  */
 #ifndef EFI_MAIN_RELAY_CONTROL
-#define EFI_MAIN_RELAY_CONTROL FALSE
+#define EFI_MAIN_RELAY_CONTROL TRUE
 #endif
 
 #ifndef EFI_VEHICLE_SPEED
@@ -321,31 +372,39 @@
 #define EFI_CONSOLE_USB_DEVICE SDU1
 
 #if defined(EFI_HAS_EXT_SDRAM)
-    #ifndef ENABLE_PERF_TRACE
-    #define ENABLE_PERF_TRACE TRUE
-    #endif // ENABLE_PERF_TRACE
-    #define LUA_USER_HEAP (1 * 1024 * 1024)
+	#ifndef ENABLE_PERF_TRACE
+	  #define ENABLE_PERF_TRACE TRUE
+	#endif // ENABLE_PERF_TRACE
+	#define LUA_EXTRA_HEAP (1 * 1024 * 1024)
 #elif defined(EFI_IS_F42x)
-    // F42x has more memory, so we can:
-    //  - use compressed USB MSD image (requires 32k of memory)
-    //  - use perf trace (requires ~16k of memory)
-	#define EFI_USE_COMPRESSED_INI_MSD
-	#define ENABLE_PERF_TRACE TRUE
-
-	#define LUA_USER_HEAP 25000
-#else
-    #ifndef ENABLE_PERF_TRACE
-	// small memory F40x can't fit perf trace
-	#define ENABLE_PERF_TRACE FALSE
-    #endif // ENABLE_PERF_TRACE
-
-	#ifndef LUA_USER_HEAP
-	#define LUA_USER_HEAP 25000
+	// F42x has more memory, so we can:
+	//  - use compressed USB MSD image (requires 32k of memory)
+	//  - use perf trace (requires ~16k of memory)
+	//  - use spectorgram (requires ~12k of memory), need disable perf trace or compressed USB MSD image
+	#ifndef KNOCK_SPECTROGRAM
+	  #ifndef EFI_USE_COMPRESSED_INI_MSD
+		#define EFI_USE_COMPRESSED_INI_MSD TRUE
+		#endif
 	#endif
+	#define ENABLE_PERF_TRACE TRUE
+#else
+	#ifndef ENABLE_PERF_TRACE
+	  // small memory F40x can't fit perf trace
+	  #define ENABLE_PERF_TRACE FALSE
+	#endif // ENABLE_PERF_TRACE
+#endif
+
+#ifndef EFI_USE_COMPRESSED_INI_MSD
+#define EFI_USE_COMPRESSED_INI_MSD FALSE
 #endif
 
 #ifndef EFI_LUA
 #define EFI_LUA TRUE
+#endif
+
+#ifndef FULL_SD_LOGS
+// reduce RAM usage? todo: optimize RAM consumption so that all builds have full logs?
+#define FULL_SD_LOGS FALSE
 #endif
 
 #ifndef EFI_LUA_LOOKUP
@@ -358,9 +417,6 @@
 
 #define EFI_HISTOGRAMS FALSE
 
-#ifndef EFI_SENSOR_CHART
-#define EFI_SENSOR_CHART TRUE
-#endif
 
 #ifndef EFI_PERF_METRICS
 #define EFI_PERF_METRICS FALSE
@@ -385,7 +441,7 @@
  * Do we need Malfunction Indicator blinking logic?
  */
 #ifndef EFI_MALFUNCTION_INDICATOR
-#define EFI_MALFUNCTION_INDICATOR TRUE
+#define EFI_MALFUNCTION_INDICATOR FALSE
 #endif
 
 #ifndef CONSOLE_MAX_ACTIONS
@@ -398,8 +454,15 @@
 
 // todo: most of this should become configurable
 
-// todo: switch to continuous ADC conversion for fast ADC?
+// TODO: switch to continuous ADC conversion for fast ADC?
+// NOTE: GPT mode triggers ADC convertion through IRQ
 #define EFI_INTERNAL_FAST_ADC_GPT	&GPTD6
+// NOTE: PWM mode triggers ADC convertion through hardware ADC trigger
+//#define EFI_INTERNAL_FAST_ADC_PWM	&PWMD8
+
+// Continuously run internal ADC in background for all channels
+// Do averaging in thread with no sync with convertion end
+#define EFI_INTERNAL_SLOW_ADC_BACKGROUND	TRUE
 
 #define EFI_SPI1_AF 5
 #define EFI_SPI2_AF 5
@@ -431,12 +494,13 @@
  *  PE5
  */
 
-// allow override of EFI_USE_UART_DMA from cmdline passed defs
 #ifndef EFI_USE_UART_DMA
-#define EFI_USE_UART_DMA TRUE
+#define EFI_USE_UART_DMA FALSE
 #endif
 
+#ifndef AUX_SERIAL_DEVICE
 #define AUX_SERIAL_DEVICE (&SD6)
+#endif
 
 #ifndef EFI_CONSOLE_TX_BRAIN_PIN
 #define EFI_CONSOLE_TX_BRAIN_PIN Gpio::C10
@@ -451,10 +515,27 @@
 #define EFI_CONSOLE_AF 7
 #endif
 
+// Rx pin should have either internal either external pull up to avoid floating and receiving random garbage
+#ifndef EFI_CONSOLE_RX_BRAIN_PIN_MODE
+#define EFI_CONSOLE_RX_BRAIN_PIN_MODE (PAL_MODE_ALTERNATE(EFI_CONSOLE_AF) | PAL_STM32_PUPDR_PULLUP)
+#endif
+
+#ifndef EFI_CONSOLE_TX_BRAIN_PIN_MODE
+#define EFI_CONSOLE_TX_BRAIN_PIN_MODE (PAL_MODE_ALTERNATE(EFI_CONSOLE_AF))
+#endif
+
 // todo: this should be detected automatically based on pin selection
 // https://github.com/rusefi/rusefi/issues/3536
 #ifndef TS_SERIAL_AF
 #define TS_SERIAL_AF 7
+#endif
+
+#ifndef TS_SERIAL_RX_BRAIN_PIN_MODE
+#define TS_SERIAL_RX_BRAIN_PIN_MODE (PAL_MODE_ALTERNATE(TS_SERIAL_AF) | PAL_STM32_PUPDR_PULLUP)
+#endif
+
+#ifndef TS_SERIAL_TX_BRAIN_PIN_MODE
+#define TS_SERIAL_TX_BRAIN_PIN_MODE (PAL_MODE_ALTERNATE(TS_SERIAL_AF))
 #endif
 
 #ifndef LED_CRITICAL_ERROR_BRAIN_PIN

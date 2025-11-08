@@ -16,14 +16,17 @@
 
 #include <cstring>
 #include <cstdint>
-#include <rusefi/isnan.h>
-#include <rusefi/math.h>
+
+// looks like some technical debt here?! that's about error: ‘isnan’ is not a member of ‘std’
+#include <cmath>
+#include <rusefi/rusefi_math.h>
+
 #include "efiprintf.h"
 #include "rusefi/efistringutil.h"
 #include "cli_registry.h"
 
 /* for isspace() */
-#include <ctype.h>
+#include <cctype>
 
 #ifndef CONSOLE_MAX_ACTIONS
 #define CONSOLE_MAX_ACTIONS 256
@@ -36,6 +39,8 @@
 // todo: support \t as well
 #define SPACE_CHAR ' '
 
+using namespace rusefi::stringutil;
+
 static int consoleActionCount = 0;
 static TokenCallback consoleActions[CONSOLE_MAX_ACTIONS];
 
@@ -45,7 +50,7 @@ void resetConsoleActions(void) {
 
 static void doAddAction(const char *token, action_type_e type, Void callback, void *param) {
 #if !defined(EFI_DISABLE_CONSOLE_ACTIONS)
-	for (uint32_t i = 0; i < strlen(token);i++) {
+	for (uint32_t i = 0; i < std::strlen(token); i++) {
 		char ch = token[i];
 		if (isupper(ch)) {
 		    onCliCaseError(token);
@@ -236,7 +241,7 @@ int tokenLength(const char *msgp) {
 
 char *unquote(char *line) {
 	if (line[0] == '"') {
-		int len = strlen(line);
+		int len = std::strlen(line);
 		if (line[len - 1] == '"') {
 			line[len - 1] = 0;
 			return line + 1;
@@ -362,7 +367,7 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 	case FLOAT_PARAMETER:
 	{
 		float value = atoff(argv[0]);
-		if (cisnan(value)) {
+		if (std::isnan(value)) {
 			efiPrintf("invalid float [%s]", argv[0]);
 			return -1;
 		}
@@ -377,7 +382,7 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 		float value[2];
 		for (int i = 0; i < 2; i++) {
 			value[i] = atoff(argv[i]);
-			if (cisnan(value[i])) {
+			if (std::isnan(value[i])) {
 				efiPrintf("invalid float [%s]", argv[i]);
 				return -1;
 			}
@@ -396,7 +401,7 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 		float value[3];
 		for (int i = 0; i < 3; i++) {
 			value[i] = atoff(argv[i]);
-			if (cisnan(value[i])) {
+			if (std::isnan(value[i])) {
 				efiPrintf("invalid float [%s]", argv[i]);
 				return -1;
 			}
@@ -410,7 +415,7 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 		float value[4];
 		for (int i = 0; i < 4; i++) {
 			value[i] = atoff(argv[i]);
-			if (cisnan(value[i])) {
+			if (std::isnan(value[i])) {
 				efiPrintf("invalid float [%s]", argv[i]);
 				return -1;
 			}
@@ -429,7 +434,7 @@ int handleActionWithParameter(TokenCallback *current, char *argv[], int argc) {
 			return -1;
 		}
 		float value2 = atoff(argv[1]);
-		if (cisnan(value2)) {
+		if (std::isnan(value2)) {
 			efiPrintf("invalid float [%s]", argv[1]);
 			return -1;
 		}
@@ -506,7 +511,7 @@ void handleConsoleLine(char *line) {
 	if (line == NULL)
 		return; // error detected
 
-	int lineLength = strlen(line);
+	int lineLength = std::strlen(line);
 	if (lineLength > MAX_CMD_LINE_LENGTH) {
 		// todo: better reaction to excessive line
 		efiPrintf("Long line?");

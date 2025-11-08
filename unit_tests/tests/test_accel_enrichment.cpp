@@ -15,32 +15,32 @@
 TEST(fuel, testTpsAccelEnrichmentMath) {
 	printf("====================================================================================== testAccelEnrichment\r\n");
 
-	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	engine->rpmCalculator.setRpmValue(600);
 	engine->periodicFastCallback();
 
-	engine->tpsAccelEnrichment.setLength(4);
+	engine->module<TpsAccelEnrichment>()->setLength(4);
 
-	engine->tpsAccelEnrichment.onNewValue(0);
-	ASSERT_EQ( 0,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta";
-	engine->tpsAccelEnrichment.onNewValue(10);
-	ASSERT_EQ( 10,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta#1";
-	engine->tpsAccelEnrichment.onNewValue(30);
-	ASSERT_EQ( 20,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta#2";
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
+	ASSERT_EQ( 0,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta";
+	engine->module<TpsAccelEnrichment>()->onNewValue(10);
+	ASSERT_EQ( 10,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta#1";
+	engine->module<TpsAccelEnrichment>()->onNewValue(30);
+	ASSERT_EQ( 20,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta#2";
 
-	engine->tpsAccelEnrichment.onNewValue(0);
-	ASSERT_EQ( 20,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta#3";
-	engine->tpsAccelEnrichment.onNewValue(0);
-	ASSERT_EQ( 20,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta#4";
-	engine->tpsAccelEnrichment.onNewValue(0);
-	ASSERT_EQ( 0,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta#5";
-	engine->tpsAccelEnrichment.onNewValue(0);
-	ASSERT_EQ( 0,  engine->tpsAccelEnrichment.getMaxDelta()) << "maxDelta";
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
+	ASSERT_EQ( 20,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta#3";
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
+	ASSERT_EQ( 20,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta#4";
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
+	ASSERT_EQ( 0,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta#5";
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
+	ASSERT_EQ( 0,  engine->module<TpsAccelEnrichment>()->getMaxDelta()) << "maxDelta";
 }
 
 TEST(fuel, testTpsAccelEnrichmentScheduling) {
-	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	setCrankOperationMode();
 
@@ -58,25 +58,25 @@ TEST(fuel, testTpsAccelEnrichmentScheduling) {
 	eth.fireTriggerEvents2(/* count */ 4, 25 /* ms */);
 	ASSERT_EQ( 1200,  Sensor::getOrZero(SensorType::Rpm)) << "RPM";
 	int expectedInvocationCounter = 1;
-	ASSERT_EQ(expectedInvocationCounter, engine->tpsAccelEnrichment.onUpdateInvocationCounter);
+	ASSERT_EQ(expectedInvocationCounter, engine->module<TpsAccelEnrichment>()->onUpdateInvocationCounter);
 
 	Sensor::setMockValue(SensorType::Tps1, 70);
 	eth.fireTriggerEvents2(/* count */ 1, 25 /* ms */);
 
 	float expectedAEValue = 7;
 	// it does not matter how many times we invoke 'getTpsEnrichment' - state does not change
-	for (int i = 0; i <20;i++) {
-		ASSERT_NEAR(expectedAEValue, engine->tpsAccelEnrichment.getTpsEnrichment(), EPS4D);
+	for (int i = 0; i < 20; i++) {
+		ASSERT_NEAR(expectedAEValue, engine->module<TpsAccelEnrichment>()->getTpsEnrichment(), EPS4D);
 	}
 
 	expectedInvocationCounter++;
-	ASSERT_EQ(expectedInvocationCounter, engine->tpsAccelEnrichment.onUpdateInvocationCounter);
+	ASSERT_EQ(expectedInvocationCounter, engine->module<TpsAccelEnrichment>()->onUpdateInvocationCounter);
 
 	eth.engine.periodicFastCallback();
 	eth.engine.periodicFastCallback();
 	eth.engine.periodicFastCallback();
 
-	ASSERT_EQ(expectedInvocationCounter, engine->tpsAccelEnrichment.onUpdateInvocationCounter);
+	ASSERT_EQ(expectedInvocationCounter, engine->module<TpsAccelEnrichment>()->onUpdateInvocationCounter);
 }
 
 static void doFractionalTpsIteration(int period, int divisor, int numCycles, std::vector<floatms_t> &tpsEnrich) {
@@ -85,19 +85,19 @@ static void doFractionalTpsIteration(int period, int divisor, int numCycles, std
 	// split into 2 portions
 	engineConfiguration->tpsAccelFractionDivisor = divisor;
 
-	engine->tpsAccelEnrichment.resetAE();
-	engine->tpsAccelEnrichment.onNewValue(0);
+	engine->module<TpsAccelEnrichment>()->resetAE();
+	engine->module<TpsAccelEnrichment>()->onNewValue(0);
 	for (int i = 0; i < numCycles; i++) {
-		engine->tpsAccelEnrichment.onNewValue(10);
-		engine->tpsAccelEnrichment.onEngineCycleTps();
-		tpsEnrich[i] = engine->tpsAccelEnrichment.getTpsEnrichment();
+		engine->module<TpsAccelEnrichment>()->onNewValue(10);
+		engine->module<TpsAccelEnrichment>()->onEngineCycleTps();
+		tpsEnrich[i] = engine->module<TpsAccelEnrichment>()->getTpsEnrichment();
 	}
 }
 
 TEST(fuel, testAccelEnrichmentFractionalTps) {
 	printf("====================================================================================== testAccelEnrichmentFractionalTps\r\n");
 
-	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
 	// setup
 	engineConfiguration->tpsAccelEnrichmentThreshold = 5;
@@ -116,7 +116,7 @@ TEST(fuel, testAccelEnrichmentFractionalTps) {
 	engine->rpmCalculator.setRpmValue(600);
 	engine->periodicFastCallback();
 
-	engine->tpsAccelEnrichment.setLength(2);
+	engine->module<TpsAccelEnrichment>()->setLength(2);
 
 
 	const int numCycles = 4;
@@ -143,4 +143,11 @@ TEST(fuel, testAccelEnrichmentFractionalTps) {
 	// we have half-portion for the first two cycles, and 1/4-th portion for the next 2 cycles, and so on...
 	EXPECT_THAT(tpsEnrich, testing::ElementsAre(0.25f, 0.25f, 0.125f, 0.125f)) << "fractionalTps#4";
 
+}
+
+TEST(fuel, testTpsAccelEnrichment) {
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	engineConfiguration->accelEnrichmentMode = AE_MODE_PREDICTIVE_MAP;
+	// should return 0 if we are using predictive map
+	EXPECT_EQ(0, engine->module<TpsAccelEnrichment>()->getTpsEnrichment());
 }

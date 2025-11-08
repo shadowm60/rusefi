@@ -21,67 +21,22 @@
  */
 
 #include "pch.h"
-
-
+#include "transition_events.h"
 #include "speed_density.h"
-#include "advance_map.h"
 #include "flash_main.h"
 
 #include "bench_test.h"
 
 #if EFI_ONBOARD_MEMS
 #include "accelerometer.h"
-#endif
+#endif // EFI_ONBOARD_MEMS
 
 #include "defaults.h"
 
-#include "bmw_m73.h"
-#include "bmw_n73.h"
-
-#include "canam.h"
 #include "custom_engine.h"
-#include "dodge_neon.h"
-#include "dodge_ram.h"
 
-#include "engine_template.h"
-
-#include "ford_aspire.h"
-#include "ford_1995_inline_6.h"
-#include "f136.h"
-
-#include "honda_k_dbc.h"
-#include "honda_600.h"
-#include "honda.h"
-#include "honda_obd1.h"
-#include "hyundai.h"
-
-#include "GY6_139QMB.h"
-
-#include "nissan_primera.h"
-#include "nissan_vq.h"
-
-#include "mazda_miata.h"
-#include "mazda_miata_1_6.h"
-#include "mazda_miata_na8.h"
-#include "mazda_miata_vvt.h"
-#include "m111.h"
-#include "mercedes.h"
-
-#include "gm_ls_4.h"
-#include "gm_sbc.h"
-#include "subaru.h"
-#include "slingshot.h"
-#include "test_engine.h"
-#include "sachs.h"
-#include "harley.h"
-#include "vw.h"
-#include "vw_b6.h"
-#include "toyota_jz.h"
-#include "toyota_1NZ_FE.h"
-#include "mitsubishi_3A92.h"
-#include "mitsubishi_4G93.h"
-#include "ford_festiva.h"
 #include "boost_control.h"
+#include "engine_configuration_defaults.h"
 #if EFI_IDLE_CONTROL
 #include "idle_thread.h"
 #endif /* EFI_IDLE_CONTROL */
@@ -92,10 +47,6 @@
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 #include "electronic_throttle.h"
-#endif
-
-#if EFI_HIP_9011
-#include "hip9011.h"
 #endif
 
 #include "hardware.h"
@@ -112,8 +63,13 @@
 #include "tunerstudio.h"
 #endif
 
-//#define TS_DEFAULT_SPEED 115200
+#include "board_overrides.h"
+
 #define TS_DEFAULT_SPEED 38400
+
+std::optional<setup_custom_board_overrides_type> custom_board_DefaultConfiguration;
+std::optional<setup_custom_board_overrides_type> custom_board_ConfigOverrides;
+std::optional<setup_custom_board_config_type> custom_board_OnConfigurationChange;
 
 /**
  * Current engine configuration. On firmware start we assign empty configuration, then
@@ -142,27 +98,37 @@ void rememberCurrentConfiguration() {
     hasRememberedConfiguration = true;
 }
 
-static void wipeString(char *string, int size) {
+static void fillAfterString(char *string, int size) {
 	// we have to reset bytes after \0 symbol in order to calculate correct tune CRC from MSQ file
-	for (int i = strlen(string) + 1; i < size; i++) {
+	for (int i = std::strlen(string) + 1; i < size; i++) {
 		string[i] = 0;
 	}
 }
 
 static void wipeStrings() {
-	wipeString(engineConfiguration->engineMake, sizeof(vehicle_info_t));
-	wipeString(engineConfiguration->engineCode, sizeof(vehicle_info_t));
-	wipeString(engineConfiguration->vehicleName, sizeof(vehicle_info_t));
+	fillAfterString(engineConfiguration->engineMake, sizeof(vehicle_info_t));
+	fillAfterString(engineConfiguration->engineCode, sizeof(vehicle_info_t));
+	fillAfterString(engineConfiguration->vehicleName, sizeof(vehicle_info_t));
 }
 
 void onBurnRequest() {
+  onTransitionEvent(TransitionEvent::BurnRequest);
 	wipeStrings();
 
 	incrementGlobalConfigurationVersion("burn");
 }
 
-// Weak link a stub so that every board doesn't have to implement this function
-__attribute__((weak)) void boardOnConfigurationChange(engine_configuration_s* /*previousConfiguration*/) { }
+/**
+ * this hook is about https://github.com/rusefi/rusefi/wiki/Custom-Firmware and https://github.com/rusefi/rusefi/wiki/Canned-Tune-Process
+ * todo: why two hooks? is one already dead?
+ */
+void boardBeforeTuneDefaults() {
+  // placeholder
+}
+
+void boardOnConfigurationChange(engine_configuration_s* /*previousConfiguration*/) {
+  // placeholder
+}
 
 /**
  * this is the top-level method which should be called in case of any changes to engine configuration
@@ -172,18 +138,19 @@ __attribute__((weak)) void boardOnConfigurationChange(engine_configuration_s* /*
  * See 'preCalculate' or 'startHardware' which are invoked BOTH on start and configuration change
  */
 void incrementGlobalConfigurationVersion(const char * msg) {
+  onTransitionEvent(TransitionEvent::GlobalConfigurationVersion);
     assertStackVoid("increment", ObdCode::STACK_USAGE_MISC, EXPECTED_REMAINING_STACK);
     if (!hasRememberedConfiguration) {
         criticalError("too early to invoke incrementGlobalConfigurationVersion %s", msg);
     }
 	engine->globalConfigurationVersion++;
-#if EFI_DEFAILED_LOGGING
+#if EFI_DETAILED_LOGGING
 	efiPrintf("set globalConfigurationVersion=%d", globalConfigurationVersion);
-#endif /* EFI_DEFAILED_LOGGING */
+#endif /* EFI_DETAILED_LOGGING */
 
 	applyNewHardwareSettings();
 
-	boardOnConfigurationChange(&activeConfiguration);
+	call_board_override(custom_board_OnConfigurationChange, &activeConfiguration);
 
 	engine->preCalculate();
 
@@ -219,10 +186,6 @@ void setConstantDwell(floatms_t dwellMs) {
 	setArrayValues(config->sparkDwellValues, dwellMs);
 }
 
-void setWholeIgnitionIatCorr(float value) {
-	setTable(config->ignitionIatCorrTable, value);
-}
-
 void setFuelTablesLoadBin(float minValue, float maxValue) {
 	setLinearCurve(config->injPhaseLoadBins, minValue, maxValue, 1);
 	setLinearCurve(config->veLoadBins, minValue, maxValue, 1);
@@ -236,21 +199,34 @@ void setWholeIatCorrTimingTable(float value) {
 /**
  * See also crankingTimingAngle
  */
-void setWholeTimingTable_d(angle_t value) {
+void setWholeTimingTable(angle_t value) {
 	setTable(config->ignitionTable, value);
 }
 
 #if EFI_ENGINE_CONTROL
-static void initTemperatureCurve(float *bins, float *values, int size, float defaultValue) {
-	for (int i = 0; i < size; i++) {
-		bins[i] = -40 + i * 10;
-		values[i] = defaultValue; // this correction is a multiplier
-	}
+namespace {
+    void initTemperatureCurve(
+        float * const bins,
+        float * const values,
+        const int size,
+        const float defaultValue,
+        const float initialTemperature = -40.0f,
+        const float temperatureStep = 10.0f
+    ) {
+        for (int i = 0; i < size; i++) {
+            bins[i] = initialTemperature + i * temperatureStep;
+            values[i] = defaultValue; // this correction is a multiplier
+        }
+    }
+
+    void initBoostTemperatureCurve(float* const bins, float* const values, const float defaultValue) {
+        initTemperatureCurve(bins, values, BOOST_CURVE_SIZE, defaultValue, 20.0f, 20.0f);
+    }
 }
 #endif // EFI_ENGINE_CONTROL
 
 void prepareVoidConfiguration(engine_configuration_s *p_engineConfiguration) {
-	criticalAssertVoid(p_engineConfiguration != NULL, "ec NULL");
+	criticalAssertVoid(p_engineConfiguration != nullptr, "ec NULL");
 	efi::clear(p_engineConfiguration);
 
 	p_engineConfiguration->clutchDownPinMode = PI_PULLUP;
@@ -283,38 +259,22 @@ void setDefaultSdCardParameters() {
 }
 
 #if EFI_ENGINE_CONTROL
-static void setDefaultWarmupIdleCorrection() {
-	initTemperatureCurve(CLT_MANUAL_IDLE_CORRECTION, 1.0);
-
-	float baseIdle = 30;
-
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION, -40, 1.5);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION, -30, 1.5);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION, -20, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION, -10, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,   0, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  10, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  20, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  30, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  40, 40.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  50, 37.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  60, 35.0 / baseIdle);
-	setCurveValue(CLT_MANUAL_IDLE_CORRECTION,  70, 33.0 / baseIdle);
-}
 
 /**
  * see also setTargetRpmCurve()
  */
 static void setDefaultIdleSpeedTarget() {
+#if CLT_CURVE_SIZE == 16
 	copyArray(config->cltIdleRpmBins, {  -30, - 20,  -10,    0,   10,   20,   30,   40,   50,  60,  70,  80,  90, 100 , 110,  120 });
 	copyArray(config->cltIdleRpm,     { 1350, 1350, 1300, 1200, 1150, 1100, 1050, 1000, 1000, 950, 950, 930, 900, 900, 1000, 1100 });
+#endif // CLT_CURVE_SIZE
 }
 #endif // EFI_ENGINE_CONTROL
 
 /**
  * see also setDefaultIdleSpeedTarget()
  */
-void setTargetRpmCurve(int rpm) {
+void setTargetRpmCurve(float rpm) {
 	setLinearCurve(config->cltIdleRpmBins, CLT_CURVE_RANGE_FROM, 140, 10);
 	setLinearCurve(config->cltIdleRpm, rpm, rpm, 10);
 }
@@ -352,20 +312,28 @@ static void setDefaultGppwmParameters() {
 	}
 }
 
+static void setDefaultBoostOpenLoopParameters() {
+	engineConfiguration->boostOpenLoopYAxis = GPPWM_Tps;
+}
+
 #if EFI_ENGINE_CONTROL
 static void setDefaultEngineNoiseTable() {
-	setRpmTableBin(engineConfiguration->knockNoiseRpmBins);
+	setRpmTableBin(config->knockNoiseRpmBins);
 
+	engineConfiguration->knockDetectionWindowStart = 15.0 + 5.0;
 	engineConfiguration->knockSamplingDuration = 45;
 
-	setArrayValues(engineConfiguration->knockBaseNoise, -20);
+	setArrayValues(config->knockBaseNoise, -20);
 }
 #endif // EFI_ENGINE_CONTROL
 
 static void setDefaultCanSettings() {
-  // OBD-II default rate is 500kbps
-  engineConfiguration->canBaudRate = B500KBPS;
-  engineConfiguration->can2BaudRate = B500KBPS;
+	// OBD-II default rate is 500kbps
+	engineConfiguration->canBaudRate = B500KBPS;
+	engineConfiguration->can2BaudRate = B500KBPS;
+#if (EFI_CAN_BUS_COUNT >= 3)
+	engineConfiguration->can3BaudRate = B500KBPS;
+#endif
 
 	engineConfiguration->canSleepPeriodMs = 50;
 	engineConfiguration->canReadEnabled = true;
@@ -385,6 +353,14 @@ static void setDefaultScriptParameters() {
 	setRpmTableBin(config->scriptTable3RpmBins);
 	setLinearCurve(config->scriptTable4LoadBins, 20, 120, 10);
 	setRpmTableBin(config->scriptTable4RpmBins);
+}
+
+static void setDefaultIdleOpenLoopParameters() {
+	setRpmTableBin(config->rpmIdleCorrBins);
+	setLinearCurve(config->cltIdleCorrBins, CLT_CURVE_RANGE_FROM, 140, 10);
+	for (size_t i = 0; i < CLT_IDLE_TABLE_RPM_SIZE; i++) {
+		setLinearCurve(config->cltIdleCorrTable[i], 75.0, 50, 5);
+	}
 }
 
 /**
@@ -418,6 +394,7 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->sdCardLogFrequency = 50;
 
 	setDefaultGppwmParameters();
+	setDefaultBoostOpenLoopParameters();
 	setDefaultScriptParameters();
 
 #if EFI_ENGINE_CONTROL
@@ -454,7 +431,6 @@ static void setDefaultEngineConfiguration() {
 	setDefaultEtbBiasCurve();
 #endif /* EFI_ELECTRONIC_THROTTLE_BODY */
 
-	engineConfiguration->mafSensorType = Bosch0280218037;
 	setBosch0280218037();
 
 	engineConfiguration->mapMinBufferLength = 1;
@@ -467,6 +443,11 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->maxAcTps = 75;
 
 	initTemperatureCurve(IAT_FUEL_CORRECTION_CURVE, 1);
+
+	initBoostTemperatureCurve(config->cltBoostCorrBins, config->cltBoostCorr, 1.0f);
+	initBoostTemperatureCurve(config->iatBoostCorrBins, config->iatBoostCorr, 1.0f);
+	initBoostTemperatureCurve(config->cltBoostAdderBins, config->cltBoostAdder, 0.0f);
+	initBoostTemperatureCurve(config->iatBoostAdderBins, config->iatBoostAdder, 0.0f);
 
 	engineConfiguration->alternatorControl.minValue = 0;
 	engineConfiguration->alternatorControl.maxValue = 90;
@@ -486,18 +467,22 @@ static void setDefaultEngineConfiguration() {
 	setRpmTableBin(config->alsIgnRetardrpmBins);
 	setLinearCurve(config->alsFuelAdjustmentLoadBins, 2, 10, /*precision*/1);
 	setRpmTableBin(config->alsFuelAdjustmentrpmBins);
-	setLinearCurve(engineConfiguration->fuelLevelBins, 0, 5);
+	setLinearCurve(config->fuelLevelBins, 0, 5);
 
-	setDefaultWarmupIdleCorrection();
 
 	setRpmTableBin(engineConfiguration->map.samplingAngleBins);
 	setLinearCurve(engineConfiguration->map.samplingAngle, 100, 130, 1);
 	setRpmTableBin(engineConfiguration->map.samplingWindowBins);
 	setLinearCurve(engineConfiguration->map.samplingWindow, 50, 50, 1);
 
+#if VVT_TABLE_SIZE == 8
 	setLinearCurve(config->vvtTable1LoadBins, 20, 120, 10);
-	setRpmTableBin(config->vvtTable1RpmBins);
 	setLinearCurve(config->vvtTable2LoadBins, 20, 120, 10);
+#else
+	setLinearCurve(config->vvtTable1LoadBins, 20, 120, 5);
+	setLinearCurve(config->vvtTable2LoadBins, 20, 120, 5);
+#endif
+	setRpmTableBin(config->vvtTable1RpmBins);
 	setRpmTableBin(config->vvtTable2RpmBins);
 
 	setDefaultEngineNoiseTable();
@@ -505,19 +490,15 @@ static void setDefaultEngineConfiguration() {
     // is this same old setCommonNTCSensor?
 	engineConfiguration->clt.config = {0, 23.8889, 48.8889, 9500, 2100, 1000, 1500};
 
-    setCommonNTCSensor(&engineConfiguration->iat, 2700);
+    setCommonNTCSensorParameters(&engineConfiguration->iat);
 
 	// wow unit tests have much cooler setDefaultLaunchParameters method
 	engineConfiguration->launchRpm = 3000;
 // 	engineConfiguration->launchTimingRetard = 10;
-	engineConfiguration->launchTimingRpmRange = 500;
+	engineConfiguration->launchRpmWindow = 500;
     engineConfiguration->launchSpeedThreshold = 30;
-	engineConfiguration->hardCutRpmRange = 500;
 
 	engineConfiguration->engineSnifferRpmThreshold = 2500;
-	engineConfiguration->sensorSnifferRpmThreshold = 2500;
-
-	engineConfiguration->noAccelAfterHardLimitPeriodSecs = 3;
 
 	/**
 	 * Idle control defaults
@@ -538,9 +519,9 @@ static void setDefaultEngineConfiguration() {
 
 	engineConfiguration->idle.solenoidFrequency = DEFAULT_SOLENOID_FREQUENCY;
 	// set idle_position 50
-	engineConfiguration->manIdlePosition = 50;
+	setDefaultIdleOpenLoopParameters();
 //	engineConfiguration->idleMode = IM_AUTO;
-	engineConfiguration->idleMode = IM_MANUAL;
+	engineConfiguration->idleMode = idle_mode_e::IM_MANUAL;
 
 	engineConfiguration->useStepperIdle = false;
 
@@ -550,8 +531,6 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->analogInputDividerCoefficient = 2;
 #endif
 
-	// performance optimization
-	engineConfiguration->sensorChartMode = SC_OFF;
 
 	setTPS1Calibration(convertVoltageTo10bitADC(0),
 			convertVoltageTo10bitADC(5),
@@ -565,8 +544,8 @@ static void setDefaultEngineConfiguration() {
 
 	engineConfiguration->idlePositionMin = PACK_MULT_VOLTAGE * 0;
 	engineConfiguration->idlePositionMax = PACK_MULT_VOLTAGE * 5;
-	engineConfiguration->wastegatePositionMin = PACK_MULT_VOLTAGE * 0;
-	engineConfiguration->wastegatePositionMax = PACK_MULT_VOLTAGE * 5;
+	engineConfiguration->wastegatePositionClosedVoltage = 0.0;
+	engineConfiguration->wastegatePositionOpenedVoltage = 5.0;
 	engineConfiguration->tpsErrorDetectionTooLow = -10; // -10% open
 	engineConfiguration->tpsErrorDetectionTooHigh = 110; // 110% open
 
@@ -600,18 +579,25 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->engineChartSize = 400;
 #endif
 
+#if EFI_PROD_CODE || EFI_SIMULATOR
+	// some tests broke with map averaging, see https://github.com/rusefi/rusefi/issues/7868
 	engineConfiguration->isMapAveragingEnabled = true;
+#endif
 	engineConfiguration->isWaveAnalyzerEnabled = true;
 
 	engineConfiguration->acIdleRpmTarget = 900;
-	engineConfiguration->acDelay = 0.5;
+	engineConfiguration->acDelay = engine_configuration_defaults::AC_DELAY;
+    engineConfiguration->minAcPressure = engine_configuration_defaults::MIN_AC_PRESSURE;
+    engineConfiguration->maxAcPressure = engine_configuration_defaults::MAX_AC_PRESSURE;
+	engineConfiguration->acPressureEnableHyst = engine_configuration_defaults::AC_PRESSURE_ENABLE_HYST;
 	engineConfiguration->acIdleExtraOffset = 15;
 
-	/* these two are used for HIP9011 only
-	 * Currently this is offset from fire event, not TDC */
-	/* TODO: convert to offset from TDC */
-	engineConfiguration->knockDetectionWindowStart = 15.0 + 5.0;
-	engineConfiguration->knockDetectionWindowEnd = 15.0 + 45.0;
+    engineConfiguration->nitrousMinimumTps = engine_configuration_defaults::NITROUS_MINIMUM_TPS;
+    engineConfiguration->nitrousMinimumClt = engine_configuration_defaults::NITROUS_MINIMUM_CLT;
+    engineConfiguration->nitrousMaximumAfr = engine_configuration_defaults::NITROUS_MAXIMUM_AFR;
+    engineConfiguration->nitrousActivationRpm = engine_configuration_defaults::NITROUS_ACTIVATION_RPM;
+    engineConfiguration->nitrousDeactivationRpm = engine_configuration_defaults::NITROUS_DEACTIVATION_RPM;
+    engineConfiguration->nitrousDeactivationRpmWindow = engine_configuration_defaults::NITROUS_DEACTIVATION_RPM_WINDOW;
 
 	engineConfiguration->triggerSimulatorRpm = DEFAULT_SELT_STIM_RPM;
 	engineConfiguration->simulatorCamPosition[0] = DEFAULT_SELT_STIM_VVT0;
@@ -631,8 +617,6 @@ static void setDefaultEngineConfiguration() {
 	engineConfiguration->mapErrorDetectionTooHigh = 410;
 
 	setLinearCurve(config->throttleEstimateEffectiveAreaBins, 0, 100);
-
-	engineConfiguration->hip9011Gain = 1;
 #endif // EFI_ENGINE_CONTROL
     #include "default_script.lua"
 }
@@ -655,7 +639,7 @@ void loadConfiguration() {
 #endif /* EFI_ACTIVE_CONFIGURATION_IN_FLASH */
 
 	/* If board have any storage */
-#if (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE)
+#if EFI_CONFIGURATION_STORAGE
 	if (IGNORE_FLASH_CONFIGURATION) {
 		engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
 		resetConfigurationExt(engineConfiguration->engineType);
@@ -669,10 +653,10 @@ void loadConfiguration() {
 	// This board doesn't load configuration, initialize the default
 	engineConfiguration->engineType = DEFAULT_ENGINE_TYPE;
 	resetConfigurationExt(engineConfiguration->engineType);
-#endif /* (EFI_STORAGE_INT_FLASH == TRUE) || (EFI_STORAGE_MFS == TRUE) */
+#endif /* EFI_CONFIGURATION_STORAGE */
 
 	// Force any board configuration options that humans shouldn't be able to change
-	setBoardConfigOverrides();
+	call_board_override(custom_board_ConfigOverrides);
 }
 
 void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e engineType) {
@@ -682,6 +666,11 @@ void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e
 	 */
 	setDefaultEngineConfiguration();
 
+	/**
+	 * custom board engine defaults. Yes, this overlaps with (older) engine_type_e approach.
+	 */
+	call_board_override(custom_board_BeforeTuneDefaults);
+
 	// set initial pin groups
 	setDefaultBasePins();
 
@@ -690,345 +679,13 @@ void resetConfigurationExt(configuration_callback_t boardCallback, engine_type_e
 	}
 
 #if EFI_PROD_CODE
-	// call overrided board-specific configuration setup, if needed (for custom boards only)
-	setBoardDefaultConfiguration();
-	setBoardConfigOverrides();
+	// call board-specific configuration setup, if needed (for custom boards only)
+	call_board_override(custom_board_DefaultConfiguration);
+	call_board_override(custom_board_ConfigOverrides);
 #endif // EFI_PROD_CODE
 
 	engineConfiguration->engineType = engineType;
-
-	/**
-	 * And override them with engine-specific defaults
-	 */
-	switch (engineType) {
-	case engine_type_e::MINIMAL_PINS:
-		// all basic settings are already set in prepareVoidConfiguration(), no need to set anything here
-		// nothing to do - we do it all in setBoardDefaultConfiguration
-		break;
-#if EFI_UNIT_TEST
-	case engine_type_e::TEST_ISSUE_366_BOTH:
-		setTestEngineIssue366both();
-		break;
-	case engine_type_e::TEST_ISSUE_366_RISE:
-		setTestEngineIssue366rise();
-		break;
-#endif // EFI_UNIT_TEST
-#if HW_MICRO_RUSEFI
-	case engine_type_e::MRE_VW_B6:
-		setMreVwPassatB6();
-		break;
-	case engine_type_e::MRE_M111:
-		setMreM111EngineConfiguration();
-		break;
-	case engine_type_e::MRE_SECONDARY_CAN:
-		mreSecondaryCan();
-		break;
-	case engine_type_e::MRE_SUBARU_EJ18:
-		setSubaruEJ18_MRE();
-		break;
-	case engine_type_e::MRE_BOARD_NEW_TEST:
-		mreBoardNewTest();
-		break;
-	case engine_type_e::BMW_M73_MRE:
-	case engine_type_e::BMW_M73_MRE_SLAVE:
-		setEngineBMW_M73_microRusEfi();
-		break;
-	case engine_type_e::MRE_BODY_CONTROL:
-		mreBCM();
-		break;
-#endif // HW_MICRO_RUSEFI
-	case engine_type_e::MIATA_NC:
-	case engine_type_e::HONDA_OBD1:
-		setHondaObd1();
-		break;
-	case engine_type_e::FUEL_BENCH:
-	  fuelBenchMode();
-		break;
-
-#if HW_PROTEUS || HW_HELLEN_4CHAN || HW_HELLEN_8CHAN
-    case engine_type_e::HYUNDAI_PB:
-        setHyundaiPb();
-		break;
-#endif
-
-#if HW_PROTEUS || HW_HELLEN_HONDA
-	case engine_type_e::HONDA_K:
-		setHondaK();
-		break;
-#endif
-
-#if HW_PROTEUS
-	case engine_type_e::MAVERICK_X3:
-	    setMaverickX3();
-		break;
-	case engine_type_e::ME17_9_MISC:
-	    setSlingshot();
-		break;
-    case engine_type_e::PROTEUS_M111:
-        setProteusM111EngineConfiguration();
-        break;
-    case engine_type_e::WASTEGATE_PROTEUS_TEST:
-        proteusDcWastegateTest();
-        break;
-    case engine_type_e::PROTEUS_NISSAN_VQ35:
-        setProteusNissanVQ();
-		break;
-	case engine_type_e::PROTEUS_GM_LS_4:
-		setProteusGmLs4();
-		break;
-	case engine_type_e::PROTEUS_VW_B6:
-		setProteusVwPassatB6();
-		break;
-	case engine_type_e::PROTEUS_QC_TEST_BOARD:
-		proteusBoardTest();
-		break;
-	case engine_type_e::PROTEUS_LUA_DEMO:
-		proteusLuaDemo();
-		break;
-	case engine_type_e::HARLEY:
-		setHarley();
-		break;
-	case engine_type_e::PROTEUS_BMW_M73:
-		setEngineBMW_M73_Proteus();
-		break;
-	case engine_type_e::MIATA_PROTEUS_TCU:
-		setMiataNB2_Proteus_TCU();
-		break;
-	case engine_type_e::HONDA_OBD2A:
-		setProteusHondaOBD2A();
-		break;
-	case engine_type_e::PROTEUS_E65_6H_MAN_IN_THE_MIDDLE:
-		setEngineProteusGearboxManInTheMiddle();
-		break;
-	case engine_type_e::PROTEUS_STIM_QC:
-	    proteusStimQc();
-		break;
-	case engine_type_e::PROTEUS_N73:
-	case engine_type_e::PROTEUS_MIATA_NB2:
-		setMiataNB2_Proteus();
-		break;
-	case engine_type_e::GM_SBC:
-	    setGmSbc();
-        break;
-#ifdef HARDWARE_CI
-	case engine_type_e::PROTEUS_ANALOG_PWM_TEST:
-		setProteusAnalogPwmTest();
-		break;
-#endif // HARDWARE_CI
-#endif // HW_PROTEUS
-
-#if HW_HELLEN_MERCEDES
-	case engine_type_e::HELLEN_128_MERCEDES_4_CYL:
-		setHellenMercedes128_4_cyl();
-		break;
-	case engine_type_e::HELLEN_128_MERCEDES_6_CYL:
-		setHellenMercedes128_6_cyl();
-		break;
-	case engine_type_e::HELLEN_128_MERCEDES_8_CYL:
-		setHellenMercedes128_8_cyl();
-		break;
-#endif
-
-#if HW_HELLEN_NISSAN
-	case engine_type_e::HELLEN_121_NISSAN_4_CYL:
-		setHellen121nissanQR();
-		break;
-	case engine_type_e::HELLEN_121_NISSAN_6_CYL:
-		setHellen121nissanVQ();
-		break;
-#endif
-
-#if HW_HELLEN_HYUNDAI
-	case engine_type_e::HELLEN_154_HYUNDAI_COUPE_BK1:
-		setGenesisCoupeBK1();
-		break;
-	case engine_type_e::HELLEN_154_HYUNDAI_COUPE_BK2:
-		setGenesisCoupeBK2();
-		break;
-#endif
-
-#if HW_HELLEN_4CHAN
-    case engine_type_e::HELLEN_4CHAN_STIM_QC:
-        alphax4chanStimQc();
-		break;
-#endif // HW_HELLEN_4CHAN
-
-#if HW_HELLEN_8CHAN
-  case engine_type_e::UNUSED_97:
-	case engine_type_e::GM_SBC:
-	    setGmSbc();
-        break;
-#endif
-
-#if HW_HELLEN_NB1
-	case engine_type_e::HELLEN_NB1:
-		setHellenNB1();
-		break;
-#endif
-
-#if HW_HELLEN_NB2
-	case engine_type_e::HELLEN_NB2:
-		setMiataNB2_Hellen72();
-		break;
-	case engine_type_e::HELLEN_NB2_36:
-		setMiataNB2_Hellen72_36();
-		break;
-#endif
-
-#if HW_HELLEN_121_VAG
-	case engine_type_e::HELLEN_121_VAG_5_CYL:
-	    setHellen121Vag_5_cyl();
-        break;
-	case engine_type_e::HELLEN_121_VAG_V6_CYL:
-	    setHellen121Vag_v6_cyl();
-        break;
-	case engine_type_e::HELLEN_121_VAG_VR6_CYL:
-	    setHellen121Vag_vr6_cyl();
-        break;
-	case engine_type_e::HELLEN_121_VAG_8_CYL:
-	    setHellen121Vag_8_cyl();
-        break;
-#endif
-
-	case engine_type_e::FERRARI_F136:
-	      setF136();
-        break;
-
-#if HW_HELLEN
-	case engine_type_e::TOYOTA_1NZ_FE:
-	    setToyota1NZFE();
-	    break;
-	case engine_type_e::MAZDA_NA8_96:
-		setMazdaMiata96();
-		break;
-	case engine_type_e::HELLEN_121_VAG_4_CYL:
-	case engine_type_e::HELLEN_154_VAG:
-		break;
-	case engine_type_e::HELLEN_NA6:
-		setHellenNA6();
-		break;
-	case engine_type_e::HELLEN_NA94:
-		setHellenNA94();
-		break;
-	case engine_type_e::HELLEN_HONDA_BCM:
-	    setHondaCivicBcm();
-        break;
-#endif // HW_HELLEN
-#if HW_FRANKENSO || HW_PROTEUS
-    // used in HW CI
-	case engine_type_e::VW_ABA:
-		setVwAba();
-		break;
-	case engine_type_e::FRANKENSO_BMW_M73_F:
-		setBMW_M73_TwoCoilUnitTest();
-		break;
-#endif // HW_FRANKENSO || HW_PROTEUS
-#if HW_FRANKENSO
-	case engine_type_e::DEFAULT_FRANKENSO:
-		setFrankensoConfiguration();
-		break;
-	case engine_type_e::FRANKENSO_TEST_33810:
-		setDiscovery33810Test();
-		break;
-	case engine_type_e::DISCOVERY_PDM:
-	case engine_type_e::TEST_ENGINE:
-		setTestCamEngineConfiguration();
-		break;
-	case engine_type_e::TEST_CRANK_ENGINE:
-		setTestCrankEngineConfiguration();
-		break;
-	case engine_type_e::FRANKENSO_QA_ENGINE:
-		setFrankensoBoardTestConfiguration();
-		break;
-	case engine_type_e::BMW_M73_M:
-		setEngineBMW_M73_Manhattan();
-		break;
-	case engine_type_e::DODGE_NEON_1995:
-		setDodgeNeon1995EngineConfiguration();
-		break;
-	case engine_type_e::DODGE_NEON_2003_CRANK:
-		setDodgeNeonNGCEngineConfiguration();
-		break;
-	case engine_type_e::FORD_ASPIRE_1996:
-		setFordAspireEngineConfiguration();
-		break;
-	case engine_type_e::NISSAN_PRIMERA:
-		setNissanPrimeraEngineConfiguration();
-		break;
-	case engine_type_e::FRANKENSO_MIATA_NA6_MAP:
-		setMiataNA6_MAP_Frankenso();
-		break;
-	case engine_type_e::ETB_BENCH_ENGINE:
-		setEtbTestConfiguration();
-		break;
-	case engine_type_e::L9779_BENCH_ENGINE:
-		setL9779TestConfiguration();
-		break;
-	case engine_type_e::EEPROM_BENCH_ENGINE:
-#if EFI_PROD_CODE
-		setEepromTestConfiguration();
-#endif
-		break;
-	case engine_type_e::ET_UNUSED_56:
-	case engine_type_e::MITSUBISHI_3A92:
-	    setMitsubishi3A92();
-	    break;
-	case engine_type_e::MITSUBISHI_4G93:
-	    setMitsubishi4G93();
-	    break;
-	case engine_type_e::FORD_INLINE_6_1995:
-		setFordInline6();
-		break;
-	case engine_type_e::GY6_139QMB:
-		setGy6139qmbDefaultEngineConfiguration();
-		break;
-	case engine_type_e::HONDA_600:
-		setHonda600();
-		break;
-	case engine_type_e::FORD_ESCORT_GT:
-		setFordEscortGt();
-		break;
-	case engine_type_e::UNUSED_21:
-	case engine_type_e::UNUSED_65:
-	case engine_type_e::UNUSED_22:
-	case engine_type_e::DODGE_RAM:
-		setDodgeRam1996();
-		break;
-	case engine_type_e::FRANKENSO_MAZDA_MIATA_2003:
-		setMazdaMiata2003EngineConfiguration();
-		break;
-	case engine_type_e::ET_UNUSED_55:
-	case engine_type_e::TEST_ENGINE_VVT:
-		setTestVVTEngineConfiguration();
-		break;
-	case engine_type_e::TEST_DC_WASTEGATE_DISCOVERY:
-		setTestDcWastegateConfiguration();
-		break;
-	case engine_type_e::SACHS:
-		setSachs();
-		break;
-	case engine_type_e::ET_UNUSED_35:
-	case engine_type_e::TOYOTA_2JZ_GTE_VVTi:
-		setToyota_2jz_vics();
-		break;
-	case engine_type_e::TEST_33816:
-		setTest33816EngineConfiguration();
-		break;
-	case engine_type_e::TEST_100:
-	case engine_type_e::TEST_101:
-	case engine_type_e::TEST_102:
-	case engine_type_e::TEST_ROTARY:
-		setRotary();
-		break;
-#endif // HW_FRANKENSO
-#ifdef HW_SUBARU_EG33
-	case engine_type_e::SUBARU_EG33:
-		setSubaruEG33Defaults();
-		break;
-#endif //HW_SUBARU_EG33
-	default:
-		firmwareError(ObdCode::CUSTOM_UNEXPECTED_ENGINE_TYPE, "Unexpected engine type: %d", engineType);
-	}
+	applyEngineType(engineType);
 	applyNonPersistentConfiguration();
 }
 
@@ -1040,13 +697,6 @@ void resetConfigurationExt(engine_type_e engineType) {
 	resetConfigurationExt(&emptyCallbackWithConfiguration, engineType);
 }
 
-void validateConfiguration() {
-	if (engineConfiguration->adcVcc > 5.0f || engineConfiguration->adcVcc < 1.0f) {
-		engineConfiguration->adcVcc = 3.0f;
-	}
-	engine->preCalculate();
-}
-
 void applyNonPersistentConfiguration() {
 #if EFI_PROD_CODE
 	efiAssertVoid(ObdCode::CUSTOM_APPLY_STACK, hasLotsOfRemainingStack(), "apply c");
@@ -1054,12 +704,8 @@ void applyNonPersistentConfiguration() {
 #endif
 
 #if EFI_ENGINE_CONTROL
-	engine->updateTriggerWaveform();
+	engine->updateTriggerConfiguration();
 #endif // EFI_ENGINE_CONTROL
-}
-
-void setTwoStrokeOperationMode() {
-	engineConfiguration->twoStroke = true;
 }
 
 void setCamOperationMode() {
@@ -1067,6 +713,7 @@ void setCamOperationMode() {
 }
 
 void setCrankOperationMode() {
+	// this is related to 'setDefaultBaseEngine' having 'skippedWheelOnCam = true' which is a weird fact by itself
 	engineConfiguration->skippedWheelOnCam = false;
 }
 
@@ -1077,17 +724,19 @@ void commonFrankensoAnalogInputs() {
 	engineConfiguration->vbattAdcChannel = EFI_ADC_14;
 }
 
-// These symbols are weak so that a board_configuration.cpp file can override them
-BOARD_WEAK void setBoardDefaultConfiguration() { }
-// specific firmware builds are meant for specific hardware. In order to provide best user experience on well-known boards sometimes we reduce user flexibility.
-BOARD_WEAK void setBoardConfigOverrides() { }
+void setBoardDefaultConfiguration() {
+  // custom_board_DefaultConfiguration
+}
+void setBoardConfigOverrides() {
+  // time to force migration to custom_board_ConfigOverrides
+}
 
-BOARD_WEAK int hackHellenBoardId(int detectedId) { return detectedId; }
+PUBLIC_API_WEAK int hackHellenBoardId(int detectedId) { return detectedId; }
 
-BOARD_WEAK void onBoardStandBy() { }
+PUBLIC_API_WEAK void onBoardStandBy() { }
 
-BOARD_WEAK int getBoardMetaOutputsCount() { return 0; }
+PUBLIC_API_WEAK_SOMETHING_WEIRD int getBoardMetaOutputsCount() { return 0; }
 // default implementation: treat all outputs as low side
-BOARD_WEAK int getBoardMetaLowSideOutputsCount() { return getBoardMetaOutputsCount(); }
-BOARD_WEAK Gpio* getBoardMetaOutputs() { return nullptr; }
-BOARD_WEAK int getBoardMetaDcOutputsCount() { return 0; }
+PUBLIC_API_WEAK int getBoardMetaLowSideOutputsCount() { return getBoardMetaOutputsCount(); }
+PUBLIC_API_WEAK Gpio* getBoardMetaOutputs() { return nullptr; }
+PUBLIC_API_WEAK int getBoardMetaDcOutputsCount() { return 0; }

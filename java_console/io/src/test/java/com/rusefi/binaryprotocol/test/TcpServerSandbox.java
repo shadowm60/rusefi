@@ -1,12 +1,13 @@
 package com.rusefi.binaryprotocol.test;
 
 import com.macfaq.io.LittleEndianOutputStream;
+import com.opensr5.ini.IniFileModeSingleton;
 import com.rusefi.CompatibleFunction;
 import com.rusefi.Listener;
 import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.binaryprotocol.IncomingDataBuffer;
-import com.rusefi.config.generated.Fields;
-import com.rusefi.config.generated.TsOutputs;
+import com.rusefi.config.generated.Integration;
+import com.rusefi.config.generated.VariableRegistryValues;
 import com.rusefi.io.IoStream;
 import com.rusefi.io.commands.ByteRange;
 import com.rusefi.io.commands.HelloCommand;
@@ -19,7 +20,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
-import static com.rusefi.config.generated.Fields.*;
+import static com.rusefi.config.generated.VariableRegistryValues.TS_PROTOCOL;
 import static com.rusefi.io.tcp.BinaryProtocolServer.TS_OK;
 import static com.rusefi.io.tcp.BinaryProtocolServer.getOutputCommandResponse;
 
@@ -31,8 +32,8 @@ import static com.rusefi.io.tcp.BinaryProtocolServer.getOutputCommandResponse;
  * @see BinaryProtocolServerSandbox what's the difference?
  */
 public class TcpServerSandbox {
-    private final static byte[] TOTALLY_EMPTY_CONFIGURATION = new byte[Fields.TOTAL_CONFIG_SIZE];
-
+    private final static byte[] TOTALLY_EMPTY_CONFIGURATION = new byte[IniFileModeSingleton.getInstance().getMetaInfo().getPageSize(0)];
+/*
     public static void main(String[] args) throws IOException {
         Listener serverSocketCreationCallback = parameter -> System.out.println("serverSocketCreationCallback");
         CompatibleFunction<Socket, Runnable> socketRunnableFactory = new CompatibleFunction<Socket, Runnable>() {
@@ -72,7 +73,7 @@ public class TcpServerSandbox {
     }
 
     static class EcuState {
-        private final byte[] outputs = new byte[Fields.TS_TOTAL_OUTPUT_SIZE];
+        private final byte[] outputs = new byte[VariableRegistryValues.TS_TOTAL_OUTPUT_SIZE];
 
         final long startUpTime = System.currentTimeMillis();
 
@@ -93,16 +94,14 @@ public class TcpServerSandbox {
 
         byte command = payload[0];
 
-        if (command == Fields.TS_HELLO_COMMAND) {
-            new HelloCommand(Fields.TS_SIGNATURE).handle(stream);
-        } else if (command == Fields.TS_GET_PROTOCOL_VERSION_COMMAND_F) {
+        if (command == Integration.TS_HELLO_COMMAND) {
+            new HelloCommand(VariableRegistryValues.TS_SIGNATURE).handle(stream);
+        } else if (command == Integration.TS_GET_PROTOCOL_VERSION_COMMAND_F) {
             stream.sendPacket((TS_OK + TS_PROTOCOL).getBytes());
-        } else if (command == Fields.TS_PAGE_COMMAND) {
-            stream.sendPacket(TS_OK.getBytes());
-        } else if (command == Fields.TS_CRC_CHECK_COMMAND) {
+        } else if (command == Integration.TS_CRC_CHECK_COMMAND) {
             stream.sendPacket(BinaryProtocolServer.createCrcResponse(TOTALLY_EMPTY_CONFIGURATION));
-        } else if (command == Fields.TS_SET_LOGGER_SWITCH) {
-            if (payload[1] == Fields.TS_COMPOSITE_READ) {
+        } else if (command == Integration.TS_SET_LOGGER_SWITCH) {
+            if (payload[1] == Integration.TS_COMPOSITE_READ) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 baos.write(TS_OK.charAt(0));
                 LittleEndianOutputStream dout = new LittleEndianOutputStream(baos);
@@ -120,44 +119,44 @@ public class TcpServerSandbox {
             } else {
                 stream.sendPacket(TS_OK.getBytes());
             }
-        } else if (command == Fields.TS_OUTPUT_COMMAND) {
+        } else if (command == Integration.TS_OUTPUT_COMMAND) {
             byte[] response = getOutputCommandResponse(payload, ecuState.outputs);
             stream.sendPacket(response);
-        } else if (command == Fields.TS_GET_SCATTERED_GET_COMMAND) {
-//            System.out.println("Cool TS_GET_SCATTERED_GET_COMMAND");
-            int startOffset = HIGHSPEEDOFFSETS.getOffset();
-            int totalResponseSize = 0;
-            for (int i = 0; i < HIGH_SPEED_COUNT; i++) {
-                int higherByte = getByte(startOffset + 1);
-                int type = higherByte >> 5;
-                int size = getSize(type);
-
-                totalResponseSize += size;
-
-                int twoBytes = getByte(startOffset) + (higherByte & 0x1F) * 256;
-//                System.out.println("TS_GET_SCATTERED_GET_COMMAND index=" + i + " type=" + type + " offset=" + twoBytes);
-                startOffset += 2;
-            }
-
-            byte[] response = new byte[1 + totalResponseSize];
-            response[0] = (byte) TS_OK.charAt(0);
-            stream.sendPacket(response);
-
-        } else if (command == Fields.TS_CHUNK_WRITE_COMMAND) {
+//        } else if (command == Integration.TS_GET_SCATTERED_GET_COMMAND) {
+////            System.out.println("Cool TS_GET_SCATTERED_GET_COMMAND");
+//            int startOffset = HIGHSPEEDOFFSETS.getOffset();
+//            int totalResponseSize = 0;
+//            for (int i = 0; i < HIGH_SPEED_COUNT; i++) {
+//                int higherByte = getByte(startOffset + 1);
+//                int type = higherByte >> 5;
+//                int size = getSize(type);
+//
+//                totalResponseSize += size;
+//
+//                int twoBytes = getByte(startOffset) + (higherByte & 0x1F) * 256;
+////                System.out.println("TS_GET_SCATTERED_GET_COMMAND index=" + i + " type=" + type + " offset=" + twoBytes);
+//                startOffset += 2;
+//            }
+//
+//            byte[] response = new byte[1 + totalResponseSize];
+//            response[0] = (byte) TS_OK.charAt(0);
+//            stream.sendPacket(response);
+//
+        } else if (command == Integration.TS_CHUNK_WRITE_COMMAND) {
             ByteRange byteRange = ByteRange.valueOf(payload);
             System.out.println("TS_CHUNK_WRITE_COMMAND " + byteRange + " payload " + payload.length);
             System.arraycopy(payload, WriteChunkCommand.SCR_POS_WITH, TOTALLY_EMPTY_CONFIGURATION, byteRange.getOffset(), byteRange.getCount());
             stream.sendPacket(TS_OK.getBytes());
-        } else if (command == Fields.TS_BURN_COMMAND) {
-            stream.sendPacket(new byte[]{Fields.TS_RESPONSE_BURN_OK});
-        } else if (command == Fields.TS_READ_COMMAND) {
+        } else if (command == Integration.TS_BURN_COMMAND) {
+            stream.sendPacket(new byte[]{Integration.TS_RESPONSE_BURN_OK});
+        } else if (command == Integration.TS_READ_COMMAND) {
             ByteRange byteRange = ByteRange.valueOf(payload);
             int count = byteRange.getCount();
             // always all zero response
             byte[] response = new byte[1 + count];
             response[0] = (byte) TS_OK.charAt(0);
             stream.sendPacket(response);
-        } else if (command == Fields.TS_GET_FIRMWARE_VERSION) {
+        } else if (command == Integration.TS_GET_FIRMWARE_VERSION) {
             stream.sendPacket((TS_OK + "rusEFI proxy").getBytes());
         } else
             throw new UnsupportedOperationException("Unsupported command " + BinaryProtocol.findCommand(command));
@@ -172,4 +171,5 @@ public class TcpServerSandbox {
     private static int getByte(int startOffset) {
         return TOTALLY_EMPTY_CONFIGURATION[startOffset] & 0xFF;
     }
+ */
 }

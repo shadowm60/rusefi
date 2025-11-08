@@ -12,7 +12,7 @@ TEST(realCrankingNB2, normalCranking) {
 	CsvReader reader(1, /* vvtCount */ 1);
 
 	reader.open("tests/trigger/resources/nb2-cranking-good.csv");
-	EngineTestHelper eth (engine_type_e::HELLEN_NB2);
+	EngineTestHelper eth (engine_type_e::MAZDA_MIATA_NB2);
 	engineConfiguration->alwaysInstantRpm = true;
 
 	while (reader.haveMore()) {
@@ -28,7 +28,7 @@ TEST(realCrankingNB2, normalCranking) {
 
 	ASSERT_EQ(876, round(Sensor::getOrZero(SensorType::Rpm)));
 
-	EXPECT_EQ(2, eth.recentWarnings()->getCount());
+	EXPECT_EQ(2u, eth.recentWarnings()->getCount());
 	EXPECT_EQ(ObdCode::CUSTOM_PRIMARY_NOT_ENOUGH_TEETH, eth.recentWarnings()->get(0).Code);
 	EXPECT_EQ(ObdCode::CUSTOM_CAM_TOO_MANY_TEETH, eth.recentWarnings()->get(1).Code);
 }
@@ -37,7 +37,7 @@ TEST(realCrankingNB2, crankingMissingInjector) {
 	CsvReader reader(1, /* vvtCount */ 1);
 
 	reader.open("tests/trigger/resources/nb2-cranking-good-missing-injector-1.csv");
-	EngineTestHelper eth (engine_type_e::HELLEN_NB2);
+	EngineTestHelper eth (engine_type_e::MAZDA_MIATA_NB2);
 	engineConfiguration->alwaysInstantRpm = true;
 
 	while (reader.haveMore()) {
@@ -49,7 +49,7 @@ TEST(realCrankingNB2, crankingMissingInjector) {
 
 	ASSERT_EQ(316, round(Sensor::getOrZero(SensorType::Rpm)));
 
-	EXPECT_EQ(3, eth.recentWarnings()->getCount());
+	EXPECT_EQ(3u, eth.recentWarnings()->getCount());
 	EXPECT_EQ(ObdCode::CUSTOM_PRIMARY_NOT_ENOUGH_TEETH, eth.recentWarnings()->get(0).Code);
 	EXPECT_EQ(ObdCode::CUSTOM_CAM_TOO_MANY_TEETH, eth.recentWarnings()->get(1).Code);
 	EXPECT_EQ(ObdCode::CUSTOM_PRIMARY_TOO_MANY_TEETH, eth.recentWarnings()->get(2).Code);

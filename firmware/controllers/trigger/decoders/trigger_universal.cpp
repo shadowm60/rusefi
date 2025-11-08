@@ -20,20 +20,21 @@ angle_t getEngineCycle(operation_mode_e operationMode) {
  * last fall aligned at 720 and skipped area is right before 720
  */
 void addSkippedToothTriggerEvents(TriggerWheel wheel, TriggerWaveform *s, int totalTeethCount, int skippedCount,
-		float toothWidth, float offset, float engineCycle, float filterLeft, float filterRight) {
-	efiAssertVoid(ObdCode::CUSTOM_ERR_6586, totalTeethCount > 0, "total count");
-	efiAssertVoid(ObdCode::CUSTOM_ERR_6587, skippedCount >= 0, "skipped count");
+		float toothWidthPercentage, float offset, float engineCycle, float filterLeft, float filterRight) {
+	criticalAssertVoid(totalTeethCount > 0, "total count");
+	criticalAssertVoid(skippedCount >= 0, "skipped count");
+	criticalAssertVoid(toothWidthPercentage < 1, "toothWidthPercentage");
 
 	float oneTooth = engineCycle / totalTeethCount;
 
 	for (int i = 0; i < totalTeethCount - skippedCount - 1; i++) {
-		float angleDown = oneTooth * (i + (1 - toothWidth));
+		float angleDown = oneTooth * (i + (1 - toothWidthPercentage));
 		float angleUp = oneTooth * (i + 1);
 		s->addEventClamped(offset + angleDown, TriggerValue::RISE, wheel, filterLeft, filterRight);
 		s->addEventClamped(offset + angleUp, TriggerValue::FALL, wheel, filterLeft, filterRight);
 	}
 
-	float angleDown = oneTooth * (totalTeethCount - skippedCount - 1 + (1 - toothWidth));
+	float angleDown = oneTooth * (totalTeethCount - skippedCount - 1 + (1 - toothWidthPercentage));
 	s->addEventClamped(offset + angleDown, TriggerValue::RISE, wheel, filterLeft, filterRight);
 	// custom handling of last event in order to avoid rounding error
 	s->addEventClamped(offset + engineCycle, TriggerValue::FALL, wheel, filterLeft, filterRight);
@@ -133,6 +134,7 @@ void configureKawaKX450F(TriggerWaveform *s) {
 	s->addToothRiseFall(360, /* width*/10.80);
 }
 
+// TT_VVT_BOSCH_QUICK_START
 void configureQuickStartSenderWheel(TriggerWaveform *s) {
 	// todo: most cam wheels are defined as 'SyncEdge::Rise' or 'SyncEdge::RiseOnly' shall we unify?
 	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::Fall);
@@ -147,7 +149,7 @@ void configureQuickStartSenderWheel(TriggerWaveform *s) {
 	s->addToothRiseFall(360, /* width*/ 70);
 }
 
-static void commonSymmetrical(TriggerWaveform* s, int count) {
+static void commonSymmetrical(TriggerWaveform* s, int count, float gapFrom, float gapTo) {
 	s->shapeWithoutTdc = true;
 
 	// Sync after 2 good teeth
@@ -157,7 +159,7 @@ static void commonSymmetrical(TriggerWaveform* s, int count) {
 		 * gaps would be nice during running but horrible during running
 		 * Hopefully we do not want variable gap logic yet?
 		 */
-		s->setTriggerSynchronizationGap3(i, 0.2f, 3.4f);
+		s->setTriggerSynchronizationGap3(i, gapFrom, gapTo);
 	}
 
     float width = 360 / count;
@@ -174,15 +176,15 @@ void configure12ToothCrank(TriggerWaveform* s) {
 	s->initialize(FOUR_STROKE_TWELVE_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
 
 	// 2JZ would be global trigger offset 65 but same wheel could be Honda, not hard coding for now
-  commonSymmetrical(s, 12);
+  commonSymmetrical(s, 12, 0.2f, 3.4f);
 }
 
 void configure3ToothCrank(TriggerWaveform* s) {
 	s->initialize(FOUR_STROKE_THREE_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
-  commonSymmetrical(s, 3);
+  commonSymmetrical(s, 3, 0.5, 1.4);
 }
 
 void configure6ToothCrank(TriggerWaveform* s) {
 	s->initialize(FOUR_STROKE_SIX_TIMES_CRANK_SENSOR, SyncEdge::RiseOnly);
-  commonSymmetrical(s, 6);
+  commonSymmetrical(s, 6, 0.7, 1.4);
 }

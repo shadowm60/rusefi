@@ -60,7 +60,7 @@
  */
 #define EFI_TUNER_STUDIO_VERBOSE FALSE
 
-#define EFI_DEFAILED_LOGGING FALSE
+#define EFI_DETAILED_LOGGING FALSE
 
 /**
  * Dev console support.
@@ -132,14 +132,6 @@
 
 #define EFI_MCP_3208 FALSE
 
-#ifndef EFI_HIP_9011
-#define EFI_HIP_9011 FALSE
-#endif
-
-#ifndef EFI_CJ125
-#define EFI_CJ125 FALSE
-#endif
-
 #if !defined(EFI_ONBOARD_MEMS) || defined(__DOXYGEN__)
  #define EFI_ONBOARD_MEMS FALSE
 #endif
@@ -152,9 +144,6 @@
 #ifndef EFI_CAN_SUPPORT
 #define EFI_CAN_SUPPORT FALSE
 #endif
-
-#define EFI_HD44780_LCD FALSE
-#define EFI_LCD FALSE
 
 #define EFI_IDLE_CONTROL TRUE
 
@@ -180,20 +169,9 @@
 #define EFI_FILE_LOGGING FALSE
 #endif
 
-
-/**
- * While we embed multiple PnP configurations into the same firmware binary, these marcoses give us control
- * over which configurations go into the binary
- */
-#define EFI_SUPPORT_DODGE_NEON FALSE
-#define EFI_SUPPORT_FORD_ASPIRE FALSE
-#define EFI_SUPPORT_NISSAN_PRIMERA FALSE
-#define EFI_SUPPORT_1995_FORD_INLINE_6 FALSE
-
 #define EFI_ENGINE_SNIFFER TRUE
 
 #define EFI_HISTOGRAMS FALSE
-#define EFI_SENSOR_CHART FALSE
 
 #define EFI_PERF_METRICS FALSE
 
@@ -312,6 +290,7 @@
 #define BOARD_DRV8860_COUNT 1
 #define BOARD_MC33810_COUNT 0
 #define BOARD_L9779_COUNT 0
+#define BOARD_TLE9104_COUNT 0
 
 #define DRV8860_SS_PORT GPIOH
 #define DRV8860_SS_PAD  11U
@@ -341,15 +320,7 @@
 #define EFI_PRINTF_FUEL_DETAILS FALSE
 #define ENABLE_PERF_TRACE FALSE
 
-#define RAM_UNUSED_SIZE 1
-#define CCM_UNUSED_SIZE 1
-
 #define EFI_BACKUP_SRAM FALSE
-
-#define EFI_PRINT_ERRORS_AS_WARNINGS TRUE
-//#define EFI_PRINT_MESSAGES_TO_TERMINAL TRUE
-
-//#define PWM_PHASE_MAX_COUNT 122
 
 //!!!!!!!!!!!!!!!!!!!!!!
 #define debugLog(fmt,...) { \

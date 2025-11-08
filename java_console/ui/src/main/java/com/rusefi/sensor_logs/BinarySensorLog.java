@@ -1,8 +1,8 @@
 package com.rusefi.sensor_logs;
 
-import com.opensr5.Logger;
+import com.devexperts.logging.FileLogger;
 import com.rusefi.FileLog;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.rusEFIVersion;
 
 import java.io.*;
@@ -46,8 +46,8 @@ public class BinarySensorLog<T extends BinaryLogEntry> implements SensorLog {
     @Override
     public void writeSensorLogLine() {
         if (stream == null) {
-            FileLog.createFolderIfNeeded();
-            fileName = Logger.DIR + "rusEFI_gauges_" + FileLog.getDate() + ".mlg";
+            FileLogger.createFolderIfNeeded();
+            fileName = FileLogger.DIR + "rusEFI_gauges_" + FileLog.getDate() + ".mlg";
 
             try {
                 stream = new DataOutputStream(new FileOutputStream(fileName));
@@ -113,7 +113,7 @@ public class BinarySensorLog<T extends BinaryLogEntry> implements SensorLog {
         // 0008h Timestamp
         stream.writeInt((int) (System.currentTimeMillis() / 1000));
 
-        int headerSize = Fields.MLQ_HEADER_SIZE + Fields.MLQ_FIELD_HEADER_SIZE * entries.size();
+        int headerSize = Integration.MLQ_HEADER_SIZE + Integration.MLQ_FIELD_HEADER_SIZE * entries.size();
         // 000ch Info data start - immediately after header
         stream.writeInt(headerSize);
 

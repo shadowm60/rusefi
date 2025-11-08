@@ -11,11 +11,12 @@
 #pragma once
 
 #include "io_pins.h"
+#include <rusefi/timer.h>
 
 class ButtonDebounce {
 public:
 	explicit ButtonDebounce(const char* name);
-    void init(efitimems_t threshold, brain_pin_e &pin, pin_input_mode_e &mode);
+    void init(efitimems_t threshold, brain_pin_e &pin, pin_input_mode_e &mode, bool inverted = false);
     void stopConfiguration();
     void startConfiguration();
     bool readPinEvent();
@@ -25,15 +26,21 @@ public:
     static void startConfigurationList();
     static void debug();
     bool getPhysicalState();
+#if EFI_UNIT_TEST
+    static void resetForUnitTests() {
+      s_firstDebounce = nullptr;
+    }
+#endif
 private:
     const char* const m_name;
-    efitick_t m_threshold;
+    efidur_t m_threshold;
     Timer timeLast;
     brain_pin_e *m_pin;
     brain_pin_e active_pin = Gpio::Unassigned;
     pin_input_mode_e *m_mode;
     pin_input_mode_e active_mode = PI_DEFAULT;
     bool storedValue = false;
+    bool m_inverted = false;
     bool isInstanceRegisteredInGlobalList = false;
     bool needsPinInitialization = true;
     ButtonDebounce *nextDebounce = nullptr;

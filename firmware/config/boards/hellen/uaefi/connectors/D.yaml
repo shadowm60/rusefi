@@ -2,18 +2,19 @@ meta: config/boards/hellen_mm100_meta.h
 
 pins:
   - pin: D1
-    meta: MM100_IN_O2S_ANALOG
-    class: analog_inputs
+    id: [MM100_IN_O2S_ANALOG, MM100_IN_O2S, MM100_IN_O2S]
+    class: [analog_inputs, switch_inputs, event_inputs]
     color: orange
     ts_name: ___ AUX1
-    function: Auxiliary analog input 1
+    type: av
+    function: Auxiliary analog input 1 PullDown 500K
 
   - pin: D2
-    meta: MM100_IN_CRANK
-    class: switch_inputs
+    id: [MM100_IN_CRANK_ANALOG, MM100_IN_CRANK, MM100_IN_CRANK]
+    class: [analog_inputs, switch_inputs, event_inputs]
     color: yellow
     ts_name: ___ BUTTON1
-    function: Button input 1
+    function: Button input 1 PullDown 10K
 
   - pin: D3
     function: Sensor +5v Power Feed
@@ -36,7 +37,7 @@ pins:
     meta: MM100_IN_PPS_ANALOG
     class: analog_inputs
     ts_name: ___ PPS1
-    function: PPS input 1
+    function: Universal analog input. Suggested PPS input 1
     type: av
     color: white
 
@@ -54,16 +55,16 @@ pins:
     meta: MM100_IN_MAP1_ANALOG
     class: analog_inputs
     ts_name: ___ MAP
-    function: MAP input
+    function: Universal analog input. Suggested MAP input
     type: av
     color: yellow
 
   - pin: D10
-    meta: MM100_IN_CAM
-    class: switch_inputs
+    id: [MM100_IN_CAM_ANALOG, MM100_IN_CAM, MM100_IN_CAM]
+    class: [analog_inputs, switch_inputs, event_inputs]
     color: green
     ts_name: ___ A/C Request / BUTTON2
-    function: A/C Request / Button input 2
+    function: A/C Request / Button input 2 PullDown 10K
 
   - pin: D11
     color: black
@@ -77,7 +78,7 @@ pins:
     meta: MM100_IN_TPS_ANALOG
     class: analog_inputs
     ts_name: ___ TPS1
-    function: TPS input 1
+    function: Universal analog input. Suggested TPS input 1
     type: av
     color: green
 

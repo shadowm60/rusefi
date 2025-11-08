@@ -1,13 +1,17 @@
 package com.rusefi.maintenance;
 
+import com.devexperts.logging.Logging;
 import com.rusefi.FileLog;
 import com.rusefi.io.UpdateOperationCallbacks;
+import com.rusefi.ui.StatusWindow;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.FileNotFoundException;
+
+import static com.devexperts.logging.Logging.getLogging;
 
 /**
  * This code automates drivers unpacking and installation
@@ -16,6 +20,7 @@ import java.io.FileNotFoundException;
  * See https://github.com/rusefi/rusefi/tree/master/misc/install_st
  */
 public class DriverInstall {
+    private static final Logging log = getLogging(DriverInstall.class);
     private static final String FOLDER = "../drivers";
     private static final String SELF_UNCOMPRESSING_ARCHIVE = "silent_st_drivers2.exe";
     private static final String YES = " -y";
@@ -33,7 +38,7 @@ public class DriverInstall {
                 if (dialogResult != JOptionPane.YES_OPTION)
                     return;
 
-                final UpdateOperationCallbacks wnd = new UpdateStatusWindow("Windows rusEFI ST Drivers");
+                final UpdateOperationCallbacks wnd = StatusWindow.createAndShowFrame("Windows rusEFI ST Drivers");
 
                 ExecHelper.submitAction(() -> installDrivers(wnd), getClass() + " thread");
 
@@ -44,11 +49,11 @@ public class DriverInstall {
     }
 
     private static void installDrivers(UpdateOperationCallbacks wnd) {
-        FileLog.MAIN.logLine("IsWindows=" + FileLog.isWindows());
+        log.info("IsWindows=" + FileLog.isWindows());
         if (!new File(FOLDER).exists()) {
             String message = FOLDER + " not found";
-            wnd.append(message);
-            FileLog.MAIN.logLine(message);
+            wnd.logLine(message);
+            log.info(message);
             return;
         }
       try {
@@ -60,7 +65,7 @@ public class DriverInstall {
       String batch = isWindows7orBelow() ? WINDOWS7_BATCH : WINDOWS8_BATCH;
         ExecHelper.executeCommand(UNPACKED_FOLDER, ExecHelper.getBatchCommand(batch), batch, wnd);
       } catch (FileNotFoundException e) {
-        wnd.append(e.toString());
+        wnd.logLine(e.toString());
         wnd.error();
       }
     }
@@ -69,5 +74,9 @@ public class DriverInstall {
         String version = System.getProperty(FileLog.OS_VERSION);
         // https://en.wikipedia.org/wiki/List_of_Microsoft_Windows_versions
         return version.startsWith("5.") || version.startsWith("6.0") || version.startsWith("6.1");
+    }
+
+    public static boolean isFolderExist() {
+        return new File(FOLDER).exists();
     }
 }

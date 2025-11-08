@@ -11,9 +11,6 @@
 #pragma once
 
 #include "state_sequence.h"
-#include "generated_lookup_engine_configuration.h"
-#include <rusefi/isnan.h>
-#include "engine_state.h"
 
 #define FOUR_STROKE_ENGINE_CYCLE 720
 
@@ -22,33 +19,17 @@
 #define TRIGGER_GAP_DEVIATION_HIGH (1.0f + TRIGGER_GAP_DEVIATION)
 
 #if EFI_ENABLE_ASSERTS
-#define assertAngleRange(angle, msg, code) if (angle > 10000000 || angle < -10000000) { firmwareError(code, "angle range %s %.2f", msg, angle);angle = 0;}
+#define assertAngleRange(angle, msg, code) if (angle > 10000000 || angle < -10000000) { firmwareError(code, "angle range %s %d", msg, (int)angle);angle = 0;}
 #else
 #define assertAngleRange(angle, msg, code) {UNUSED(code);}
 #endif
 
 // Shifts angle into the [0..720) range for four stroke and [0..360) for two stroke
 // See also wrapVvt
-static inline void wrapAngle(angle_t& angle, const char* msg, ObdCode code) {
-	if (cisnan(angle)) {
-		firmwareError(ObdCode::CUSTOM_ERR_ANGLE, "a NaN %s", msg);
-		angle = 0;
-	}
-
-	assertAngleRange(angle, msg, code);
-	float engineCycle = getEngineState()->engineCycle;
-
-	while (angle < 0) {
-		angle += engineCycle;
-	}
-
-	while (angle >= engineCycle) {
-		angle -= engineCycle;
-	}
-}
+void wrapAngle(angle_t& angle, const char* msg, ObdCode code);
 
 // proper method avoids un-wrapped state of variables
-static inline angle_t wrapAngleMethod(angle_t param, const char *msg = "", ObdCode code = ObdCode::OBD_PCM_Processor_Fault) {
+inline angle_t wrapAngleMethod(angle_t param, const char *msg = "", ObdCode code = ObdCode::OBD_PCM_Processor_Fault) {
 	wrapAngle(param, msg, code);
 	return param;
 }
@@ -66,7 +47,7 @@ class TriggerConfiguration;
 class TriggerWaveform {
 public:
 	TriggerWaveform();
-	void initializeTriggerWaveform(operation_mode_e triggerOperationMode, const trigger_config_s &triggerType);
+	void initializeTriggerWaveform(operation_mode_e triggerOperationMode, const trigger_config_s &triggerType, bool isCrankWheel = true);
 	void setShapeDefinitionError(bool value);
 
 	/**
@@ -104,7 +85,7 @@ public:
 	int version = 0;
 
 	/**
-	 * Depending on trigger shape, we use betweeb one and three previous gap ranges to detect synchronizaiton.
+	 * Depending on trigger shape, we use between one and three previous gap ranges to detect synchronization.
 	 *
 	 * Usually second or third gap is not needed, but some crazy triggers like 36-2-2-2 require two consecutive
 	 * gaps ratios to sync
@@ -188,6 +169,8 @@ public:
 	void addEvent360(angle_t angle, TriggerValue const state, TriggerWheel const channelIndex = TriggerWheel::T_PRIMARY);
 
 	void addToothRiseFall(angle_t angle, angle_t width = 10, TriggerWheel const channelIndex = TriggerWheel::T_PRIMARY);
+	// fun: yet another inconsistency, right?!
+	void addToothFallRise(angle_t angle, angle_t width = 10, TriggerWheel const channelIndex = TriggerWheel::T_PRIMARY);
 
 	/**
 	 * This version of the method is best when same wheel could be mounted either on crank or cam
@@ -210,7 +193,14 @@ public:
 
 	void initialize(operation_mode_e operationMode, SyncEdge syncEdge);
 	void setTriggerSynchronizationGap(float syncRatio);
+	/**
+	 * note that index is in reverse order comparing with chronological order on the documentation images
+	 * https://github.com/rusefi/rusefi/wiki/All-Supported-Triggers
+	 */
 	void setTriggerSynchronizationGap3(int index, float syncRatioFrom, float syncRatioTo);
+	void setTriggerSynchronizationGap4(int index, float syncRatio) {
+	  setTriggerSynchronizationGap3(index, syncRatio * TRIGGER_GAP_DEVIATION_LOW, syncRatio * TRIGGER_GAP_DEVIATION_HIGH);
+	}
 	void setTriggerSynchronizationGap2(float syncRatioFrom, float syncRatioTo);
 	void setSecondTriggerSynchronizationGap(float syncRatio);
 	void setSecondTriggerSynchronizationGap2(float syncRatioFrom, float syncRatioTo);
@@ -247,11 +237,11 @@ public:
 
 	uint16_t findAngleIndex(TriggerFormDetails *details, angle_t angle) const;
 
-private:
 	/**
 	 * These angles are in trigger DESCRIPTION coordinates - i.e. the way you add events while declaring trigger shape
 	 */
 	angle_t getSwitchAngle(int index) const;
+private:
 
 	/**
 	 * This variable is used to confirm that events are added in the right order.

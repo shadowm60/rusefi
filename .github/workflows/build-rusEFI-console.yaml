@@ -1,28 +1,28 @@
 name: rusEFI console
 
-on: [push,pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Checkout Submodules
+      - name: Checkout Submodules Without ChibiOS
         run: |
-          git submodule update --init --depth=1 unit_tests/googletest
-          git submodule update --init --depth=1 firmware/libfirmware
-          git submodule update --init --depth=1 firmware/ext/lua
-          git submodule update --init --depth=1 firmware/controllers/lua/luaaa
-          git submodule update --init --depth=1 firmware/controllers/can/wideband_firmware
-          git submodule update --init --depth=1 java_console/luaformatter
-          git submodule update --init --depth=1 java_console/peak-can-basic
+          misc/git_scripts/common_submodule_init_without_chibios.sh
 
-      - uses: actions/setup-java@v4
+      # as of 2025 TS unfortunately still uses java 8
+      # we use JDK11 but sourceCompatibility/targetCompatibility 8 so that rusEFI TS plugin is compatible with TS
+      #  [tag:java8]
+      - uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
       - name: Test Compiler
         run: javac -version
@@ -30,7 +30,12 @@ jobs:
       - name: Install Tools
         run: |
           sudo bash misc/actions/add-ubuntu-latest-apt-mirrors.sh
-          sudo apt-get install sshpass mtools
+          sudo bash misc/actions/ubuntu-install-tools.sh
+
+      - name: Build All Java
+        working-directory: ./java_tools/
+        run: |
+          ./gradlew jar :config_definition_base:shadowJar :enum_to_string:shadowJar
 
       - name: Generate Enums & Live Documentation
         working-directory: ./firmware/
@@ -39,18 +44,13 @@ jobs:
       - name: Print GCC version
         run: gcc -v
 
-      - name: Build Native Unit Tests as shared library
-        working-directory: ./unit_tests/
-        # we have a unit test of JNI thus we need to build shared library
-        run: make -j4 SANITIZE=no build/lib_rusefi_test
-
-      - name: Test console
+      - name: All Java Tests
         # at the moment 'jar' task does not depend on tests?! maybe because tests take some time?
         working-directory: ./java_tools
         run: ./gradlew test
 
       - name: Publish Gradle Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v6
         if: success() || failure() # always run even if the previous step fails
         with:
           report_paths: '**/build/test-results/test/TEST-*.xml'
@@ -58,33 +58,10 @@ jobs:
 
       - name: Attach Gradle junit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: gradle junit
           path: '**/build/test-results/test/TEST-*.xml'
-
-      - name: Build console
-        working-directory: ./java_tools
-        run: ./gradlew :ui:shadowJar
-
-      - name: Attach Ant console junit results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: console junit
-          path: ./java_console/build/*.txt
-
-      - name: Configuration Definition CI, without pushing new .jar
-        working-directory: ./java_tools
-        run: ./gradlew :config_definition:shadowJar
-
-      - name: Test everything java_tools gradle while we are here
-        working-directory: ./java_tools
-        run: ./gradlew test
-
-      - name: Configuration Definition and other tools CI, without pushing new .jars
-        working-directory: ./java_tools
-        run: ./gradlew shadowJar
 
       # this job focuses of tool validation so we do not push fresh enums here
       - name: Generate Enums using freshly compiled tool
@@ -93,4 +70,4 @@ jobs:
 
       - name: Upload rusEFI server
         working-directory: .
-        run: java_console/upload_file.sh ${{ secrets.RUSEFI_SSH_USER }} ${{ secrets.RUSEFI_SSH_PASS }} ${{ secrets.RUSEFI_SSH_SERVER }} build_server/autoupdate java_console_binary/rusefi_server.jar
+        run: java_console/upload_file.sh ${{ secrets.RUSEFI_SSH_USER }} ${{ secrets.RUSEFI_SSH_PASS }} ${{ secrets.RUSEFI_SSH_SERVER }} build_server/autoupdate console/rusefi_server.jar

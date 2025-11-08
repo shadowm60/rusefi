@@ -19,9 +19,6 @@
 
 #include "periodic_thread_controller.h"
 
-#define CAN_PEDAL_TPS_OFFSET 2
-#define CAN_SENSOR_1_OFFSET 3
-
 #define CAN_TIMEOUT MS2NT(100)
 
 //can tx periodic task cycle time in frequency, 200hz -> 5ms period
@@ -43,6 +40,11 @@ enum class CanInterval : uint16_t {
 	_MAX_Cycle = _1000ms,
 };
 
+void resetCanWriteCycle();
+
+// 11 bit (CAN 2.0A)
+#define IS_EXT_RANGE_ID(id) ((id) >= 2048)
+
 class CanListener;
 class CanSensorBase;
 
@@ -53,7 +55,7 @@ void processCanRxMessage(const size_t busIndex, const CANRxFrame& msg, efitick_t
 void registerCanListener(CanListener& listener);
 void registerCanSensor(CanSensorBase& sensor);
 
-class CanWrite final : public PeriodicController<512> {
+class CanWrite final : public PeriodicController</*TStackSize*/512> {
 public:
 	CanWrite();
 	void PeriodicTask(efitick_t nowNt) override;

@@ -3,7 +3,7 @@ package com.rusefi.simulator;
 import com.devexperts.logging.Logging;
 import com.rusefi.IoUtil;
 import com.rusefi.Timeouts;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.enums.bench_mode_e;
@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.rusefi.IoUtil.getDisableCommand;
 import static com.rusefi.binaryprotocol.IoHelper.swap16;
-import static com.rusefi.config.generated.Fields.TS_SIMULATE_CAN;
+import static com.rusefi.config.generated.Integration.TS_SIMULATE_CAN;
 import static org.junit.Assert.assertTrue;
 
 public class SimulatorFunctionalTest {
@@ -44,19 +44,19 @@ public class SimulatorFunctionalTest {
         int vvtOutputFrequency = 300; // todo: move the constant to Fields
         testPwmPin(bench_mode_e.BENCH_VVT0_VALVE, vvtOutputFrequency);
 
-        testOutputPin(bench_mode_e.BENCH_MAIN_RELAY, Fields.BENCH_MAIN_RELAY_DURATION);
-        testOutputPin(bench_mode_e.BENCH_FUEL_PUMP, Fields.BENCH_FUEL_PUMP_DURATION);
-        testOutputPin(bench_mode_e.BENCH_FAN_RELAY, Fields.BENCH_FAN_DURATION);
-        testOutputPin(bench_mode_e.HD_ACR, Fields.BENCH_AC_RELAY_DURATION);
-        testOutputPin(bench_mode_e.HD_ACR2, Fields.BENCH_AC_RELAY_DURATION);
-        testOutputPin(bench_mode_e.BENCH_AC_COMPRESSOR_RELAY, Fields.BENCH_AC_RELAY_DURATION);
-        testOutputPin(bench_mode_e.BENCH_STARTER_ENABLE_RELAY, Fields.BENCH_STARTER_DURATION);
+        testOutputPin(bench_mode_e.BENCH_MAIN_RELAY, Integration.BENCH_MAIN_RELAY_DURATION);
+        testOutputPin(bench_mode_e.BENCH_FUEL_PUMP, Integration.BENCH_FUEL_PUMP_DURATION);
+        testOutputPin(bench_mode_e.BENCH_FAN_RELAY, Integration.BENCH_FAN_DURATION);
+        testOutputPin(bench_mode_e.HD_ACR, Integration.BENCH_AC_RELAY_DURATION);
+        testOutputPin(bench_mode_e.HD_ACR2, Integration.BENCH_AC_RELAY_DURATION);
+        testOutputPin(bench_mode_e.BENCH_AC_COMPRESSOR_RELAY, Integration.BENCH_AC_RELAY_DURATION);
+        testOutputPin(bench_mode_e.BENCH_STARTER_ENABLE_RELAY, Integration.BENCH_STARTER_DURATION);
         EcuTestHelper ecu = new EcuTestHelper(linkManager);
 
-        ecu.sendCommand(getDisableCommand(Fields.CMD_SELF_STIMULATION));
+        ecu.sendCommand(getDisableCommand(Integration.CMD_SELF_STIMULATION));
         IoUtil.awaitRpm(0);
 
-        testOutputPin(bench_mode_e.BENCH_VVT0_VALVE, Fields.BENCH_VVT_DURATION);
+        testOutputPin(bench_mode_e.BENCH_VVT0_VALVE, Integration.BENCH_VVT_DURATION);
     }
 
     private void assertHappyTriggerSimulator() throws InterruptedException {
@@ -175,7 +175,7 @@ public class SimulatorFunctionalTest {
                                          byte subCommand) throws InterruptedException {
         CountDownLatch gotCan = new CountDownLatch(1);
         byte [][] packets = new byte [1][];
-        packets[0] = getCanFrameData(bench_test_packet_ids_e.IO_CONTROL.get(),
+        packets[0] = getCanFrameData(bench_test_packet_ids_e.HW_QC_IO_CONTROL.get(),
                 new byte [] {
                         (byte)bench_test_magic_numbers_e.BENCH_HEADER.get(),
                         (byte)command.get(),

@@ -11,6 +11,7 @@
 #include "pch.h"
 #include "hellen_meta.h"
 #include "defaults.h"
+#include "board_overrides.h"
 
 static OutputPin alphaTachPullUp;
 static OutputPin alphaTempPullUp;
@@ -36,24 +37,6 @@ static void setInjectorPins() {
 	engineConfiguration->malfunctionIndicatorPin = Gpio::Unassigned;
 }
 
-static void setupEtb() {
-	// TLE9201 driver
-	// This chip has three control pins:
-	// DIR - sets direction of the motor
-	// PWM - pwm control (enable high, coast low)
-	// DIS - disables motor (enable low)
-
-	// PWM pin
-	engineConfiguration->etbIo[0].controlPin = Gpio::H144_OUT_PWM2;
-	// DIR pin
-	engineConfiguration->etbIo[0].directionPin1 = Gpio::H144_GP_IO1;
-	// Disable pin
-	engineConfiguration->etbIo[0].disablePin = Gpio::H144_GP_IO2;
-
-	// we only have pwm/dir, no dira/dirb
-	engineConfiguration->etb_use_two_wires = false;
-}
-
 static void setIgnitionPins() {
 	engineConfiguration->ignitionPins[0] = Gpio::H144_IGN_1;
 	engineConfiguration->ignitionPins[1] = Gpio::H144_IGN_2;
@@ -64,12 +47,12 @@ static void setIgnitionPins() {
 static void setupDefaultSensorInputs() {
 	// trigger inputs, hall
 	engineConfiguration->triggerInputPins[0] = Gpio::H144_IN_CRANK;
-	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_CAM;
+//	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_CAM;
 	engineConfiguration->camInputs[0] = Gpio::Unassigned;
 
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG);
 
-	setPPSInputs(H144_IN_PPS, H144_IN_AUX2);
+	setPPSInputs(H144_IN_PPS, H144_IN_AUX2_ANALOG);
 
 	// random values to have valid config
 	engineConfiguration->tps1SecondaryMin = 1000;
@@ -85,11 +68,16 @@ static void setupDefaultSensorInputs() {
 }
 
 static bool is_F_OrOlder() {
+#ifdef STM32F7XX
+  // only new mega module boards were fabricated with F7
+  return false;
+#else
     int16_t hellenBoardId = engine->engineState.hellenBoardId;
     return hellenBoardId == BOARD_ID_ALPHA4CH_B || hellenBoardId == BOARD_ID_ALPHA4CH_D || hellenBoardId == BOARD_ID_ALPHA4CH_E || hellenBoardId == BOARD_ID_ALPHA4CH_F;
+#endif
 }
 
-void boardInitHardware() {
+static void alphax_4chan_boardInitHardware() {
 	alphaTachPullUp.initPin("a-tach", Gpio::H144_OUT_IO1);
 	alphaTempPullUp.initPin("a-temp", Gpio::H144_OUT_IO4);
 	alphaCrankPPullUp.initPin("a-crank-p", Gpio::H144_OUT_IO2);
@@ -108,27 +96,24 @@ void boardInitHardware() {
 
 	alphaD4PullDown.initPin("a-d4", Gpio::H144_LS_7);
 	alphaD5PullDown.initPin("a-d5", Gpio::H144_LS_8);
-	boardOnConfigurationChange(nullptr);
 }
 
-void boardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
-	alphaTachPullUp.setValue(engineConfiguration->boardUseTachPullUp);
-	alphaTempPullUp.setValue(engineConfiguration->boardUseTempPullUp);
-	alphaCrankPPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alphaCrankNPullUp.setValue(engineConfiguration->boardUseCrankPullUp);
-	alpha2stepPullDown.setValue(engineConfiguration->boardUse2stepPullDown);
-	alphaCamPullDown.setValue(engineConfiguration->boardUseCamPullDown);
-	alphaCamVrPullUp.setValue(engineConfiguration->boardUseCamVrPullUp);
+static void customBoardOnConfigurationChange(engine_configuration_s * /*previousConfiguration*/) {
+	alphaTachPullUp.setValue(config->boardUseTachPullUp);
+	alphaTempPullUp.setValue(config->boardUseTempPullUp);
+	alphaCrankPPullUp.setValue(config->boardUseCrankPullUp);
+	alphaCrankNPullUp.setValue(config->boardUseCrankPullUp);
+	alpha2stepPullDown.setValue(config->boardUse2stepPullDown);
+	alphaCamPullDown.setValue(config->boardUseCamPullDown);
+	alphaCamVrPullUp.setValue(config->boardUseCamVrPullUp);
 
-	alphaD2PullDown.setValue(engineConfiguration->boardUseD2PullDown);
-	alphaD3PullDown.setValue(engineConfiguration->boardUseD3PullDown);
-	alphaD4PullDown.setValue(engineConfiguration->boardUseD4PullDown);
-	alphaD5PullDown.setValue(engineConfiguration->boardUseD5PullDown);
+	alphaD2PullDown.setValue(config->boardUseD2PullDown);
+	alphaD3PullDown.setValue(config->boardUseD3PullDown);
+	alphaD4PullDown.setValue(config->boardUseD4PullDown);
+	alphaD5PullDown.setValue(config->boardUseD5PullDown);
 }
 
-
-
-void setBoardConfigOverrides() {
+static void alphax_4chan_ConfigOverrides() {
 	setHellenVbatt();
 
     if (is_F_OrOlder()) {
@@ -137,8 +122,7 @@ void setBoardConfigOverrides() {
 	} else {
 	    setHellenMegaEnPin();
 	    // rev G and newer uses hellen mega-module
-	    setHellenSdCardSpi1();
-	    hellenMegaAccelerometerPreInitCS2Pin();
+	    hellenMegaSdWithAccelerometer();
 	}
 
     setDefaultHellenAtPullUps();
@@ -149,14 +133,14 @@ void setBoardConfigOverrides() {
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
 
  */
-void setBoardDefaultConfiguration() {
+static void alphax_4chan_defaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
-	setupEtb();
+	setupTLE9201(/*controlPin*/Gpio::H144_OUT_PWM2, /*directionPin1*/Gpio::H144_GP_IO1, /*disablePin*/Gpio::H144_GP_IO2);
 	if (is_F_OrOlder()) {
         engineConfiguration->tachOutputPin = Gpio::H144_OUT_IO13;
 	    engineConfiguration->vvtPins[0] = Gpio::H144_OUT_PWM7;
@@ -175,7 +159,7 @@ void setBoardDefaultConfiguration() {
     //	engineConfiguration->baroSensor.type = MT_MPXH6400;
     //	engineConfiguration->baroSensor.hwChannel = H144_IN_MAP3; // On-board MAP
 
-    engineConfiguration->boardUseTempPullUp = true;
+    config->boardUseTempPullUp = true;
 
 	engineConfiguration->acSwitch = Gpio::Unassigned;
 	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_IO12;
@@ -226,4 +210,12 @@ Gpio* getBoardMetaOutputs() {
 
 int getBoardMetaDcOutputsCount() {
     return 1;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_InitHardware = alphax_4chan_boardInitHardware;
+	custom_board_DefaultConfiguration = alphax_4chan_defaultConfiguration;
+	custom_board_ConfigOverrides = alphax_4chan_ConfigOverrides;
+
+	custom_board_OnConfigurationChange = customBoardOnConfigurationChange;
 }

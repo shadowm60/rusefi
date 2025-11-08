@@ -1,18 +1,27 @@
 package com.rusefi.io;
 
-public interface UpdateOperationCallbacks {
-    void log(String message);
+import com.devexperts.logging.Logging;
+import com.rusefi.ui.StatusConsumer;
 
-    default void append(String message) {
-      log(message);
+public interface UpdateOperationCallbacks extends StatusConsumer {
+    Logging log = Logging.getLogging(UpdateOperationCallbacks.class);
+
+    void log(String message, boolean breakLineOnTextArea, boolean sendToLogger);
+
+    @Override
+    default void logLine(final String message) {
+        log(message, true, true);
     }
 
     void done();
+    void warning();
     void error();
 
-    class UpdateOperationDummy implements UpdateOperationCallbacks {
+    void clear();
+
+    UpdateOperationCallbacks DUMMY = new UpdateOperationCallbacks() {
         @Override
-        public void log(String message) {
+        public void log(final String message, final boolean breakLineOnTextArea, boolean sendToLogger) {
         }
 
         @Override
@@ -22,7 +31,86 @@ public interface UpdateOperationCallbacks {
         @Override
         public void error() {
         }
-    }
 
-    public static UpdateOperationCallbacks DUMMY = new UpdateOperationDummy();
+        @Override
+        public void warning() {
+
+        }
+
+        @Override
+        public void clear() {
+        }
+
+        @Override
+        public String toString() {
+            return "DUMMY";
+        }
+    };
+
+    UpdateOperationCallbacks LOGGER = new UpdateOperationCallbacks() {
+        @Override
+        public void log(final String message, final boolean breakLineOnTextArea, boolean sendToLogger) {
+            log.info(message);
+        }
+
+        @Override
+        public void done() {
+            log.info("[DONE]");
+        }
+
+        @Override
+        public void warning() {
+            log.info("[warning]");
+        }
+
+        @Override
+        public void error() {
+            log.info("[error]");
+        }
+
+        @Override
+        public void clear() {
+        }
+
+        @Override
+        public String toString() {
+            return "LOGGER";
+        }
+    };
+
+    UpdateOperationCallbacks CONSOLE = new UpdateOperationCallbacks() {
+        @Override
+        public void log(final String message, final boolean breakLineOnTextArea, boolean sendToLogger) {
+            if (breakLineOnTextArea) {
+                System.out.println(message);
+            } else {
+                System.out.print(message);
+            }
+            if (sendToLogger) {
+                LOGGER.log(message, breakLineOnTextArea, true);
+            }
+        }
+
+        @Override
+        public void done() {
+            log.info("[DONE]");
+            LOGGER.done();
+        }
+
+        @Override
+        public void warning() {
+            log.info("[warning]");
+            LOGGER.warning();
+        }
+
+        @Override
+        public void error() {
+            log.info("[error]");
+            LOGGER.error();
+        }
+
+        @Override
+        public void clear() {
+        }
+    };
 }

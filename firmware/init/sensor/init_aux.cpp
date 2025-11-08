@@ -21,6 +21,12 @@ static FunctionalSensor auxSensors[] = {
 StoredValueSensor luaGauges[] = {
 		{ SensorType::LuaGauge1, MS2NT(5000) },
 		{ SensorType::LuaGauge2, MS2NT(5000) },
+		{ SensorType::LuaGauge3, MS2NT(5000) },
+		{ SensorType::LuaGauge4, MS2NT(5000) },
+		{ SensorType::LuaGauge5, MS2NT(5000) },
+		{ SensorType::LuaGauge6, MS2NT(5000) },
+		{ SensorType::LuaGauge7, MS2NT(5000) },
+		{ SensorType::LuaGauge8, MS2NT(5000) },
 };
 
 
@@ -46,5 +52,12 @@ void initAuxSensors() {
 	for (size_t i = 0; i < efi::size(luaGauges); i++) {
 		auto& sensor = luaGauges[i];
 		sensor.Register();
+	}
+}
+
+void deinitAuxSensors() {
+	for (size_t i = 0; i < efi::size(engineConfiguration->auxAnalogInputs); i++) {
+		AdcSubscription::UnsubscribeSensor(auxSensors[i]);
+		auxSensors[i].unregister();
 	}
 }

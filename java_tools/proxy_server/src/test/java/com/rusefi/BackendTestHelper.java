@@ -1,7 +1,8 @@
 package com.rusefi;
 
-import com.rusefi.binaryprotocol.BinaryProtocol;
+import com.rusefi.binaryprotocol.BinaryProtocolLocalCache;
 import com.rusefi.io.tcp.TcpConnector;
+import com.rusefi.proxy.MockIniFileProvider;
 import com.rusefi.server.Backend;
 import com.rusefi.server.UserDetails;
 import com.rusefi.server.UserDetailsResolver;
@@ -26,6 +27,7 @@ public class BackendTestHelper {
         assertLatch(applicationServerCreated);
     }
 
+    /*
     public static void runControllerConnectorBlocking(Backend backend, int serverPortForControllers) throws InterruptedException {
         CountDownLatch controllerServerCreated = new CountDownLatch(1);
         try {
@@ -35,15 +37,16 @@ public class BackendTestHelper {
         }
         assertLatch(controllerServerCreated);
     }
-
+*/
     @NotNull
     public static UserDetailsResolver createTestUserResolver() {
         return authToken -> new UserDetails(authToken.substring(0, 5), authToken.charAt(6));
     }
 
     public static void commonServerTest() throws MalformedURLException {
+        MockIniFileProvider.install();
         HttpUtil.RUSEFI_PROXY_HOSTNAME = TcpConnector.LOCALHOST;
-        BinaryProtocol.DISABLE_LOCAL_CONFIGURATION_CACHE = true;
+        BinaryProtocolLocalCache.DISABLE_LOCAL_CONFIGURATION_CACHE = true;
 
         rusEFISSLContext.init("certificate/test_pkcs12.jks", "password");
     }

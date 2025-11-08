@@ -32,10 +32,10 @@ public class IniFileReader {
         ArrayList<String> strings = new ArrayList<>();
         boolean inQuote = false;
         boolean hadQuote = false;
+        int openedBraceCount = 0;
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (c == '\"' || isTokenSeparator(c) && !inQuote) {
+        for (final char c: str.toCharArray()) {
+            if (c == '\"' || (isTokenSeparator(c) && !inQuote && (openedBraceCount == 0))) {
                 if (c == '\"') {
                     inQuote = !inQuote;
                     if (!inQuote) {
@@ -51,8 +51,23 @@ public class IniFileReader {
                     strings.add("");
                     hadQuote = false;
                 }
-            } else
+            } else {
                 sb.append(c);
+                switch (c) {
+                    case '{': {
+                        openedBraceCount++;
+                        break;
+                    }
+                    case '}': {
+                        if (0 < openedBraceCount) {
+                            openedBraceCount--;
+                        } else {
+                            throw new IllegalArgumentException(String.format("Unexpected closing brace: %s", str));
+                        }
+                        break;
+                    }
+                }
+            }
         }
         if (sb.length() > 0)
             strings.add(sb.toString());
@@ -64,10 +79,13 @@ public class IniFileReader {
         return c == ' ' || c == '\t' || c == '=' || c == ',';
     }
 
+    public static RawIniFile read(InputStream in) {
+        return read(in, "unknown");
+    }
     /**
      * Just grabs an collection of lines, no parsing logic here
      */
-    public static RawIniFile read(InputStream in) {
+    public static RawIniFile read(InputStream in, String msg) {
         List<RawIniFile.Line> lines = new ArrayList<>();
         BufferedReader reader = new BufferedReader(new InputStreamReader(in));
 
@@ -82,15 +100,11 @@ public class IniFileReader {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        return new RawIniFile(lines);
+        return new RawIniFile(lines, msg);
     }
 
-    public static RawIniFile read(File input) {
-        try {
-            InputStream in = new FileInputStream(input);
-            return read(in);
-        } catch (FileNotFoundException e) {
-            throw new IllegalStateException(e);
-        }
+    public static RawIniFile read(File input) throws FileNotFoundException {
+        InputStream in = new FileInputStream(input);
+        return read(in, input.getAbsolutePath());
     }
 }

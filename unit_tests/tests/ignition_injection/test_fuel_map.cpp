@@ -10,18 +10,15 @@
 #include "fuel_math.h"
 #include "trigger_structure.h"
 #include "trigger_decoder.h"
-#include "advance_map.h"
+#include "util/injection_crank_helper.h"
 
 using ::testing::FloatNear;
 
 TEST(misc, testFuelMap) {
-	printf("Setting up FORD_ASPIRE_1996\r\n");
-	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
+	printf("Setting up TEST_ENGINE\r\n");
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
 
-	for (int i = 0; i < VBAT_INJECTOR_CURVE_SIZE; i++) {
-		engineConfiguration->injector.battLagCorrBins[i] = i;
-		engineConfiguration->injector.battLagCorr[i] = 0.5 + 2 * i;
-	}
+	setFlatInjectorLag(0.2);
 
 	eth.engine.updateSlowSensors();
 
@@ -67,7 +64,7 @@ TEST(misc, testFuelMap) {
 	EXPECT_EQ( 42,  getRunningFuel(1)) << "v1";
 	EXPECT_EQ( 84,  getRunningFuel(2)) << "v1";
 
-	engineConfiguration->cranking.baseFuel = 4000;
+	setTestFuelCrankingTable(4000);
 
 	// Should use 20 degree correction in case of failed sensor
 	Sensor::resetMockValue(SensorType::Clt);
@@ -129,22 +126,22 @@ static void configureFordAspireTriggerWaveform(TriggerWaveform * s) {
 TEST(misc, testAngleResolver) {
 	printf("*************************************************** testAngleResolver\r\n");
 
-	EngineTestHelper eth(engine_type_e::FORD_ASPIRE_1996);
-
+	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	eth.setTriggerType(trigger_type_e::TT_FORD_ASPIRE);
 	engineConfiguration->globalTriggerAngleOffset = 175;
 
 	TriggerWaveform * ts = &engine->triggerCentral.triggerShape;
 	TriggerFormDetails *triggerFormDetails = &engine->triggerCentral.triggerFormDetails;
-	engine->updateTriggerWaveform();
+	engine->updateTriggerConfiguration();
 
-	assertEqualsM("index 2", 52.76, triggerFormDetails->eventAngles[3]); // this angle is relation to synch point
-	assertEqualsM("time 2", 0.3233, ts->wave.getSwitchTime(2));
-	assertEqualsM("index 5", 412.76, triggerFormDetails->eventAngles[6]);
-	assertEqualsM("time 5", 0.5733, ts->wave.getSwitchTime(5));
+	ASSERT_NEAR(52.76, triggerFormDetails->eventAngles[3], EPS4D) << "index 2"; // this angle is relation to synch point
+	ASSERT_NEAR(0.3233, ts->wave.getSwitchTime(2), EPS4D) << "time 2";
+	ASSERT_NEAR(412.76, triggerFormDetails->eventAngles[6], EPS4D) << "index 5";
+	ASSERT_NEAR(0.5733, ts->wave.getSwitchTime(5), EPS4D) << "time 5";
 
 	ASSERT_EQ(4, ts->getTriggerWaveformSynchPointIndex());
 
-	ASSERT_EQ( 10,  ts->getSize()) << "shape size";
+	ASSERT_EQ( 10u,  ts->getSize()) << "shape size";
 
 	TriggerWaveform t;
 	configureFordAspireTriggerWaveform(&t);

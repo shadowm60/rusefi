@@ -1,5 +1,8 @@
 
 #include "pch.h"
+
+#if HW_PROTEUS || HW_HELLEN
+
 #include "defaults.h"
 #include "proteus_meta.h"
 #include "canam.h"
@@ -37,7 +40,6 @@ void setMaverickX3() {
     engineConfiguration->tpsAccelEnrichmentThreshold = 12;
     engineConfiguration->tpsDecelEnleanmentThreshold = 7;
     engineConfiguration->tpsAccelFractionPeriod = 3;
-    engineConfiguration->tpsAccelFractionDivisor = 0.3;
 
     engineConfiguration->isBoostControlEnabled = true;
 
@@ -52,7 +54,6 @@ void setMaverickX3() {
     engineConfiguration->idlePidDeactivationTpsThreshold = 2;
     engineConfiguration->useSeparateAdvanceForIdle = true;
     engineConfiguration->vvtControlMinRpm = 2000;
-    engineConfiguration->overrideCrankingIacSetting = true;
 
     engineConfiguration->startButtonSuppressOnStartUpMs = 1000;
     engineConfiguration->vssToothCount = 10;
@@ -83,7 +84,7 @@ void setMaverickX3() {
 	  // todo: matches Hyundai TODO extract method?
 	  setTPS1Calibration(98, 926, 891, 69);
 
-#if HW_PROTEUS
+#if HW_PROTEUS && EFI_PROD_CODE
     engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_6;
    	engineConfiguration->vehicleSpeedSensorInputPin = PROTEUS_DIGITAL_5;
 	engineConfiguration->auxAnalogInputs[0] = PROTEUS_IN_ANALOG_VOLT_4;
@@ -92,9 +93,6 @@ void setMaverickX3() {
 	engineConfiguration->startStopButtonPin = PROTEUS_IN_AV_6_DIGITAL;
 
 	engineConfiguration->boostControlPin = Gpio::PROTEUS_LS_16;
-
-	gppwm_channel *icFanPwm = &engineConfiguration->gppwm[0];
-	icFanPwm->pin = Gpio::PROTEUS_LS_15;
 
 	gppwm_channel *accRelayPwm = &engineConfiguration->gppwm[1];
 	accRelayPwm->pin = Gpio::PROTEUS_LS_4;
@@ -107,7 +105,6 @@ void setMaverickX3() {
     engineConfiguration->gppwm[0].dutyIfError = 100;
     engineConfiguration->gppwm[0].rpmAxis = GPPWM_Iat;
     engineConfiguration->gppwm[0].loadAxis = GPPWM_Map;
-	strcpy(engineConfiguration->gpPwmNote[0], "IC Fan");
 	strcpy(engineConfiguration->gpPwmNote[1], "Acc Relay");
 
 
@@ -116,3 +113,5 @@ void setMaverickX3() {
 #endif // HW_PROTEUS
 
 }
+
+#endif // HW_PROTEUS || HW_HELLEN

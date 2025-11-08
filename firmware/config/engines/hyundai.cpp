@@ -15,7 +15,7 @@ https://rusefi.com/docs/pinouts/hellen/hellen154hyundai/
 #include "hellen_meta.h"
 #include "defaults.h"
 #include "lua_lib.h"
-#include "hyundai_coupe_canned.cpp"
+#include "hyundai_coupe_canned_tables.cpp"
 #include "hyundai_pb_canned.cpp"
 
 static void set201xHyundai() {
@@ -30,11 +30,15 @@ static void set201xHyundai() {
     setTPS1Calibration(98, 926, 891, 69);
     setEtbPID(8.8944, 70.2307, 0.1855);
    	// Some sensible defaults for other options
-   	setAlgorithm(LM_SPEED_DENSITY);
+   	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
+
+  engineConfiguration->vvtControlMinRpm = 1500;
 }
 
 // set engine_type 104
 void setHyundaiPb() {
+	setGDIFueling();
+	// override injection phase
 	cannedPbTables();
     setInline4();
 	engineConfiguration->displacement = 1.6;
@@ -42,7 +46,9 @@ void setHyundaiPb() {
 	strcpy(engineConfiguration->engineCode, "Gamma");
 
 	engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL_60_2;
-	engineConfiguration->globalTriggerAngleOffset = 90;
+	engineConfiguration->globalTriggerAngleOffset = 115;
+    engineConfiguration->vvtOffsets[0] = 227;
+    engineConfiguration->vvtOffsets[1] = 50;
 
 	engineConfiguration->enableSoftwareKnock = true;
     engineConfiguration->etbIdleThrottleRange = 6.0;
@@ -63,9 +69,6 @@ void setHyundaiPb() {
 	set201xHyundai();
 	// Injectors flow 1214 cc/min at 100 bar pressure
 	engineConfiguration->injector.flow = 1214;
-	setGDIFueling();
-	engineConfiguration->injectionMode = IM_SEQUENTIAL;
-   	engineConfiguration->crankingInjectionMode = IM_SEQUENTIAL;
 
 	setCustomMap(/*lowValue*/ 20, /*mapLowValueVoltage*/ 0.79, /*highValue*/ 101.3, /*mapHighValueVoltage*/ 4);
 
@@ -75,9 +78,8 @@ void setHyundaiPb() {
 	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
 	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
 
-    engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
-
     engineConfiguration->hpfpCamLobes = 4;
+    setHpfpLobeProfileAngle(engineConfiguration->hpfpCamLobes);
     engineConfiguration->rethrowHardFault = true;
 
    	engineConfiguration->highPressureFuel.v1 = 0.5; /* volts */;
@@ -86,22 +88,31 @@ void setHyundaiPb() {
    	// page 98, Fuel System > Engine Control System > Rail Pressure Sensor (RPS) > Specifications
    	engineConfiguration->highPressureFuel.value2 = 20'000;
 
-#if HW_HELLEN_4CHAN
-	engineConfiguration->triggerInputPins[1] = Gpio::Unassigned;
+#ifdef HW_HELLEN_4K_GDI
+	engineConfiguration->starterControlPin = Gpio::TLE9104_2_OUT_2; // vvt3
+
+#endif
+
+#ifdef HW_HELLEN_4CHAN
+	engineConfiguration->triggerInputPins[0] = Gpio::H144_IN_CAM;
+	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_D_4;
 	engineConfiguration->highPressureFuel.hwChannel = H144_IN_O2S2;
 
-    engineConfiguration->hpfpValvePin = Gpio::H144_OUT_IO6; // E2
 	engineConfiguration->starterControlPin = Gpio::H144_OUT_PWM5; // F1
 	engineConfiguration->startStopButtonPin = Gpio::H144_IN_VSS; // C4
-	engineConfiguration->boardUse2stepPullDown = true; // looks like 1K extra pull-down is needed on the harness?! :(
+	config->boardUse2stepPullDown = true; // looks like 1K extra pull-down is needed on the harness?! :(
 	engineConfiguration->camInputs[0] = Gpio::H144_IN_D_4; // E6
 	engineConfiguration->map.sensor.hwChannel = H144_IN_MAP2;
 #endif // HW_HELLEN_4CHAN
 
-#if HW_PROTEUS
+#if defined(HW_HELLEN_4CHAN) || EFI_UNIT_TEST
+    engineConfiguration->hpfpValvePin = Gpio::H144_OUT_IO6; // E2
+#endif // HW_HELLEN_4CHAN
+
+#if HW_PROTEUS && EFI_PROD_CODE
 	engineConfiguration->highPressureFuel.hwChannel = PROTEUS_IN_ANALOG_VOLT_4;
-	setCommonNTCSensor(&engineConfiguration->clt, PROTEUS_DEFAULT_AT_PULLUP);
-	setCommonNTCSensor(&engineConfiguration->iat, PROTEUS_DEFAULT_AT_PULLUP);
+	setCommonNTCSensorParameters(&engineConfiguration->clt);
+	setCommonNTCSensorParameters(&engineConfiguration->iat);
 
 //    engineConfiguration->acRelayPin = Gpio::PROTEUS_LS_6;
     engineConfiguration->acSwitch = PROTEUS_DIGITAL_5;
@@ -249,6 +260,8 @@ static void commonGenesisCoupe() {
 	cannedprimeValues();
 	cannedcltIdleCorrBins();
 	cannedcltIdleCorr();
+	couplecannedignitionTable();
+	couplecannedveTable();
 #endif // HW_HELLEN_HYUNDAI
 
 	engineConfiguration->displayLogicLevelsInEngineSniffer = true;
@@ -259,7 +272,6 @@ static void commonGenesisCoupe() {
 
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_Hyundai);
 	strcpy(engineConfiguration->engineCode, "Theta II");
-	engineConfiguration->globalTriggerAngleOffset = 90;
 
 // canned tune https://rusefi.com/online/view.php?msq=1507
     // default "Single Coil"
@@ -268,11 +280,8 @@ static void commonGenesisCoupe() {
     engineConfiguration->displacement = 1.998;
     // default "false"
     engineConfiguration->isForcedInduction = true;
-    // default 0.0
-    engineConfiguration->globalTriggerAngleOffset = 475;
-    // default 0.0
+    engineConfiguration->globalTriggerAngleOffset = 360 + 115;
     engineConfiguration->vvtOffsets[0] = -154;
-    // default 0.0
     engineConfiguration->vvtOffsets[1] = 335;
     // default "None"
     engineConfiguration->injectorCompensationMode = ICM_FixedRailPressure;
@@ -291,11 +300,9 @@ static void commonGenesisCoupe() {
     // default "false"
     engineConfiguration->disableFan2WhenStopped = true;
     // default 50.0
-    engineConfiguration->crankingIACposition = 70;
+	setArrayValues(config->cltCrankingCorr, 70);
     // default 200.0
-    engineConfiguration->afterCrankingIACtaperDuration = 100;
-    // default "false"
-    engineConfiguration->overrideCrankingIacSetting = true;
+    setArrayValues(config->afterCrankingIACtaperDuration, 100);
     // default 0.0
     engineConfiguration->tpsAccelLookback = 0.3;
     // default 40.0

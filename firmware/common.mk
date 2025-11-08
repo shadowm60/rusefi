@@ -9,6 +9,26 @@ include $(PROJECT_DIR)/hw_layer/hw_layer.mk
 include $(PROJECT_DIR)/hw_layer/sensors/sensors.mk
 include $(PROJECT_DIR)/hw_layer/drivers/drivers.mk
 
+FW_CONFIG_DIR = $(PROJECT_DIR)/config
+
+ifneq ($(BOARD_DIR),)
+# FW customization hook file
+ifneq ("$(wildcard ../firmware/$(BOARD_DIR)/fw_configuration.cpp)","")
+	ALLCPPSRC += ../firmware/$(BOARD_DIR)/fw_configuration.cpp
+else
+	ALLCPPSRC += $(FW_CONFIG_DIR)/fw_default_configuration.cpp
+endif
+
+# Default tune for board?
+ifneq ("$(wildcard ../firmware/$(BOARD_DIR)/default_tune.cpp)","")
+	BOARDCPPSRC += ../firmware/$(BOARD_DIR)/default_tune.cpp
+endif
+else
+	# default setup_custom_fw_overrides() even no BOARD_DIR is defined (unit tests)
+	ALLCPPSRC += $(FW_CONFIG_DIR)/fw_default_configuration.cpp
+endif
+
+
 ALLCSRC += \
 	$(UTILSRC)
 
@@ -29,12 +49,21 @@ ALLCPPSRC += \
 	$(CONTROLLERS_SRC_CPP) \
 	$(INIT_SRC_CPP) \
 
+# The headers from `$(BOARD_DIR)/generated/live_data_generated` folder are more preferable than the headers from
+# `$(PROJECT_DIR)/live_data_generated` folder
+ifneq ("$(wildcard $(BOARD_DIR)/board_unit_tests.mk)","")
+	# technical debt: this should be in a shared location for all private or custom repos!
+	LIVE_DATA_GENERATED_DIRS := $(BOARD_DIR)/generated/live_data_generated
+endif
+LIVE_DATA_GENERATED_DIRS += $(PROJECT_DIR)/live_data_generated
 
 ALLINC += \
+	$(FW_CONFIG_DIR) \
 	$(CONSOLE_INC) \
  	$(DEVELOPMENT_DIR) \
 	$(ENGINES_INC) \
 	$(PROJECT_DIR)/config/engines \
+	$(LIVE_DATA_GENERATED_DIRS) \
 	$(BOARDS_DIR) \
 	$(PROJECT_DIR)/hw_layer/algo \
     $(PROJECT_DIR)/init \
@@ -46,4 +75,4 @@ ALLINC += \
 	$(CONTROLLERS_SENSORS_INC) \
 	$(CONTROLLERS_INC) \
 	$(PROJECT_DIR)/console/binary/generated \
-	
+

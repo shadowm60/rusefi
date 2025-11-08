@@ -11,6 +11,7 @@
 
 #include "trigger_nissan.h"
 #include "trigger_universal.h"
+#include "trigger_subaru.h"
 
 /**
  * 8,2,2,2 Nissan pattern
@@ -59,7 +60,7 @@ void makeNissanPattern(TriggerWaveform* s, size_t halfCylinderCount, size_t tota
 
 	auto patternTeeth = totalWheel / halfCylinderCount;
 	auto toothCount = patternTeeth - missing;
-	
+
 	float currentAngle = missing * toothAngle;
 	for (size_t i = 0; i < toothCount; i++) {
 		currentAngle += toothAngle;
@@ -146,9 +147,9 @@ void initializeNissanVQ30cam(TriggerWaveform *s) {
 	addvq30tooth(s, x - (52 + 9 * 1));
 	addvq30tooth(s, x - (52 + 9 * 0));
 
-	s->setTriggerSynchronizationGap3(/*gapIndex*/0, 5.78 * TRIGGER_GAP_DEVIATION_LOW, 5.78 * TRIGGER_GAP_DEVIATION_HIGH);
-	s->setTriggerSynchronizationGap3(/*gapIndex*/1, 0.38 * TRIGGER_GAP_DEVIATION_LOW, 0.38 * TRIGGER_GAP_DEVIATION_HIGH);
-	s->setTriggerSynchronizationGap3(/*gapIndex*/2, 2.67 * TRIGGER_GAP_DEVIATION_LOW, 2.67 * TRIGGER_GAP_DEVIATION_HIGH);
+	s->setTriggerSynchronizationGap4(/*gapIndex*/0, 5.78);
+	s->setTriggerSynchronizationGap4(/*gapIndex*/1, 0.38);
+	s->setTriggerSynchronizationGap4(/*gapIndex*/2, 2.67);
 }
 
 void initializeNissanMRvvt(TriggerWaveform *s) {
@@ -187,3 +188,55 @@ void initializeNissanMRvvt(TriggerWaveform *s) {
 	// nominal gap 0.44
 	s->setSecondTriggerSynchronizationGap2(0.3, 0.55);
 }
+
+void initialize_one_of_36_2_2(TriggerWaveform *s, int firstCount, int secondCount) {
+	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::RiseOnly);
+
+	float narrow = 360 / 36;
+	float wide = narrow * 3;
+
+	float base = 0;
+
+	for (int i = 0; i < firstCount; i++) {
+		s->addToothFallRise(base + narrow, narrow / 2);
+		base += narrow;
+	}
+
+	s->addToothFallRise(base + wide, wide / 2);
+	base += wide;
+
+	for (int i = 0; i < secondCount; i++) {
+		s->addToothFallRise(base + narrow, narrow / 2);
+		base += narrow;
+	}
+
+       s->addToothFallRise(360, narrow/2);
+}
+
+void initializeNissanHRcrank(TriggerWaveform *s) {
+	initialize_one_of_36_2_2(s, 9, 21);
+
+    size_t count = 9;
+
+    s->tdcPosition = 155 + 360;
+
+ s->setTriggerSynchronizationGap3(/*gapIndex*/0, 1.7, 5);
+  for (size_t i = 1 ; i < count ; i++) {
+    s->setTriggerSynchronizationGap3(/*gapIndex*/i, 0.6, 1.5);
+  }
+  s->setTriggerSynchronizationGap3(/*gapIndex*/count, 0.1, 0.5);
+  }
+
+
+void initializeNissanHRvvtIn(TriggerWaveform *s) {
+	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::RiseOnly);
+
+
+	s->addToothRiseFall(120);
+	s->addToothRiseFall(120 + 22);
+	s->addToothRiseFall(240);
+	s->addToothRiseFall(360);
+
+	s->setTriggerSynchronizationGap3(/*gapIndex*/0, 0.1, 0.3);
+}
+

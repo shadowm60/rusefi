@@ -23,6 +23,9 @@ enum class SensorType : unsigned char {
 	/**
 	 * This value is result of averaging within user-defined window
 	 * See also MapFast, MapSlow
+	 * oh, and there is instantMap which is third thing not part of sensor framework
+	 * this sensor is Post-TB MAP Sensor
+	 * for ThrottleInletPressure see ThrottleInletPressure
 	 */
 	Map,
 	Maf,
@@ -34,6 +37,7 @@ enum class SensorType : unsigned char {
 
 	FuelPressureLow, // in kPa
 	FuelPressureHigh, // in kPa
+	// ProxySensor for one of the above
 	FuelPressureInjector,
 
 	FuelTemperature,
@@ -50,6 +54,7 @@ enum class SensorType : unsigned char {
 	Tps2Secondary,
 
 	// Redundant and combined sensors for acc pedal
+	AcceleratorPedalUnfiltered,
 	AcceleratorPedal,
 	// pedal according to only first physical sensor
 	AcceleratorPedalPrimary,
@@ -59,11 +64,14 @@ enum class SensorType : unsigned char {
 	// This maps to the pedal if we have one, and Tps1 if not.
 	DriverThrottleIntent,
 
-	AuxTemp1, // 20
+	AuxTemp1,
 	AuxTemp2,
 
+  // this becomes AFR once we multiply by STOICH_RATIO
 	Lambda1,
 	Lambda2,
+	SmoothedLambda1,
+	SmoothedLambda2,
 
 	WastegatePosition,
 	IdlePosition,
@@ -89,12 +97,18 @@ enum class SensorType : unsigned char {
 
 	InputShaftSpeed,
 
-// todo: migrate to SensorType framework!
-//	EGT1,
-//	EGT2,
+	EGT1,
+	EGT2,
+	EGT3,
+	EGT4,
+	EGT5,
+	EGT6,
+	EGT7,
+	EGT8,
 
 	Maf2,	// Second bank MAF sensor
 
+	// todo: finish implementation?
 	Map2,
 	MapSlow2,
 	MapFast2,
@@ -108,6 +122,13 @@ enum class SensorType : unsigned char {
 
 	DetectedGear,
 
+	RangeInput1,
+	RangeInput2,
+	RangeInput3,
+	RangeInput4,
+	RangeInput5,
+	RangeInput6,
+
 	// analog voltage inputs for Lua
 	AuxAnalog1,
 	AuxAnalog2,
@@ -120,11 +141,26 @@ enum class SensorType : unsigned char {
 
 	LuaGauge1,
 	LuaGauge2,
+	LuaGauge3,
+	LuaGauge4,
+	LuaGauge5,
+	LuaGauge6,
+	LuaGauge7,
+	LuaGauge8,
 
   IgnKeyVoltage,
 
+  DashOverrideRpm,
+  DashOverrideVehicleSpeed,
+  DashOverrideClt,
+  DashOverrideBatteryVoltage,
+
+  AcPressure,
+
 	AuxLinear1,
 	AuxLinear2,
+	AuxLinear3,
+	AuxLinear4,
 
 	// frequency sensors
 	AuxSpeed1,

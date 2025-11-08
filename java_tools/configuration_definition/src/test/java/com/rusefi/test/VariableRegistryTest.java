@@ -16,6 +16,15 @@ import static com.rusefi.AssertCompatibility.assertEquals;
  */
 public class VariableRegistryTest {
     @Test
+    public void testBackSlash() {
+        VariableRegistry registry = new VariableRegistry();
+        registry.register("var1", "a\\b");
+        assertEquals("a\\b", registry.applyVariables("@@var1@@"));
+        registry.register("var2", "a\\\\b");
+        assertEquals("a\\\\b", registry.applyVariables("@@var2@@"));
+    }
+
+    @Test
     public void testReplace() {
         VariableRegistry registry = new VariableRegistry();
         registry.register("var", 256);
@@ -77,7 +86,7 @@ public class VariableRegistryTest {
     public void testDefineAndQuotes() throws IOException {
         VariableRegistry registry = new VariableRegistry();
         registry.readPrependValues(new StringReader("#define SINGLE 'L'\n" +
-                "#define DOUBLE \"R\""));
+                "#define DOUBLE \"R\""), false);
         assertEquals("hello L R 'L' \"R\"", registry.applyVariables("hello @#SINGLE#@ @#DOUBLE#@ @@SINGLE@@ @@DOUBLE@@"));
     }
 }

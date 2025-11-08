@@ -1,11 +1,11 @@
 package com.rusefi.binaryprotocol;
 
-import com.opensr5.Logger;
+import com.devexperts.logging.FileLogger;
 import com.rusefi.FileLog;
 import com.rusefi.Timeouts;
 import com.rusefi.composite.CompositeEvent;
 import com.rusefi.composite.CompositeParser;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.core.Sensor;
 import com.rusefi.core.SensorCentral;
 import com.rusefi.io.LinkManager;
@@ -50,6 +50,7 @@ public class BinaryProtocolLogger {
             }
         };
 
+        // fragile or just scary: here we install a JVM level callback for gradual file footer
         Runtime.getRuntime().addShutdownHook(hook);
         needCompositeLogger = linkManager.getCompositeLogicEnabled();
     }
@@ -71,14 +72,14 @@ public class BinaryProtocolLogger {
 
     @NotNull
     public static String getFileName(String prefix, String fileType) {
-        return Logger.DIR + prefix + FileLog.getDate() + fileType;
+        return FileLogger.DIR + prefix + FileLog.getDate() + fileType;
     }
 
     public void compositeLogic(BinaryProtocol binaryProtocol) {
         if (needCompositeLogger) {
             getComposite(binaryProtocol);
         } else if (isCompositeLoggerEnabled) {
-            binaryProtocol.executeCommand(Fields.TS_SET_LOGGER_SWITCH, new byte[]{Fields.TS_COMPOSITE_DISABLE}, "disable composite");
+            binaryProtocol.executeCommand(Integration.TS_SET_LOGGER_SWITCH, new byte[]{Integration.TS_COMPOSITE_DISABLE}, "disable composite");
             isCompositeLoggerEnabled = false;
             closeComposites();
         }
@@ -92,14 +93,14 @@ public class BinaryProtocolLogger {
     }
 
     public void getComposite(BinaryProtocol binaryProtocol) {
-        if (binaryProtocol.isClosed)
+        if (binaryProtocol.isClosed())
             return;
 
         // get command would enable composite logging in controller but we need to turn it off from our end
         // todo: actually if console gets disconnected composite logging might end up enabled in controller?
         isCompositeLoggerEnabled = true;
 
-        byte[] response = binaryProtocol.executeCommand(Fields.TS_GET_COMPOSITE_BUFFER_DONE_DIFFERENTLY, "composite log");
+        byte[] response = binaryProtocol.executeCommand(Integration.TS_GET_COMPOSITE_BUFFER_DONE_DIFFERENTLY, "composite log");
         if (checkResponseCode(response)) {
             List<CompositeEvent> events = CompositeParser.parse(response);
             createCompositesIfNeeded();

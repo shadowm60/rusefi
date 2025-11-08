@@ -11,14 +11,13 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.annotation.*;
+import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @XmlRootElement
 public class Msq {
+    public static final Locale TS_INTEGRATION_LOCALE = Locale.US;
     private static final Logging log = Logging.getLogging(Msq.class);
 
     public List<Page> page = new ArrayList<>();
@@ -31,10 +30,18 @@ public class Msq {
         versionInfo = new VersionInfo(Integer.toString(rusEFIVersion.CONSOLE_VERSION));
     }
 
+    static {
+        log.info("java=" + System.getProperty("java.version"));
+    }
+
+    /**
+     * @see #asImage
+     */
     @NotNull
     public static Msq valueOf(ConfigurationImage image, int totalConfigSize, String tsSignature, IniFileModel ini) {
+        Objects.requireNonNull(image, "image valueOf");
         Msq tune = create(totalConfigSize, tsSignature);
-        for (String key : ini.allIniFields.keySet())
+        for (String key : ini.getAllIniFields().keySet())
             tune.loadConstant(ini, key, image);
         return tune;
     }
@@ -43,13 +50,18 @@ public class Msq {
     public static Msq create(int totalConfigSize, String tsSignature) {
         Msq tune = new Msq();
         tune.versionInfo.setSignature(tsSignature);
+        // TODO: document what on earth is this null/null page about?!
         tune.page.add(new Page(null, null));
         tune.page.add(new Page(0, totalConfigSize));
         return tune;
     }
 
-    public ConfigurationImage asImage(IniFileModel instance, int totalConfigSize) {
-        ConfigurationImage ci = new ConfigurationImage(totalConfigSize);
+    /**
+     * @see #valueOf for opposite operation
+     */
+    public ConfigurationImage asImage(IniFileModel instance) {
+        Objects.requireNonNull(instance, "ini model");
+        ConfigurationImage ci = new ConfigurationImage(instance.getMetaInfo().getPageSize(0));
 
         Page page = findPage();
         if (page == null)
@@ -58,7 +70,7 @@ public class Msq {
             if (constant.getName().startsWith("UNALLOCATED_SPACE")) {
                 continue;
             }
-            IniField field = instance.allIniFields.get(constant.getName());
+            IniField field = instance.getAllIniFields().get(constant.getName());
             Objects.requireNonNull(field, "Field for " + constant.getName());
             log.debug("Setting " + field);
             field.setValue(ci, constant);
@@ -67,7 +79,7 @@ public class Msq {
     }
 
     public static Msq readTune(String fileName) throws JAXBException {
-        return XmlUtil.readModel(Msq.class, fileName);
+        return XmlUtil.readModel(Msq.class, new File(fileName));
     }
 
     public void writeXmlFile(String outputXmlFileName) throws JAXBException, IOException {
@@ -75,12 +87,12 @@ public class Msq {
         versionInfo.validate();
         Page page = findPage();
         if (page.constant.isEmpty())
-            throw new IllegalStateException("Empty Msq file");
+            throw new IllegalStateException("Empty Msq file " + page);
         XmlUtil.writeXml(this, Msq.class, outputXmlFileName);
     }
 
     public void loadConstant(IniFileModel ini, String key, ConfigurationImage image) {
-        IniField field = ini.allIniFields.get(key);
+        IniField field = ini.getAllIniFields().get(key);
         String value = field.getValue(image);
         Page page = findPage();
         if (page == null) {

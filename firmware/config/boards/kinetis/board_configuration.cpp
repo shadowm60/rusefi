@@ -8,6 +8,7 @@
  */
 
 #include "pch.h"
+#include "board_overrides.h"
 
 #if 0
 char __debugBuffer[80];
@@ -37,10 +38,10 @@ static void setSerialConfigurationOverrides() {
 	engineConfiguration->uartConsoleSerialSpeed = SERIAL_SPEED;
 }
 
-void setBoardOverrides() {
+static void kinetis_boardConfigOverrides() {
 	engineConfiguration->useNoiselessTriggerDecoder = true;
 
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
 	engineConfiguration->cylindersCount = 4;
 	engineConfiguration->firingOrder = FO_1_3_4_2;
@@ -54,10 +55,8 @@ void setBoardOverrides() {
 	engineConfiguration->displacement = 1.645;
 	engineConfiguration->injector.flow = 200;
 
-	engineConfiguration->cranking.baseFuel = 25;		// ???
+	setTable(config->crankingCycleBaseFuel, 25);		// ???
 	engineConfiguration->cranking.rpm = 600;
-
-	engineConfiguration->rpmHardLimit = 3000; // yes, 3k. let's play it safe for now
 
 	engineConfiguration->map.sensor.type = MT_MPX4250A;
 
@@ -107,10 +106,10 @@ void setAdcChannelOverrides() {
 	// on Kinetis, ADC_FAST & SLOW are not really "fast" or "slow",
 	// they are just different ADC numbers with different sets of channels
 	removeChannel("VBatt", engineConfiguration->vbattAdcChannel);
-	addChannel("VBatt", engineConfiguration->vbattAdcChannel, ADC_FAST);
+	addFastAdcChannel("VBatt", engineConfiguration->vbattAdcChannel);
 
 	removeChannel("TPS", engineConfiguration->tps1_1AdcChannel);
-	addChannel("TPS", engineConfiguration->tps1_1AdcChannel, ADC_SLOW);
+	addFastAdcChannel("TPS", engineConfiguration->tps1_1AdcChannel);
 }
 
 #include <setjmp.h>
@@ -123,4 +122,8 @@ void longjmp(jmp_buf /*env*/, int /*status*/) {
 int setjmp(jmp_buf /*env*/) {
 	// Fake return 0, not implemented
 	return 0;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_ConfigOverrides = kinetis_boardConfigOverrides;
 }

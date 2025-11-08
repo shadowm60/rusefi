@@ -11,7 +11,6 @@
 #include "global.h"
 
 #define INITIAL_PIN_STATE -1
-#define GPIO_NULL NULL
 
 // mode >= 0  is always true since that's an unsigned
 #define assertOMode(mode) { \
@@ -34,6 +33,8 @@ void efiSetPadUnused(brain_pin_e brainPin);
 
 #if EFI_GPIO_HARDWARE
 bool efiReadPin(brain_pin_e pin);
+bool efiReadPin(brain_pin_e pin, pin_input_mode_e mode);
+bool efiIsInputPinInverted(pin_input_mode_e mode);
 
 iomode_t getInputMode(pin_input_mode_e mode);
 

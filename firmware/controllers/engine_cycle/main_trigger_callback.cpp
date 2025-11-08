@@ -47,7 +47,7 @@
 
 #include "backup_ram.h"
 
-void endSimultaneousInjection(InjectionEvent *event) {
+void endSimultaneousInjection(InjectionEvent* event) {
 	endSimultaneousInjectionOnlyTogglePins();
 	event->update();
 }
@@ -107,7 +107,10 @@ void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float n
 
 		float actualInjectedMass = numberOfInjections * (injectionMassStage1 + injectionMassStage2);
 
+#ifdef MODULE_ODOMETER
 		engine->module<TripOdometer>()->consumeFuel(actualInjectedMass, nowNt);
+#endif // MODULE_ODOMETER
+
 	}
 #endif // EFI_VEHICLE_SPEED
 
@@ -123,11 +126,21 @@ void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float n
 #endif /*EFI_PRINTF_FUEL_DETAILS */
 
 	if (this->cylinderNumber == 0) {
+		if (engine->outputChannels.actualLastInjection) {
+			engine->outputChannels.actualLastInjectionRatio = injectionDurationStage1 / engine->outputChannels.actualLastInjection;
+		} else {
+			engine->outputChannels.actualLastInjectionRatio = 0;
+		}
+		if (engine->outputChannels.actualLastInjectionStage2) {
+			engine->outputChannels.actualLastInjectionRatioStage2 = injectionDurationStage2 / engine->outputChannels.actualLastInjectionStage2;
+		} else {
+			engine->outputChannels.actualLastInjectionRatioStage2 = 0;
+		}
 		engine->outputChannels.actualLastInjection = injectionDurationStage1;
 		engine->outputChannels.actualLastInjectionStage2 = injectionDurationStage2;
 	}
 
-	if (cisnan(injectionDurationStage1) || cisnan(injectionDurationStage2)) {
+	if (std::isnan(injectionDurationStage1) || std::isnan(injectionDurationStage2)) {
 		warning(ObdCode::CUSTOM_OBD_NAN_INJECTION, "NaN injection pulse");
 		return;
 	}
@@ -142,6 +155,9 @@ void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float n
 	// see https://github.com/rusefi/rusefi/pull/596 for more details
 	if (injectionDurationStage1 < 0.050f)
 	{
+#if EFI_PROD_CODE
+		warning(ObdCode::CUSTOM_OBD_impossibly_short_INJECTION, "Short pulse %.2f", injectionDurationStage1);
+#endif
 		return;
 	}
 
@@ -162,20 +178,15 @@ void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float n
 	action_s startAction, endActionStage1, endActionStage2;
 	// We use different callbacks based on whether we're running sequential mode or not - everything else is the same
 	if (isSimultaneous) {
-		startAction = startSimultaneousInjection;
-		endActionStage1 = { &endSimultaneousInjection, this };
+		startAction = action_s::make<startSimultaneousInjection>();
+		endActionStage1 = action_s::make<endSimultaneousInjection>(this);
 	} else {
-		uintptr_t startActionPtr = reinterpret_cast<uintptr_t>(this);
-
-		if (hasStage2Injection) {
-			// Set the low bit in the arg if there's a secondary injection to start too
-			startActionPtr |= 1;
-		}
+		auto const taggedPointer{TaggedPointer<decltype(this)>::make(this, hasStage2Injection)};
 
 		// sequential or batch
-		startAction = { &turnInjectionPinHigh, startActionPtr };
-		endActionStage1 = { &turnInjectionPinLow, this };
-		endActionStage2 = { &turnInjectionPinLowStage2, this };
+		startAction = action_s::make<turnInjectionPinHigh>( taggedPointer.getRaw() );
+		endActionStage1 = action_s::make<turnInjectionPinLow>( this );
+		endActionStage2 = action_s::make<turnInjectionPinLowStage2>( this );
 	}
 
 	// Correctly wrap injection start angle
@@ -189,25 +200,25 @@ void InjectionEvent::onTriggerTooth(efitick_t nowNt, float currentPhase, float n
 
 	// Schedule closing stage 1
 	efitick_t turnOffTimeStage1 = startTime + US2NT((int)durationUsStage1);
-	getExecutorInterface()->scheduleByTimestampNt("inj", nullptr, turnOffTimeStage1, endActionStage1);
+	getScheduler()->schedule("inj", nullptr, turnOffTimeStage1, endActionStage1);
 
 	// Schedule closing stage 2 (if applicable)
 	if (hasStage2Injection && endActionStage2) {
 		efitick_t turnOffTimeStage2 = startTime + US2NT((int)durationUsStage2);
-		getExecutorInterface()->scheduleByTimestampNt("inj stage 2", nullptr, turnOffTimeStage2, endActionStage2);
+		getScheduler()->schedule("inj stage 2", nullptr, turnOffTimeStage2, endActionStage2);
 	}
 
-#if EFI_DEFAILED_LOGGING
+#if EFI_DETAILED_LOGGING
 	printf("scheduling injection angle=%.2f/delay=%d injectionDuration=%d %d\r\n", angleFromNow, (int)NT2US(startTime - nowNt), (int)durationUsStage1, (int)durationUsStage2);
 #endif
-#if EFI_DEFAILED_LOGGING
+#if EFI_DETAILED_LOGGING
 	efiPrintf("handleFuel pin=%s eventIndex %d duration=%.2fms %d", outputs[0]->name,
 			injEventIndex,
 			injectionDurationStage1,
 			getRevolutionCounter());
 	efiPrintf("handleFuel pin=%s delay=%.2f %d", outputs[0]->name, NT2US(startTime - nowNt),
 			getRevolutionCounter());
-#endif /* EFI_DEFAILED_LOGGING */
+#endif /* EFI_DETAILED_LOGGING */
 }
 
 static void handleFuel(efitick_t nowNt, float currentPhase, float nextPhase) {
@@ -247,27 +258,20 @@ static void handleFuel(efitick_t nowNt, float currentPhase, float nextPhase) {
 void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_t currentPhase, angle_t nextPhase) {
 	ScopePerf perf(PE::MainTriggerCallback);
 
-#if ! HW_CHECK_MODE
 	if (hasFirmwareError()) {
 		/**
 		 * In case on a major error we should not process any more events.
 		 */
 		return;
 	}
-#endif // HW_CHECK_MODE
 
-	int rpm = engine->rpmCalculator.getCachedRpm();
+	float rpm = engine->rpmCalculator.getCachedRpm();
 	if (rpm == 0) {
 		// this happens while we just start cranking
 
 		// todo: check for 'trigger->is_synchnonized?'
 		return;
 	}
-	if (rpm == NOISY_RPM) {
-		warning(ObdCode::OBD_Crankshaft_Position_Sensor_A_Circuit_Malfunction, "noisy trigger");
-		return;
-	}
-
 
 	if (trgEventIndex == 0) {
 
@@ -275,12 +279,16 @@ void mainTriggerCallback(uint32_t trgEventIndex, efitick_t edgeTimestamp, angle_
 			getIgnitionEvents()->isReady = false; // we need to rebuild complete ignition schedule
 			getFuelSchedule()->isReady = false;
 			// moved 'triggerIndexByAngle' into trigger initialization (why was it invoked from here if it's only about trigger shape & optimization?)
-			// see updateTriggerWaveform() -> prepareOutputSignals()
+			// see updateTriggerConfiguration() -> prepareOutputSignals()
 
 			// we need this to apply new 'triggerIndexByAngle' values
 			engine->periodicFastCallback();
 		}
 	}
+
+	engine->engineModules.apply_all([=](auto & m) {
+		m.onEnginePhase(rpm, edgeTimestamp, currentPhase, nextPhase);
+	});
 
 	/**
 	 * For fuel we schedule start of injection based on trigger angle, and then inject for

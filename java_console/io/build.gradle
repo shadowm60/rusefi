@@ -1,10 +1,5 @@
-plugins {
-    id 'java-library'
-    id 'java-test-fixtures'
-}
-
 apply from: '../../android/dependencies.gradle'
-apply from: '../../java_tools/dependencies.gradle'
+apply from: dependenciesPath
 
 configurations {
     all*.exclude group: 'org.hamcrest', module: 'hamcrest-core'
@@ -16,30 +11,25 @@ tasks.withType(Test) {
 
 dependencies {
     implementation global_libs.javaxJson
+
     api global_libs.jcip
+
+    // attempt to fix xml binding drama (see #7878, #7430)
+    api global_libs.jaxb
+
     api project(':models')
     api project(':peak-can-basic')
     api project(':core_io')
     api project(':logging')
 
-    implementation group: 'com.fazecast', name: 'jSerialComm', version: '2.10.3'
+    api group: 'com.fazecast', name: 'jSerialComm', version: '2.11.2'
     implementation group: 'tel.schich', name: 'javacan-core', version: "$javaCanVersion"
     implementation group: 'tel.schich', name: 'javacan-core', version: "$javaCanVersion", classifier: 'x86_64'
     implementation global_libs.json
-    implementation ts_plugin_libs.httpclient
+    api ts_plugin_libs.httpclient
+    api ts_plugin_libs.httpcore
 
-    testFixturesImplementation global_libs.mockito
+    testFixturesApi global_libs.mockito
     testFixturesApi global_libs.annotations
     testFixturesApi global_libs.junit5api
-}
-
-tasks.register('copyJniHeader', Copy) {
-    dependsOn("compileJava")
-    from 'build/generated/sources/headers/java/main'
-    into "../../unit_tests/native"
-    include 'com*.h'
-}
-
-test {
-    dependsOn("copyJniHeader")
 }

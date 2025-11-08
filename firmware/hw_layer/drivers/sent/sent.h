@@ -9,15 +9,21 @@
 
 #pragma once
 
+#if EFI_SENT_SUPPORT
+
+#include "sent_decoder.h"
+
 /* SENT decoder init */
 void initSent();
 
-/* ISR hook */
-void SENT_ISR_Handler(uint8_t ch, uint16_t val_res);
+/* decoder feed hook */
+void SENT_ISR_Handler(uint8_t channels, uint16_t clocks, uint8_t flags);
 
 /* Stop/Start for config update */
 void startSent();
 void stopSent();
 
-float getSentValue(size_t index);
-int getSentValues(size_t index, uint16_t *sig0, uint16_t *sig1);
+float getSentValue(SentInput input);
+int getSentValues(SentInput input, uint16_t *sig0, uint16_t *sig1);
+
+#endif /* EFI_SENT_SUPPORT */

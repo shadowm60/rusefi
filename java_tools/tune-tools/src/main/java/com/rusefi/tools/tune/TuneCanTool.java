@@ -4,11 +4,15 @@ import com.devexperts.logging.Logging;
 import com.opensr5.ini.DialogModel;
 import com.opensr5.ini.IniFileModel;
 import com.rusefi.*;
-import com.rusefi.config.generated.Fields;
 import com.rusefi.core.preferences.storage.Node;
+import com.rusefi.enums.engine_type_e;
+import com.rusefi.output.ConfigStructure;
+import com.rusefi.parse.TypesHelper;
 import com.rusefi.tune.xml.Constant;
 import com.rusefi.tune.xml.Msq;
+import com.rusefi.xml.XmlUtil;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.xml.bind.JAXBException;
 import java.io.File;
@@ -19,12 +23,11 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Objects;
+import java.util.*;
 
 import static com.devexperts.logging.Logging.getLogging;
 import static com.rusefi.ConfigFieldImpl.unquote;
 import static com.rusefi.config.Field.niceToString;
-import static com.rusefi.tools.tune.WriteSimulatorConfiguration.INI_FILE_FOR_SIMULATOR;
 
 /**
  * this command line utility compares two TS calibration files and produces .md files with C++ source code of the difference between those two files.
@@ -38,34 +41,44 @@ import static com.rusefi.tools.tune.WriteSimulatorConfiguration.INI_FILE_FOR_SIM
  */
 public class TuneCanTool {
     private static final Logging log = getLogging(TuneCanTool.class);
-    private static final String REPORTS_OUTPUT_FOLDER = "tune_reports";
+    private static final String REPORTS_OUTPUT_FOLDER = "canned-tunes";
 
-    public static final String SRC_TEST_RESOURCES = "src/test/resources/";
-    private static final String FOLDER = "generated";
-    public static final String SIMULATED_PREFIX = FOLDER + File.separator + "simulator_tune";
-    public static final String SIMULATED_SUFFIX = ".xml";
-    public static final String DEFAULT_TUNE = SIMULATED_PREFIX + SIMULATED_SUFFIX;
+    public static final String SIMULATED_PREFIX = "simulator_tune";
+    public static final String TUNE_FILE_SUFFIX = ".msq";
+    public static final String DEFAULT_TUNE = SIMULATED_PREFIX + TUNE_FILE_SUFFIX;
     private static final String workingFolder = "downloaded_tunes";
+    public static final String MD_FIXED_FORMATTING = ""; // in reality we do not care for .md? "```\n";
+    // IDE and GHA run from different working folders :(
+    // see write_tune.sh for env variable to property mapping
+    static final String ENGINE_TUNE_OUTPUT_FOLDER = System.getProperty("ENGINE_TUNE_OUTPUT_FOLDER", "../simulator/generated/");
+    private static final String EXTENSION = ".cpp";
+    public static String boardPath = new File("config/boards/hellen/uaefi/").getAbsolutePath();
 
-    private static IniFileModel ini;
+    protected static IniFileModel ini;
+
+    static {
+        log.info("ENGINE_TUNE_OUTPUT_FOLDER=" + ENGINE_TUNE_OUTPUT_FOLDER);
+    }
 
 
     public static void main(String[] args) throws Exception {
-        ini = new IniFileModel().readIniFile(INI_FILE_FOR_SIMULATOR);
-        if (ini == null)
-            throw new IllegalStateException("Not found " + INI_FILE_FOR_SIMULATOR);
+        //writeDiffBetweenLocalTuneFileAndDefaultTune("../1.msq");
 
+//        TuneCanToolRunner.initialize("C:\\stuff\\fw\\generated\\tunerstudio\\generated\\rusefi_.ini");
         RootHolder.ROOT = "../firmware/";
+        TuneCanToolHelper.initialize(TuneContext.iniFileName);
 
-//        writeDiffBetweenLocalTuneFileAndDefaultTune("example.msq");
-
-//        writeDiffBetweenLocalTuneFileAndDefaultTune("vehicleName", getDefaultTuneName(Fields.engine_type_e_MAVERICK_X3),
-//            "C:\\stuff\\i\\canam-2022-short\\canam-progress-pnp-dec-29.msq",  "comment");
+//        writeDiffBetweenLocalTuneFileAndDefaultTune("harley", "C:\\stuff\\fw\\fw-\\generated\\simulator_tune_HARLEY.msq",
+//            "c:\\stuff\\hd-\\tunes\\pnp-april-8-inverted-offsets.msq","comment", "");
 
 
-//        processREOtune(1507, Fields.engine_type_e_HELLEN_154_HYUNDAI_COUPE_BK2, "BK2");
-        processREOtune(1576, Fields.engine_type_e_HYUNDAI_PB, "PB");
-//        processREOtune(1490, Fields.engine_type_e_MRE_M111, "m111-alex");
+//        writeDiffBetweenLocalTuneFileAndDefaultTune("vehicleName", getDefaultTuneName(engine_type_e.HONDA_OBD1),
+//            "C:\\stuff\\\\2024-03-09-CurrentTune.msq", "comment", "");
+
+        writeDiffBetweenLocalTuneFileAndDefaultTune("canam", "C:\\stuff\\fw\\fw-\\generated\\simulator_tune_MAVERICK_X3.msq",
+            "C:\\stuff\\i\\!snapshots\\2024-07-16_14.28.35_default_cal_001.msq", "comment", "");
+
+
 //        handle("Mitsubicha", 1258);
 //        handle("Scion-1NZ-FE", 1448);
 //        handle("4g93", 1425);
@@ -75,38 +88,39 @@ public class TuneCanTool {
     /**
      * @see WriteSimulatorConfiguration
      */
-    private static void processREOtune(int tuneId, int engineType, String key) throws JAXBException, IOException {
+    protected static void processREOtune(int tuneId, engine_type_e engineType, String key,
+                                         String methodNamePrefix) throws JAXBException, IOException {
         // compare specific internet tune to total global default
-        handle(key, tuneId, TuneCanTool.DEFAULT_TUNE);
+        handle(key + "-comparing-against-global-defaults", tuneId, ENGINE_TUNE_OUTPUT_FOLDER + TuneCanTool.DEFAULT_TUNE, methodNamePrefix);
         // compare same internet tune to default tune of specified engine type
-        handle(key + "-diff", tuneId, getDefaultTuneName(engineType));
+        handle(key + "-comparing-against-current-" + key + "-default", tuneId, getDefaultTuneOutputFileName(engineType), methodNamePrefix);
     }
 
     @NotNull
-    private static String getDefaultTuneName(int engineType) {
-        return SIMULATED_PREFIX + "_" + engineType + SIMULATED_SUFFIX;
+    public static String getDefaultTuneOutputFileName(engine_type_e engineType) {
+        return ENGINE_TUNE_OUTPUT_FOLDER + SIMULATED_PREFIX + "_" + engineType.name() + TUNE_FILE_SUFFIX;
     }
 
-    private static void handle(String vehicleName, int tuneId, String defaultTuneFileName) throws JAXBException, IOException {
+    private static void handle(String vehicleName, int tuneId, String defaultTuneFileName, String methodNamePrefix) throws JAXBException, IOException {
         String customTuneFileName = workingFolder + File.separator + tuneId + ".msq";
         String url = "https://rusefi.com/online/view.php?msq=" + tuneId;
 
         downloadTune(tuneId, customTuneFileName);
 
-        writeDiffBetweenLocalTuneFileAndDefaultTune(vehicleName, defaultTuneFileName, customTuneFileName, url);
+        writeDiffBetweenLocalTuneFileAndDefaultTune(vehicleName, defaultTuneFileName, customTuneFileName, url, methodNamePrefix);
     }
 
-//    private static void writeDiffBetweenLocalTuneFileAndDefaultTune(String localFileName) throws JAXBException, IOException {
-//        writeDiffBetweenLocalTuneFileAndDefaultTune("vehicleName", DEFAULT_TUNE,
-//            localFileName,  "comment");
-//    }
+    private static void writeDiffBetweenLocalTuneFileAndDefaultTune(String localFileName) throws JAXBException, IOException {
+        writeDiffBetweenLocalTuneFileAndDefaultTune("vehicleName", DEFAULT_TUNE,
+            localFileName, "comment", "");
+    }
 //
 //    private static void writeDiffBetweenLocalTuneFileAndDefaultTune(int engineCode, String localFileName, String cannedComment) throws JAXBException, IOException {
 //        writeDiffBetweenLocalTuneFileAndDefaultTune("vehicleName", getDefaultTuneName(engineCode),
 //            localFileName,  cannedComment);
 //    }
 
-    private static void writeDiffBetweenLocalTuneFileAndDefaultTune(String vehicleName, String defaultTuneFileName, String customTuneFileName, String cannedComment) throws JAXBException, IOException {
+    public static void writeDiffBetweenLocalTuneFileAndDefaultTune(String vehicleName, String defaultTuneFileName, String customTuneFileName, String cannedComment, String methodNamePrefix) throws JAXBException, IOException {
         new File(REPORTS_OUTPUT_FOLDER).mkdir();
 
         Msq customTune = Msq.readTune(customTuneFileName);
@@ -114,24 +128,30 @@ public class TuneCanTool {
 
         StringBuilder methods = new StringBuilder();
 
-        StringBuilder sb = getTunePatch(defaultTune, customTune, ini, customTuneFileName, methods, defaultTuneFileName);
+        StringBuilder sb = getTunePatch(defaultTune, customTune, ini, customTuneFileName, methods, defaultTuneFileName, methodNamePrefix);
 
-        String fileNameMethods = REPORTS_OUTPUT_FOLDER + "/" + vehicleName + "_methods.md";
+        final String folder = ENGINE_TUNE_OUTPUT_FOLDER + REPORTS_OUTPUT_FOLDER;
+        new File(folder).mkdirs();
+        String fileNameMethods = folder + "/" + vehicleName + "_methods" + EXTENSION;
         try (FileWriter methodsWriter = new FileWriter(fileNameMethods)) {
+            methodsWriter.append(MD_FIXED_FORMATTING);
             methodsWriter.append(methods);
+            methodsWriter.append(MD_FIXED_FORMATTING);
         }
 
-        String fileName = REPORTS_OUTPUT_FOLDER + "/" + vehicleName + ".md";
+        String fileName = folder + "/" + vehicleName + EXTENSION;
         File outputFile = new File(fileName);
         log.info("Writing to " + outputFile.getAbsolutePath());
 
         try (FileWriter w = new FileWriter(outputFile)) {
-            w.append("# " + vehicleName + "\n\n");
+            w.append("static void defaults" + methodNamePrefix + "() {\n");
             w.append("// canned tune " + cannedComment + "\n\n");
+            w.append("// canned tune " + vehicleName + "\n\n");
 
-            w.append("```\n");
+            w.append(MD_FIXED_FORMATTING);
             w.append(sb);
-            w.append("```\n");
+            w.append("}\n");
+            w.append(MD_FIXED_FORMATTING);
         }
         log.info("Done writing to " + outputFile.getAbsolutePath() + "!");
     }
@@ -163,22 +183,43 @@ public class TuneCanTool {
         return value.replaceAll("\\s+", " ").trim();
     }
 
+    public static String getParentReference(ConfigField cf, StringBuffer cName) {
+    	  String parentReference;
+          if (cf.getParentStructureType().getName().equals(MetaHelper.ENGINE_CONFIGURATION_S)) {
+              parentReference = "engineConfiguration->";
+          } else if (cf.getParentStructureType().getName().equals(MetaHelper.PERSISTENT_CONFIG_S)) {
+              parentReference = "config->";
+          } else {
+              String path = getPath(cf.getParentStructureType());
+              parentReference = path + cName;
+          }
+          return parentReference;
+    }
+
+    // same logic as getTunePatch, used for testing getParentReference
+    public static ConfigField getReaderState(String fieldName) throws IOException {
+    	ReaderStateImpl state = MetaHelper.getReaderState(boardPath);
+    	StringBuffer context = new StringBuffer();
+    	ConfigField cf = MetaHelper.findField(state, fieldName, context);
+		return cf;
+    }
+
     @NotNull
-    public static StringBuilder getTunePatch(Msq defaultTune, Msq customTune, IniFileModel ini, String customTuneFileName, StringBuilder methods, String defaultTuneFileName) throws IOException {
-        ReaderStateImpl state = MetaHelper.getReaderState();
+    public static StringBuilder getTunePatch(Msq defaultTune, Msq customTune, IniFileModel ini, String customTuneFileName, StringBuilder methods, String defaultTuneFileName, String methodNamePrefix) throws IOException {
+        Objects.requireNonNull(ini, "ini");
+        ReaderStateImpl state = MetaHelper.getReaderState(boardPath);
 
         StringBuilder invokeMethods = new StringBuilder();
 
 
         StringBuilder sb = new StringBuilder();
-        for (DialogModel.Field f : ini.fieldsInUiOrder.values()) {
+        for (DialogModel.Field f : ini.getFieldsInUiOrder().values()) {
             String fieldName = f.getKey();
-//            System.out.println("Processing " + fieldName);
             Constant customValue = customTune.getConstantsAsMap().get(fieldName);
             Constant defaultValue = defaultTune.getConstantsAsMap().get(fieldName);
             if (defaultValue == null) {
                 // no longer present?
-                System.out.println("Not found in default tune: " + fieldName);
+                log.info("Not found in default tune: " + fieldName);
                 continue;
             }
             Objects.requireNonNull(defaultValue.getValue(), "d value");
@@ -190,86 +231,81 @@ public class TuneCanTool {
 
             boolean isSameValue = simplerSpaces(defaultValue.getValue()).equals(simplerSpaces(customValue.getValue()));
             if (isSameValue) {
-                System.out.println("Even text form matches default: " + fieldName);
+                log.info("Even text form matches default: " + fieldName);
                 continue;
             }
 
             // todo: what about stuff outside of engine_configuration_s?
             StringBuffer context = new StringBuffer();
 
+            // nasty: context is a return parameter
             ConfigField cf = MetaHelper.findField(state, fieldName, context);
             if (cf == null) {
-                log.info("Not found " + fieldName);
+                log.info("ConfigField Not found " + fieldName);
                 continue;
             }
-            String cName = context + cf.getOriginalArrayName();
+            if (TypesHelper.isFloat(cf.getTypeName()) && !cf.isArray()) {
+                float floatDefaultValue = Float.parseFloat(defaultValue.getValue());
+                float floatCustomValue = Float.parseFloat(customValue.getValue());
+                if (isValuesAreVeryNear(floatCustomValue, floatDefaultValue)) {
+                    log.info("Skipping rounding error " + floatDefaultValue + " vs " + floatCustomValue);
+                    continue;
+                }
+            }
 
-            if (cf.getType().equals("boolean")) {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, unquote(customValue.getValue())));
+            String cName = context + cf.getOriginalArrayName();
+            String parentReference = getParentReference(cf, new StringBuffer());
+
+            if (cf.getIterateOriginalName() != null && TuneCanToolHelper.IGNORE_LIST.contains(cf.getIterateOriginalName())) {
+                log.info("Ignoring " + cName);
+                continue;
+            }
+            if (!TuneCanToolHelper.accept(cName)) {
+                log.info("Ignoring " + cName);
+                continue;
+            }
+
+            if (isHardwareProperty(cf.getName())) {
+                continue;
+            }
+
+            if (cf.getTypeName().equals("boolean")) {
+            	Boolean configFieldState = unquote(cf.getTrueName()).equals(unquote(customValue.getValue()));
+
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, configFieldState.toString()));
                 continue;
             }
 
             if (cf.isArray()) {
-                String parentReference;
-                if (cf.getParent().getName().equals("engine_configuration_s")) {
-                    parentReference = "engineConfiguration->";
-                } else if (cf.getParent().getName().equals("persistent_config_s")) {
-                    parentReference = "config->";
-                } else {
-                    // todo: for instance map.samplingAngle
-                    //throw new IllegalStateException("Unexpected " + cf.getParent());
-                    System.out.println(" " + cf);
-                    continue;
-                }
-
+            	parentReference = getParentReference(cf, context);
 
                 if (cf.getArraySizes().length == 2) {
-                    TableData tableData = TableData.readTable(customTuneFileName, fieldName, ini);
-                    if (tableData == null) {
-                        System.out.println(" " + fieldName);
+                    TableResult result = getHandleTable(ini, customTuneFileName, defaultTuneFileName, methodNamePrefix, fieldName, cf, parentReference);
+                    if (result == null)
                         continue;
-                    }
-                    System.out.println("Handling table " + fieldName);
-
-                    if (defaultTuneFileName != null) {
-                        TableData defaultTableData = TableData.readTable(defaultTuneFileName, fieldName, ini);
-                        if (defaultTableData.getCsourceMethod(parentReference).equals(tableData.getCsourceMethod(parentReference))) {
-                            System.out.println("Table " + fieldName + " matches default content");
-                            continue;
-                        }
-                    }
-                    System.out.println("Custom content in table " + fieldName);
 
 
-                    methods.append(tableData.getCsourceMethod(parentReference));
-                    invokeMethods.append(tableData.getCinvokeMethod());
+                    methods.append(result.customContent);
+                    invokeMethods.append(result.tableData.getCinvokeMethod(methodNamePrefix));
                     continue;
                 }
 
                 CurveData data = CurveData.valueOf(customTuneFileName, fieldName, ini);
-                if (data == null)
+                // see #7832 for reason of use cf.getName() instated of getOriginalArrayName()
+                String customContent = handleCurve(ini, defaultTuneFileName, methodNamePrefix, data, parentReference, cf.getName(), fieldName);
+                if (customContent == null)
                     continue;
 
-                if (defaultTuneFileName != null) {
-                    CurveData defaultCurveData = CurveData.valueOf(defaultTuneFileName, fieldName, ini);
-                    if (defaultCurveData.getCinvokeMethod().equals(data.getCinvokeMethod())) {
-                        System.out.println("Curve " + fieldName + " matches default content");
-                        continue;
-                    }
-                }
-                System.out.println("Custom content in curve " + fieldName);
-
-                methods.append(data.getCsourceMethod(parentReference));
-                invokeMethods.append(data.getCinvokeMethod());
+                methods.append(customContent);
+                invokeMethods.append(data.getCinvokeMethod(methodNamePrefix));
 
                 continue;
             }
 
-
             if (!Node.isNumeric(customValue.getValue())) {
                 // todo: smarter logic for enums
 
-                String type = cf.getType();
+                String type = cf.getTypeName();
                 if (isHardwareEnum(type)) {
                     continue;
                 }
@@ -282,7 +318,7 @@ public class TuneCanTool {
 
                 int ordinal;
                 try {
-                    ordinal = TuneTools.resolveEnumByName(customEnum, unquote(customValue.getValue()));
+                    ordinal = TuneTools.resolveEnumByName(customEnum, unquote(customValue.getValue()), ini.getDefines());
                 } catch (IllegalStateException e) {
                     log.info("Looks like things were renamed: " + customValue.getValue() + " not found in " + customEnum);
                     continue;
@@ -291,7 +327,7 @@ public class TuneCanTool {
                 log.info(cf + " " + sourceCodeEnum + " " + customEnum + " " + ordinal);
 
                 String sourceCodeValue = sourceCodeEnum.findByValue(ordinal);
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, sourceCodeValue));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, sourceCodeValue));
 
                 continue;
             }
@@ -299,9 +335,9 @@ public class TuneCanTool {
             int intValue = (int) doubleValue;
             boolean isInteger = intValue == doubleValue;
             if (isInteger) {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, Integer.toString(intValue)));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, Integer.toString(intValue)));
             } else {
-                sb.append(TuneTools.getAssignmentCode(defaultValue, cName, niceToString(doubleValue)));
+                sb.append(TuneTools.getAssignmentCode(defaultValue, parentReference, cName, niceToString(doubleValue)));
             }
 
         }
@@ -310,4 +346,116 @@ public class TuneCanTool {
         return sb;
     }
 
+    private static @Nullable TuneCanTool.TableResult getHandleTable(IniFileModel ini, String customTuneFileName, String defaultTuneFileName, String methodNamePrefix, String fieldName, ConfigField cf, String parentReference) throws IOException {
+        TableData tableData = TableData.readTable(customTuneFileName, fieldName, ini);
+        if (tableData == null) {
+            log.info(" " + fieldName);
+            return null;
+        }
+        log.info("Handling table " + fieldName + ", C table name:" + parentReference + cf.getName() + " with " + cf.autoscaleSpecPair());
+
+        // usage of cf.getName() instead of tableData.getName() since TS tables and C tables differ on naming (ie gppwm1_table vs gppwm[0].table)
+        String customContent = tableData.getCsourceMethod(parentReference, methodNamePrefix, cf.getName());
+        if (defaultTuneFileName != null) {
+            TableData defaultTableData = TableData.readTable(defaultTuneFileName, fieldName, ini);
+            String defaultContent = defaultTableData.getCsourceMethod(parentReference, methodNamePrefix, cf.getName());
+            if (defaultContent.equals(customContent)) {
+                log.info("Table " + fieldName + " matches default content");
+                return null;
+            }
+            log.info("Custom content in table " + fieldName);
+        } else {
+            log.info("New table " + fieldName);
+        }
+        return new TableResult(tableData, customContent);
+    }
+
+    private static class TableResult {
+        public final TableData tableData;
+        public final String customContent;
+
+        public TableResult(TableData tableData, String customContent) {
+            this.tableData = tableData;
+            this.customContent = customContent;
+        }
+    }
+
+    private static @Nullable String handleCurve(IniFileModel ini, String defaultTuneFileName, String methodNamePrefix, CurveData data, String parentReference, String cName, String fieldName) throws IOException {
+        if (data == null)
+            return null;
+
+        String customContent = data.getCsourceMethod(parentReference, methodNamePrefix, cName);
+        if (defaultTuneFileName != null) {
+            CurveData defaultCurveData = CurveData.valueOf(defaultTuneFileName, fieldName, ini);
+            String defaultContent = defaultCurveData.getCsourceMethod(parentReference, methodNamePrefix, cName);
+            if (defaultContent.equals(customContent)) {
+                log.info("Curve " + fieldName + " matches default content");
+                return null;
+            }
+            if (isSameValue(data, defaultCurveData)) {
+                log.info("Curve " + fieldName + " values are pretty close");
+                return null;
+            }
+            log.info("Custom content in curve " + fieldName);
+        } else {
+            log.info("New curve " + fieldName);
+        }
+        return customContent;
+    }
+
+    private static boolean isSameValue(CurveData data, CurveData defaultContent) {
+        float[] data1array = data.getRawData();
+        float[] data2array = defaultContent.getRawData();
+        if (data1array.length != data2array.length)
+            return false;
+        for (int i = 0; i < data1array.length; i++) {
+            if (!isValuesAreVeryNear(data1array[i], data2array[i]))
+                return false;
+        }
+        return true;
+    }
+
+    private static boolean isValuesAreVeryNear(float floatCustomValue, float floatDefaultValue) {
+        if (floatCustomValue == 0 && floatDefaultValue == 0)
+            return true;
+        return floatCustomValue != 0 && Math.abs(floatDefaultValue / floatCustomValue - 1) < 0.001;
+    }
+
+    private static String getPath(ConfigStructure parentType) {
+        String parentTypeName = parentType.getName();
+        ConfigField configField = parentType.getParent().getCurrentInstance().get(parentTypeName);
+        ConfigStructure grandFather = configField.getParentStructureType();
+        String grandParentName;
+        if (grandFather.getName().equals("persistent_config_s")) {
+            grandParentName = "config->";
+        } else if (grandFather.getName().equals("engine_configuration_s")) {
+            grandParentName = "engineConfiguration->";
+        } else {
+            throw new IllegalStateException("Unexpected grandParentName " + grandFather);
+        }
+        return grandParentName;
+    }
+
+    private final static Set<String> HARDWARE_PROPERTIES = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+    static {
+        HARDWARE_PROPERTIES.addAll(Arrays.asList(
+            "invertPrimaryTriggerSignal",
+            "invertSecondaryTriggerSignal",
+            "invertCamVVTSignal",
+            "adcVcc",
+            "vbattDividerCoeff",
+            "warningPeriod", // inconsistency between prod code and simulator
+            "engineChartSize", // inconsistency between prod code and simulator
+            "displayLogicLevelsInEngineSniffer",
+            "isSdCardEnabled",
+            "is_enabled_spi_1",
+            "is_enabled_spi_2",
+            "is_enabled_spi_3"
+        ));
+    }
+
+    private static boolean isHardwareProperty(String name) {
+        return HARDWARE_PROPERTIES.contains(name);
+    }
 }

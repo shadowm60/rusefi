@@ -17,8 +17,16 @@
 // set engine_type 32
 void setVwAba() {
 	setFrankensoConfiguration();
+	engineConfiguration->camInputs[0] = Gpio::E0; // a random unused pin needed for happy HW CI
 
-	setWholeTimingTable_d(20);
+  // default PC1-5 ADC pins conflict with the ethernet module on F767, used on HW CI
+	engineConfiguration->tps1_1AdcChannel = EFI_ADC_32;
+	engineConfiguration->vbattAdcChannel = EFI_ADC_33;
+	engineConfiguration->clt.adcChannel = EFI_ADC_34;
+	engineConfiguration->iat.adcChannel = EFI_ADC_35;
+	engineConfiguration->afr.hwChannel = EFI_ADC_36;
+
+	setWholeTimingTable(20);
 	// set cranking_timing_angle 10
 	engineConfiguration->crankingTimingAngle = 10;
 
@@ -33,21 +41,10 @@ void setVwAba() {
 	engineConfiguration->displacement = 2.0;
 	engineConfiguration->injector.flow = 320; // 30lb/h
 	// set algorithm 3
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 	engineConfiguration->map.sensor.type = MT_GM_3_BAR;
 
 	engineConfiguration->ignitionMode = IM_ONE_COIL;
-
-#if HW_FRANKENSO
-	engineConfiguration->mafAdcChannel = EFI_ADC_1;
-	engineConfiguration->ignitionPins[0] = Gpio::E14; // Frankenso high side - pin 1G
-	engineConfiguration->ignitionPins[1] = Gpio::Unassigned;
-	engineConfiguration->ignitionPins[2] = Gpio::Unassigned;
-	engineConfiguration->ignitionPins[3] = Gpio::Unassigned;
-
-	engineConfiguration->idlePositionChannel = EFI_ADC_3; // PA3
-	engineConfiguration->wastegatePositionSensor = EFI_ADC_4; // PA4
-#endif // HW_FRANKENSO
 
 	float mapRange = 110;
 
@@ -60,7 +57,8 @@ void setVwAba() {
 	engineConfiguration->tpsMax = 135;
 }
 
-void setHellen121Vag_5_cyl() {
+void setVag_5_cyl() {
+  strcpy(engineConfiguration->engineMake, ENGINE_MAKE_VAG);
 	engineConfiguration->cylindersCount = 5;
 	engineConfiguration->displacement = 2.5;
 	engineConfiguration->firingOrder = FO_1_2_4_5_3;

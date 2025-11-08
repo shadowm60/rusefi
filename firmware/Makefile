@@ -2,6 +2,39 @@
 # see readme.md
 # see setup_linux_environment.sh but Windows is also totally fine
 #
+##############################################################################
+# The most advanced open source ECU has the most advanced Makefile!
+# Here we do a bit of code generation, compile custom bootloader and embedded firmware and even build user artifacts!
+#
+# In order for Make to know which board you are trying to build for, it needs some parameters.
+# BOARD_DIR - relative to the firmware dir, will be set to config/boards/f407-discovery if left empty
+# SHORT_BOARD_NAME - will be set to f407-discovery if left empty
+# PROJECT_BOARD - will be set to SHORT_BOARD_NAME if left empty
+#
+# You can set these as environment variables like this:
+# source config/boards/common_script_read_meta_env.inc config/boards/f407-discovery/meta-info.env
+# source config/boards/common_script_read_meta_env.inc config/boards/subaru_eg33/meta-info-subaru_eg33_f7.env
+# source config/boards/common_script_read_meta_env.inc firmware/config/boards/hellen/hellen154hyundai_f7/meta-info-hellen154hyundai_f7.env
+#
+# There is also a script to compile the firmware to avoid messing with your environment variables.
+# ./bin/compile.sh config/boards/f407-discovery/meta-info.env
+# Or to package the bundles:
+# ./bin/compile.sh -b config/boards/f407-discovery/meta-info.env
+# If not provided with a path to a meta-info file, compile.sh will let you select a target.
+#
+# If you wish to call make directly, here are the available commands:
+#
+# make docs-enums	Generate docs and enums
+# make config			Generate docs, enums, and configs
+# make						Generate docs, enums, configs, and build firmware
+# make bundle			Generate docs, enums, configs, build bootloader, build firmware, and package full bundle
+# make autoupdate	Generate docs, enums, configs, build bootloader, build firmware, and package autoupdate bundle
+# make bundles		Generate docs, enums, configs, build bootloader, build firmware, and package both full and autoupdate bundles
+# make bootloader Generate docs, enums, configs, and build bootloader
+# make ../simulator/build/rusefi_simulator.exe build Windows simulator (even if invoked on Linux)
+# bin/compile.sh config/boards/f407-discovery/meta-info.env ../simulator/build/rusefi_simulator.linux build Linux simulator
+# make ../simulator/build/rusefi_simulator.both build _both_ Windows and Linux simulator (do we need that? shall we drop that?)
+#
 
 CHIBIOS = ChibiOS
 RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk
@@ -10,8 +43,6 @@ RULESFILE = $(RULESPATH)/rules.mk
 ifneq ("$(wildcard $(../.git))","")
 $(error "../.git not found. We expect source code to be cloned not downloaded as zip file.")
 endif
-
-include rusefi_rules.mk
 
 # Define project name here
 PROJECT = rusefi
@@ -25,15 +56,9 @@ PCHSUB = firmware
 # Imported source files and paths
 CHIBIOS_CONTRIB = ChibiOS-Contrib
 
-# Configure libfirmware Paths/Includes
-RUSEFI_LIB = $(PROJECT_DIR)/libfirmware
-include $(RUSEFI_LIB)/util/util.mk
-include $(RUSEFI_LIB)/pt2001/pt2001.mk
+include $(PROJECT_DIR)/common_libfirmware.mk
 
 include rusefi.mk
-
-# by default EXTRA_PARAMS is empty and we create 'debug' version of the firmware with additional assertions and statistics
-# for 'release' options see 'clean_compile_two_versions.bat' file
 
 ifeq ($(DEBUG_LEVEL_OPT),)
   # Default to a release build - but leave in debug info.  It doesn't change the hex/bin output.
@@ -49,13 +74,16 @@ endif
 # yes we have two kinds of EXTRA_*PARAMS so that we can define those in two different places independently
 #
 ifeq ($(USE_OPT),)
-  USE_OPT = $(EXTRA_PARAMS) $(EXTRA_2_PARAMS) $(DEBUG_LEVEL_OPT) $(RFLAGS) -fomit-frame-pointer -fsingle-precision-constant  -fno-inline-functions
+  USE_OPT = $(EXTRA_PARAMS) $(EXTRA_2_PARAMS) $(EXTRA_3_PARAMS) $(DEBUG_LEVEL_OPT) $(RFLAGS) -fomit-frame-pointer -fsingle-precision-constant  -fno-inline-functions
 endif
 
 # EFI_UNIT_TEST determines if we are running in a unit test (hide things from hw/sim)
 # EFI_PROD_CODE determines if we are running on real hardware (hide things from tests/sim)
 # EFI_SIMULATOR determines if we are running in the simulator (hide things from hw/tests)
 USE_OPT += $(RUSEFI_OPT) -DEFI_UNIT_TEST=0 -DEFI_PROD_CODE=1 -DEFI_SIMULATOR=0
+
+# signalling to libfirmware that we have criticalError() method
+USE_OPT += -DWE_HAVE_CRITICAL_ERROR_METHOD
 
 # C specific options here (added to USE_OPT).
 ifeq ($(USE_COPT),)
@@ -93,6 +121,12 @@ ifeq ($(USE_LTO),)
   #
   USE_LTO = no
   USE_OPT += -flto=auto
+endif
+
+ifeq ($(OS),Windows_NT)
+   USE_OPT += -DIS_WINDOWS_COMPILER=1
+else
+   USE_OPT += -DIS_WINDOWS_COMPILER=0
 endif
 
 # If enabled, this option allows to compile the application in THUMB mode.
@@ -140,11 +174,6 @@ ifeq ($(USE_EXCEPTIONS_STACKSIZE),)
   USE_EXCEPTIONS_STACKSIZE = 0x1000
 endif
 
-# Enables the use of FPU on Cortex-M4 (no, softfp, hard).
-ifeq ($(USE_FPU),)
-  USE_FPU = hard
-endif
-
 # and this is not working for be :( See https://github.com/rusefi/rusefi/issues/638
 # use -j4 unless some value was specified
 NUMJOBS=${NUMJOBS:-" -j4 "}
@@ -173,6 +202,11 @@ DDEFS += -DSHORT_BOARD_NAME=$(SHORT_BOARD_NAME)
 # Include various ChibiOS mk files
 # Licensing files.
 include $(CHIBIOS)/os/license/license.mk
+
+# should be after 'board.mk'
+# includes ChibiOS's platform.mk for specified CPU
+include rusefi_rules.mk
+
 # Startup files.
 include $(CPU_STARTUP_DIR)
 # HAL-OSAL files (optional).
@@ -181,7 +215,7 @@ include $(CPU_PLATFORM)
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # RTOS files (optional).
 include $(CHIBIOS)/os/rt/rt.mk
-include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
+include $(CHIBIOS)/os/common/ports/ARMv7-M/compilers/GCC/mk/port.mk
 # EX files (optional).
 ifeq ($(EFI_ONBOARD_MEMS_LIS2DW12),yes)
   DDEFS += -DEFI_ONBOARD_MEMS_LIS2DW12=TRUE
@@ -209,6 +243,7 @@ endif
 include $(CHIBIOS)/os/hal/lib/complex/mfs/hal_mfs.mk
 
 ifeq ($(USE_FATFS),yes)
+  DDEFS += -DEFI_SUPPORT_FATFS=TRUE
   include $(CHIBIOS)/os/various/fatfs_bindings/fatfs.mk
 endif
 
@@ -225,6 +260,7 @@ endif
 
 include $(PROJECT_DIR)/hw_layer/mass_storage/mass_storage.mk
 include $(PROJECT_DIR)/common.mk
+include $(PROJECT_DIR)/controllers/modules/modules.mk
 
 ifeq ($(USE_OPENBLT),yes)
   # Reserve start of flash for OpenBLT
@@ -269,6 +305,7 @@ CPPSRC = \
   $(HW_LAYER_DRIVERS_CPP) \
   $(CONSOLE_SRC_CPP) \
   $(RUSEFI_LIB_CPP) \
+  $(MODULES_CPPSRC) \
   rusefi.cpp \
   main.cpp
 
@@ -300,10 +337,11 @@ ASMXSRC = $(ALLXASMSRC) \
 #
 # WARNING! order of variables is important here - for instance cypress own folders should go before default folders
 #
-INCDIR = \
+INCDIR += \
   $(PCH_DIR) \
   $(BOARDINC) \
   $(ALLINC) \
+  $(MODULES_INC) \
   $(TESTINC) \
   $(CHIBIOS)/os/various \
   $(RUSEFI_LIB_INC) \
@@ -343,8 +381,7 @@ OD   = $(TRGT)objdump
 SZ   = $(TRGT)size
 HEX  = $(CP) -O ihex
 BIN  = $(CP) -O binary
-# OpenBLT flasher expects srec files
-SREC = $(CP) -O srec
+# for srec files see bundle.mk
 
 # ARM-specific options here
 AOPT =
@@ -389,7 +426,10 @@ include $(RULESFILE)
 
 include target_sentinel.mk
 
+# this one would include ../java_tools/java_tools.mk for gradlew for config and console and plugin jars
 include rusefi_config.mk
+
+include docs_enums.mk
 
 # Enable precompiled header
 include rusefi_pch.mk

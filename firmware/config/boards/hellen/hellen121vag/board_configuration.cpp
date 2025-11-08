@@ -11,9 +11,13 @@
  */
 
 #include "pch.h"
-#include "electronic_throttle.h"
-#include "hellen_meta.h"
+#include "hellen_all_meta.h"
 #include "defaults.h"
+#include "board_overrides.h"
+
+#ifndef EFI_BOOTLOADER
+#include "electronic_throttle.h"
+#endif
 
 static void setInjectorPins() {
 	engineConfiguration->injectionPins[0] = H176_LS_1; // 96 - INJ_1
@@ -37,11 +41,11 @@ static void setupDefaultSensorInputs() {
 	engineConfiguration->camInputs[0] = Gpio::A6; // 86 - CAM1
 
     // 92 - TPS 1
-	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1);
+	setTPS1Inputs(H144_IN_TPS, H144_IN_AUX1_ANALOG);
 
     // 34 In PPS1
     // 35 In PPS2
-    setPPSInputs(H144_IN_PPS, H144_IN_AUX2);
+    setPPSInputs(H144_IN_PPS, H144_IN_AUX2_ANALOG);
 
 	setPPSCalibration(0.4, 2, 0.7, 4.1);
 
@@ -57,7 +61,7 @@ static void setupDefaultSensorInputs() {
 
 #include "hellen_leds_176.cpp"
 
-void setBoardConfigOverrides() {
+static void hellen121_vag_boardConfigOverrides() {
 	setHellenVbatt();
 
 	setHellenSdCardSpi3();
@@ -70,11 +74,11 @@ void setBoardConfigOverrides() {
 /**
  * @brief   Board-specific configuration defaults.
  *
- * See also setDefaultEngineConfiguration
+
  *
 
  */
-void setBoardDefaultConfiguration() {
+static void hellen121_vag_boardDefaultConfiguration() {
 	setInjectorPins();
 	setIgnitionPins();
 
@@ -83,7 +87,9 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->etbIo[0].controlPin = Gpio::A8; // ETB_EN out_io12
 	engineConfiguration->etb_use_two_wires = true;
 
+#ifndef EFI_BOOTLOADER
 	setBoschVAGETB();
+#endif
 
 	engineConfiguration->globalTriggerAngleOffset = 93;
 
@@ -94,7 +100,7 @@ void setBoardDefaultConfiguration() {
 
 	engineConfiguration->enableSoftwareKnock = true;
 
-	engineConfiguration->fuelPumpPin = Gpio::H144_OUT_IO3;
+	engineConfiguration->fuelPumpPin = Gpio::MM176_GP13;
 	engineConfiguration->malfunctionIndicatorPin = Gpio::G4; // 47 - CEL
 	engineConfiguration->tachOutputPin = Gpio::H144_OUT_PWM7;
 
@@ -102,7 +108,7 @@ void setBoardDefaultConfiguration() {
     engineConfiguration->idle.solenoidPin = Gpio::H144_OUT_IO4;
 
 	engineConfiguration->fanPin = Gpio::H144_OUT_PWM8;
-	engineConfiguration->mainRelayPin = Gpio::H144_OUT_IO1;
+	engineConfiguration->mainRelayPin = Gpio::MM176_OUT_PWM17;
 
 //	engineConfiguration->injectorCompensationMode
 	engineConfiguration->fuelReferencePressure = 300;
@@ -119,5 +125,13 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS; // IM_WASTED_SPARK
 
 	engineConfiguration->vrThreshold[0].pin = Gpio::H144_OUT_PWM6;
-	hellenWbo();
+}
+
+int getBoardMetaDcOutputsCount() {
+    return 1;
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = hellen121_vag_boardDefaultConfiguration;
+	custom_board_ConfigOverrides = hellen121_vag_boardConfigOverrides;
 }

@@ -1,6 +1,6 @@
 package com.rusefi;
 
-import com.rusefi.util.SystemOut;
+import com.devexperts.logging.Logging;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.zip.CRC32;
 
 public class IoUtil2 {
+    private final static Logging log = Logging.getLogging(IoUtil2.class);
     static String readFile(String fileName) {
         String line;
         StringBuilder stringBuilder = new StringBuilder();
@@ -32,7 +33,7 @@ public class IoUtil2 {
     }
 
     private static long getCrc32(String fileName) throws IOException {
-        File file = new File(RootHolder.ROOT + fileName);
+        File file = new File(IoUtil3.prependIfNotAbsolute(RootHolder.ROOT, fileName));
         byte[] fileContent = Files.readAllBytes(file.toPath());
         for (int i = 0; i < fileContent.length; i++) {
             byte aByte = fileContent[i];
@@ -44,16 +45,15 @@ public class IoUtil2 {
         return c.getValue();
     }
 
-
     static long getCrc32(List<String> inputFileNames) throws IOException {
         // get CRC32 of given input files
         long crc32 = 0;
         for (String fileName : inputFileNames) {
             long c = getCrc32(fileName) & 0xffffffffL;
-            SystemOut.println("CRC32 from " + fileName + " = " + c);
+            log.info("CRC32 from " + fileName + " = " + c);
             crc32 ^= c;
         }
-        SystemOut.println("CRC32 from all input files = " + crc32);
+        log.info("CRC32 from all input files = " + crc32);
         return crc32;
     }
 

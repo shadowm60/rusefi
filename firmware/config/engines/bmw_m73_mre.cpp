@@ -98,13 +98,8 @@ void setEngineBMW_M73_microRusEfi() {
 
 	engineConfiguration->enableVerboseCanTx = true;
 
+	engineConfiguration->trigger.type = trigger_type_e::TT_TOOTHED_WHEEL_60_2;
 
-	// do I have VR wires flipped?
-	engineConfiguration->trigger.type = trigger_type_e::TT_60_2_VW;
-
-	//set tps_min 891
 	engineConfiguration->tpsMin = 891;
-	//set tps_max 177
 	engineConfiguration->tpsMax = 177;
-
 }

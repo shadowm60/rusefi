@@ -108,7 +108,7 @@ enum class ObdCode : uint16_t {
 	//P0087 Fuel Rail/System Pressure - Too Low
 	//P0088 Fuel Rail/System Pressure - Too High
 	//P0089 Fuel Pressure Regulator 1 Performance
-	//P0090 Fuel Pressure Regulator 1 Control Circuit
+	OBD_Fuel_Pressure_Sensor_Missing = 90,
 	//P0091 Fuel Pressure Regulator 1 Control Circuit Low
 	//P0092 Fuel Pressure Regulator 1 Control Circuit High
 	//P0093 Fuel System Leak Detected - Large Leak
@@ -608,7 +608,7 @@ enum class ObdCode : uint16_t {
 	//P0559 Brake Booster Pressure Sensor Circuit Intermittent
 	OBD_System_Voltage_Malfunction = 560,
 	//P0561 System Voltage Unstable
-	//P0562 System Voltage Low
+	OBD_System_Voltage_Low = 562,
 	//P0563 System Voltage High
 	//P0564 Cruise Control Multi-Function Input "A" Circuit
 	//P0565 Cruise Control On Signal Malfunction
@@ -654,7 +654,7 @@ enum class ObdCode : uint16_t {
 	//P0605 Internal Control Module Read Only Memory (ROM) Error
 	OBD_PCM_Processor_Fault = 606,
 	//P0607 Control Module Performance
-	//P0608 Control Module VSS Output "A" Malfunction
+	OBD_ECM_VSS_OUTPUT_A_MALFUNCTION = 608,
 	//P0609 Control Module VSS Output "B" Malfunction
 	//P0610 Control Module Vehicle Options Error
 	//P0611 Fuel Injector Control Module Performance
@@ -687,9 +687,9 @@ enum class ObdCode : uint16_t {
 	OBD_Throttle_Actuator_Control_Range_Performance_Bank_1 = 638,
 	//P0639 Throttle Actuator Control Range/Performance (Bank 2)
 	//P0640 Intake Air Heater Control Circuit
-	//P0641 Sensor Reference Voltage &ldquo;A&rdquo; Circuit/Open
-	//P0642 Sensor Reference Voltage &ldquo;A&rdquo; Circuit Low
-	//P0643 Sensor Reference Voltage &ldquo;A&rdquo; Circuit High
+	OBD_Sensor_Refence_Voltate_A_Open = 641,
+	OBD_Sensor_Refence_Voltate_A_Low = 642,
+	OBD_Sensor_Refence_Voltate_A_High = 643,
 	//P0644 Driver Display Serial Communication Circuit
 	//P0645 A/C Clutch Relay Control Circuit
 	//P0646 A/C Clutch Relay Control Circuit Low
@@ -1716,8 +1716,8 @@ enum class ObdCode : uint16_t {
 	CUSTOM_NAN_ENGINE_LOAD = 6000,
 	CUSTOM_WRONG_ALGORITHM = 6001,
 	CUSTOM_NAN_ENGINE_LOAD_2 = 6002,
-	CUSTOM_OBD_6003 = 6003,
-	CUSTOM_OBD_6004 = 6004,
+	CUSTOM_FLEX_LOW = 6003,
+	CUSTOM_FLEX_HIGH = 6004,
 	CUSTOM_6005 = 6005,
 	CUSTOM_6006 = 6006,
 	CUSTOM_6007 = 6007,
@@ -1750,7 +1750,7 @@ enum class ObdCode : uint16_t {
 	CUSTOM_ZERO_DWELL = 6032,
 	CUSTOM_DWELL_TOO_LONG = 6033,
 	CUSTOM_SKIPPING_STROKE = 6034,
-	CUSTOM_6037 = 6037,
+	CUSTOM_OBD_impossibly_short_INJECTION = 6037,
 	/**
 	 * This error happens if some pinout configuration changes were applied but ECU was not reset afterwards.
 	 */
@@ -1780,7 +1780,7 @@ enum class ObdCode : uint16_t {
 
 	CUSTOM_OBD_MMC_START1 = 6060,
 	CUSTOM_OBD_MMC_START2 = 6061,
-	CUSTOM_OBD_62 = 6062,
+	CUSTOM_OBD_BAD_BANK_INDEX = 6062,
 	CUSTOM_OBD_63 = 6063,
 	CUSTOM_OBD_64 = 6064,
 	CUSTOM_OBD_65 = 6065,
@@ -1828,7 +1828,7 @@ enum class ObdCode : uint16_t {
 	CUSTOM_ERR_INVALID_INJECTION_MODE = 6104,
 	CUSTOM_ERR_WAVE_1 = 6105,
 	CUSTOM_ERR_WAVE_2 = 6106,
-	CUSTOM_ERR_TEST_ERROR = 6107,
+	RUNTIME_CRITICAL_TEST_ERROR = 6107,
 	CUSTOM_ERR_IGNITION_MODE = 6108,
 	CUSTOM_ERR_CAN_CONFIGURATION = 6109,
 
@@ -1843,7 +1843,7 @@ enum class ObdCode : uint16_t {
 	CUSTOM_ERR_DWELL_DURATION = 6118,
 	CUSTOM_ERR_NO_SHAPE = 6119,
 
-	CUSTOM_ERR_SGTP_ARGUMENT = 6121,
+	CUSTOM_ERR_INPUT_DURING_INITIALISATION = 6121,
 	CUSTOM_ERR_6122 = 6122,
 	CUSTOM_ERR_6123 = 6123,
 	CUSTOM_ERR_6124 = 6124,
@@ -2071,7 +2071,7 @@ enum class ObdCode : uint16_t {
 
 	CUSTOM_ERR_ANGLE_CR = 6680,
 	CUSTOM_DELTA_NOT_POSITIVE = 6681,
-	CUSTOM_TIMER_WATCHDOG = 6682,
+	RUNTIME_CRITICAL_TIMER_WATCHDOG = 6682,
 	CUSTOM_SAME_TWICE = 6683,
 	CUSTOM_ERR_6684 = 6684,
 	CUSTOM_ERR_6685 = 6685,
@@ -2113,7 +2113,7 @@ enum class ObdCode : uint16_t {
 
 	CUSTOM_INVALID_ADC = 6720,
 	CUSTOM_INVALID_MODE_SETTING = 6721,
-	CUSTOM_ERR_TASK_TIMER_OVERFLOW = 6722,
+	RUNTIME_CRITICAL_TASK_TIMER_OVERFLOW = 6722,
 	CUSTOM_NO_ETB_FOR_IDLE = 6723,
 	CUSTOM_ERR_TLE8888_RESPONSE = 6724,
 	CUSTOM_ERR_CJ125_DIAG = 6725,
@@ -2134,7 +2134,9 @@ enum class ObdCode : uint16_t {
 
 	CUSTOM_ERR_CAN_COMMUNICATION = 8900,
 
-	WATCH_DOG_SECONDS = 8901,
+	RUNTIME_CRITICAL_WATCH_DOG_SECONDS = 8901,
+
+	RUNTIME_CRITICAL_WRONG_IRQ_PRIORITY = 8902,
 
 	CUSTOM_ERR_CUSTOM_GAPS_BAD = 8999,
 	CUSTOM_ERR_TRIGGER_SYNC = 9000,
@@ -2150,7 +2152,9 @@ enum class ObdCode : uint16_t {
 	CUSTOM_PRIMARY_DOUBLED_EDGE = 9006,
 
 	// A trigger tooth arrived at an unexpected time
-	CUSTOM_PRIMARY_BAD_TOOTH_TIMING = 9007,
+	CUSTOM_PRIMARY_BAD_TOOTH_TIMING_EARLY = 9007,
+	CUSTOM_PRIMARY_BAD_TOOTH_TIMING_LATE = 9008,
+
 
 	/**
 	 * This is not engine miss detection - this is only internal scheduler state validation
@@ -2168,4 +2172,24 @@ enum class ObdCode : uint16_t {
 	 * Commanded fuel exceeds your fuel injector flow
 	 */
 	CUSTOM_TOO_LONG_FUEL_INJECTION = 9013,
+	/**
+	 * GPIO chip errors
+	 */
+	CUSTOM_GPIO_CHIP_FAILED_PWM = 9014,
+
+	/**
+	 * Coil did not receive discharge/fire signal in safe time
+	 */
+	CUSTOM_Ignition_Coil_Overcharge_1 = 9351,
+	CUSTOM_Ignition_Coil_Overcharge_2 = 9352,
+	CUSTOM_Ignition_Coil_Overcharge_3 = 9353,
+	CUSTOM_Ignition_Coil_Overcharge_4 = 9354,
+	CUSTOM_Ignition_Coil_Overcharge_5 = 9355,
+	CUSTOM_Ignition_Coil_Overcharge_6 = 9356,
+	CUSTOM_Ignition_Coil_Overcharge_7 = 9357,
+	CUSTOM_Ignition_Coil_Overcharge_8 = 9358,
+	CUSTOM_Ignition_Coil_Overcharge_9 = 9359,
+	CUSTOM_Ignition_Coil_Overcharge_10 = 9360,
+	CUSTOM_Ignition_Coil_Overcharge_11 = 9361,
+	CUSTOM_Ignition_Coil_Overcharge_12 = 9362,
 };

@@ -30,7 +30,11 @@ static void doRevolution(EngineTestHelper& eth, int periodMs) {
 
 // https://github.com/rusefi/rusefi/issues/1592
 TEST(fuelControl, transitionIssue1592) {
+	extern bool unitTestTaskPrecisionHack;
+	unitTestTaskPrecisionHack = true;
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE);
+	extern bool unitTestTaskNoFastCallWhileAdvancingTimeHack;
+	unitTestTaskNoFastCallWhileAdvancingTimeHack = true;
 	engine->tdcMarkEnabled = false;
 	setupSimpleTestEngineWithMafAndTT_ONE_trigger(&eth, IM_SEQUENTIAL);
 
@@ -46,12 +50,12 @@ TEST(fuelControl, transitionIssue1592) {
 
 	setTable(config->injectionPhase, 0.0f);
 	setArrayValues(config->crankingFuelCoef, 1.0f);
-	setArrayValues(config->crankingCycleCoef, 1.0f);
+
 
 	engineConfiguration->globalTriggerAngleOffset = 20;
 
 	// Yes, this is a ton of fuel but it makes the repro easier
-	engineConfiguration->cranking.baseFuel = 213.6;
+	setTable(config->crankingCycleBaseFuel, 213.6);
 	engineConfiguration->cranking.rpm = 501;
 
 	// Test the transition from batch cranking to sequential running
@@ -62,19 +66,22 @@ TEST(fuelControl, transitionIssue1592) {
 
 	{
 		// Injector 2 should be scheduled to open then close
-		void* inj2 = reinterpret_cast<void*>(&engine->injectionEvents.elements[1]);
+		auto inj2 = &engine->injectionEvents.elements[1];
+		auto const taggedPointer{TaggedPointer<decltype(this)>::make(inj2, false)};
+		auto const aHigh{ action_s::make<turnInjectionPinHigh>( taggedPointer.getRaw() ) };
+		auto const aLow{ action_s::make<turnInjectionPinLow>( inj2 ) };
 
-		ASSERT_EQ(engine->executor.size(), 2);
+		ASSERT_EQ(engine->scheduler.size(), 2);
 
 		// Check that the action is correct - we don't care about the timing necessarily
-		auto sched_open = engine->executor.getForUnitTest(0);
-		ASSERT_EQ(sched_open->action.getArgument(), inj2);
-		ASSERT_EQ(sched_open->action.getCallback(), (void(*)(void*))turnInjectionPinHigh);
+		auto sched_open = engine->scheduler.getForUnitTest(0);
+		ASSERT_EQ(sched_open->action.getArgumentRaw(), taggedPointer.getRaw());
+		ASSERT_EQ(sched_open->action.getCallback(), aHigh.getCallback());
 
-		auto sched_close = engine->executor.getForUnitTest(1);
+		auto sched_close = engine->scheduler.getForUnitTest(1);
 		// Next action should be closing the same injector
-		ASSERT_EQ(sched_close->action.getArgument(), inj2);
-		ASSERT_EQ(sched_close->action.getCallback(), (void(*)(void*))turnInjectionPinLow);
+		ASSERT_EQ(sched_close->action.getArgumentRaw(), taggedPointer.getRaw());
+		ASSERT_EQ(sched_close->action.getCallback(), aLow.getCallback());
 	}
 
 	// Run the engine for some revs

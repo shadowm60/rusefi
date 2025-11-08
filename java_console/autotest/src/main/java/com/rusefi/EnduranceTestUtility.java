@@ -1,7 +1,7 @@
 package com.rusefi;
 
 import com.rusefi.autotest.ControllerConnectorState;
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 import com.rusefi.enums.engine_type_e;
 import com.rusefi.functional_tests.EcuTestHelper;
 import com.rusefi.io.CommandQueue;
@@ -19,7 +19,7 @@ public class EnduranceTestUtility {
     public static void main(String[] args) {
         long start = System.currentTimeMillis();
         int count = parseCount(args);
-        FileLog.MAIN.logLine("Running " + count + " cycles");
+        AutotestLogging.INSTANCE.logLine("Running " + count + " cycles");
         try {
 
             LinkManager linkManager = ControllerConnectorState.getLinkManager();
@@ -27,26 +27,26 @@ public class EnduranceTestUtility {
 
             for (int i = 0; i < count; i++) {
                 EcuTestHelper.currentEngineType = engine_type_e.FORD_ASPIRE_1996.ordinal();
-                sendBlockingCommand("set " + Fields.CMD_ENGINE_TYPE + " " + 3, Timeouts.SET_ENGINE_TIMEOUT, commandQueue);
+                sendBlockingCommand("set " + Integration.CMD_ENGINE_TYPE + " " + 3, Timeouts.SET_ENGINE_TIMEOUT, commandQueue);
                 sleepSeconds(2);
                 sendBlockingCommand(getEnableCommand("self_stimulation"), commandQueue);
 //                IoUtil.changeRpm(1200);
                 EcuTestHelper.currentEngineType = engine_type_e.DEFAULT_FRANKENSO.ordinal();
-                sendBlockingCommand("set " + Fields.CMD_ENGINE_TYPE + " " + 28, Timeouts.SET_ENGINE_TIMEOUT, commandQueue);
+                sendBlockingCommand("set " + Integration.CMD_ENGINE_TYPE + " " + 28, Timeouts.SET_ENGINE_TIMEOUT, commandQueue);
                 sleepSeconds(2);
-                FileLog.MAIN.logLine("++++++++++++++++++++++++++++++++++++  " + i + "   +++++++++++++++");
+                AutotestLogging.INSTANCE.logLine("++++++++++++++++++++++++++++++++++++  " + i + "   +++++++++++++++");
             }
 
         } catch (Throwable e) {
             e.printStackTrace();
             System.exit(-1);
         }
-        FileLog.MAIN.logLine("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-        FileLog.MAIN.logLine("++++++++++++++++++++++++++++++++++++  YES YES YES " + count + "   +++++++++++++++");
-        FileLog.MAIN.logLine("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+        AutotestLogging.INSTANCE.logLine("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+        AutotestLogging.INSTANCE.logLine("++++++++++++++++++++++++++++++++++++  YES YES YES " + count + "   +++++++++++++++");
+        AutotestLogging.INSTANCE.logLine("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
         long totalTime = System.currentTimeMillis() - start;
         long minutes = totalTime / 1000 / 60;
-        FileLog.MAIN.logLine("In " + minutes + " minutes");
+        AutotestLogging.INSTANCE.logLine("In " + minutes + " minutes");
     }
 
     private static int parseCount(String[] args) {

@@ -2,7 +2,7 @@
 
 # Target ECU board design
 BOARDCPPSRC = $(BOARD_DIR)/board_configuration.cpp
-DDEFS += -DEFI_MAIN_RELAY_CONTROL=TRUE
+
 
 # This board has trigger scope hardware!
 DDEFS += -DTRIGGER_SCOPE
@@ -23,3 +23,5 @@ DDEFS += $(PRIMARY_COMMUNICATION_PORT_USART2)
 
 DDEFS += -DSTATIC_BOARD_ID=STATIC_BOARD_ID_ALPHAX_2CHAN
 
+# let 2chan start asap
+DDEFS += -DBOOT_BACKDOOR_ENTRY_TIMEOUT_MS=0

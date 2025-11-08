@@ -19,14 +19,9 @@
 #include "hellen_meta.h"
 #include "odometer.h"
 #include "defaults.h"
-#include "../board_id/qc_stim_meta.h"
 #if EFI_PROD_CODE
 #include "drivers/gpio/mc33810.h"
 #endif /* EFI_PROD_CODE */
-
-static_assert(libPROTEUS_STIM_QC == (int)engine_type_e::PROTEUS_STIM_QC);
-static_assert(libHELLEN_2CHAN_STIM_QC == (int)engine_type_e::HELLEN_2CHAN_STIM_QC);
-static_assert(libHELLEN_4CHAN_STIM_QC == (int)engine_type_e::HELLEN_4CHAN_STIM_QC);
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 #include "electronic_throttle.h"
@@ -37,43 +32,10 @@ static_assert(libHELLEN_4CHAN_STIM_QC == (int)engine_type_e::HELLEN_4CHAN_STIM_Q
 #include "scheduler.h"
 #endif /* EFI_PROD_CODE */
 
-#if EFI_PROD_CODE
-static int periodIndex = 0;
-
-static OutputPin testPin;
-static scheduling_s testScheduling;
-
-static int test557[] = {5, 5, 10, 10, 20, 20, 50, 50, 100, 100, 200, 200, 500, 500, 500, 500};
-#define TEST_LEN 16
-
-efitimeus_t testTime;
-
-static void toggleTestAndScheduleNext(void *) {
-	testPin.toggle();
-	periodIndex = (periodIndex + 1) % TEST_LEN;
-	testTime += test557[periodIndex];
-	engine->executor.scheduleByTimestamp("test", &testScheduling, testTime, &toggleTestAndScheduleNext);
-}
-
-/**
- * https://github.com/rusefi/rusefi/issues/557 common rail / direct injection scheduling control test
- */
-void runSchedulingPrecisionTestIfNeeded(void) {
-	if (!isBrainPinValid(engineConfiguration->test557pin)) {
-		return;
-	}
-
-	testPin.initPin("test", engineConfiguration->test557pin);
-	testPin.setValue(0);
-	testTime = getTimeNowUs();
-	toggleTestAndScheduleNext(/*unused*/ nullptr);
-}
-#endif /* EFI_PROD_CODE */
-
 void setDiscoveryPdm() {
 }
 
-#if HW_FRANKENSO
+#if defined(HW_NUCLEO_F767) || defined(HW_NUCLEO_H743) || defined(HW_FRANKENSO)
 
 /**
  * set engine_type 59
@@ -109,7 +71,7 @@ void setDiscovery33810Test() {
 
 // todo: should this be part of more default configurations?
 void setFrankensoConfiguration() {
-#if HW_FRANKENSO
+#ifdef HW_FRANKENSO
 	engineConfiguration->trigger.type = trigger_type_e::TT_ONE_PLUS_ONE;
 
 	commonFrankensoAnalogInputs();
@@ -136,9 +98,9 @@ void setFrankensoConfiguration() {
 	engineConfiguration->iat.adcChannel = EFI_ADC_11;
 	engineConfiguration->afr.hwChannel = EFI_ADC_13;
 
-	setCommonNTCSensor(&engineConfiguration->clt, 2700);
-	setCommonNTCSensor(&engineConfiguration->iat, 2700);
-
+  // Frankenso hardware
+  engineConfiguration->clt.config.bias_resistor = 2700;
+  engineConfiguration->iat.config.bias_resistor = 2700;
 
 	/**
 	 * http://rusefi.com/wiki/index.php?title=Manual:Hardware_Frankenso_board
@@ -171,24 +133,8 @@ void setFrankensoConfiguration() {
 	engineConfiguration->injectionPins[3] = EFI_INJECTOR_PIN3; // #4
 #endif /* EFI_INJECTOR_PIN3 */
 
-	setAlgorithm(LM_SPEED_DENSITY);
+	setAlgorithm(engine_load_mode_e::LM_SPEED_DENSITY);
 
-#if EFI_PWM_TESTER
-	engineConfiguration->injectionPins[4] = Gpio::C8; // #5
-	engineConfiguration->injectionPins[5] = Gpio::D10; // #6
-	engineConfiguration->injectionPins[6] = Gpio::D9;
-	engineConfiguration->injectionPins[7] = Gpio::D11;
-	engineConfiguration->injectionPins[8] = Gpio::D0;
-	engineConfiguration->injectionPins[9] = Gpio::B11;
-	engineConfiguration->injectionPins[10] = Gpio::C7;
-	engineConfiguration->injectionPins[11] = Gpio::E4;
-
-	/**
-	 * We want to initialize all outputs for test
-	 */
-	engineConfiguration->cylindersCount = 12;
-
-#else /* EFI_PWM_TESTER */
 	engineConfiguration->injectionPins[4] = Gpio::Unassigned;
 	engineConfiguration->injectionPins[5] = Gpio::Unassigned;
 	engineConfiguration->injectionPins[6] = Gpio::Unassigned;
@@ -203,71 +149,18 @@ void setFrankensoConfiguration() {
 	engineConfiguration->ignitionPins[2] = Gpio::C9;
 	// set_ignition_pin 4 PE10
 	engineConfiguration->ignitionPins[3] = Gpio::E10;
-#endif /* EFI_PWM_TESTER */
 
 	// todo: 8.2 or 10k?
 	engineConfiguration->vbattDividerCoeff = ((float) (10 + 33)) / 10 * 2;
 #endif // HW_FRANKENSO
 }
 
-/**
- * set engine_type 49
- */
-void setFrankensoBoardTestConfiguration() {
-	setFrankensoConfiguration();
-
-	engineConfiguration->triggerSimulatorRpm = 300;
-	engineConfiguration->cranking.rpm = 100;
-
-	engineConfiguration->cylindersCount = 12;
-	engineConfiguration->firingOrder = FO_1_7_5_11_3_9_6_12_2_8_4_10;
-
-	// set ignition_mode 1
-	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
-
-	engineConfiguration->injectionPins[0] = Gpio::B7; // injector in default pinout
-	engineConfiguration->injectionPins[1] = Gpio::B8; // injector in default pinout
-	engineConfiguration->injectionPins[2] = Gpio::B9; // injector in default pinout
-	engineConfiguration->injectionPins[3] = Gpio::C13;
-
-	engineConfiguration->injectionPins[4] = Gpio::D3;
-	engineConfiguration->injectionPins[5] = Gpio::D5;
-	engineConfiguration->injectionPins[6] = Gpio::D7;
-	engineConfiguration->injectionPins[7] = Gpio::E2; // injector in default pinout
-	engineConfiguration->injectionPins[8] = Gpio::E3;
-	engineConfiguration->injectionPins[9] = Gpio::E4;
-	engineConfiguration->injectionPins[10] = Gpio::E5;
-	engineConfiguration->injectionPins[11] = Gpio::E6;
-
-	engineConfiguration->fuelPumpPin = Gpio::Unassigned;
-	engineConfiguration->mainRelayPin = Gpio::Unassigned;
-	engineConfiguration->idle.solenoidPin = Gpio::Unassigned;
-	engineConfiguration->fanPin = Gpio::Unassigned;
-
-
-	engineConfiguration->ignitionPins[0] = Gpio::C9; // coil in default pinout
-	engineConfiguration->ignitionPins[1] = Gpio::C7; // coil in default pinout
-	engineConfiguration->ignitionPins[2] = Gpio::E10; // coil in default pinout
-	engineConfiguration->ignitionPins[3] = Gpio::E8; // Miata VVT tach
-
-	engineConfiguration->ignitionPins[4] = Gpio::E14; // coil in default pinout
-	engineConfiguration->ignitionPins[5] = Gpio::E12;
-	engineConfiguration->ignitionPins[6] = Gpio::D8;
-	engineConfiguration->ignitionPins[7] = Gpio::D9;
-
-	engineConfiguration->ignitionPins[8] = Gpio::E0; // brain board, not discovery
-	engineConfiguration->ignitionPins[9] = Gpio::E1; // brain board, not discovery
-}
-
-
 // ETB_BENCH_ENGINE
 // set engine_type 58
 void setEtbTestConfiguration() {
 	// VAG test ETB
-	// set tps_min 54
 	engineConfiguration->tpsMin = 54;
 	// by the way this ETB has default position of ADC=74 which is about 4%
-	// set tps_max 540
 	engineConfiguration->tpsMax = 540;
 
 	// yes, 30K - that's a test configuration
@@ -305,15 +198,10 @@ void setEtbTestConfiguration() {
 	// no analog dividers - all sensors with 3v supply, naked discovery bench setup
 	engineConfiguration->analogInputDividerCoefficient = 1;
 
-	// EFI_ADC_15 = PC5
-	engineConfiguration->clt.adcChannel = EFI_ADC_15;
-	set10K_4050K(&engineConfiguration->clt, 10000);
-
 	// see also setDefaultEtbBiasCurve
 }
 
-#if HW_FRANKENSO && EFI_PROD_CODE
-
+#if defined(HW_FRANKENSO) && EFI_PROD_CODE && HAL_USE_EEPROM
 
 // todo: page_size + 2
 // todo:  CC_SECTION(".nocache")
@@ -370,8 +258,6 @@ void setEepromTestConfiguration() {
 
 
     		});
-
-
 }
 #endif //HW_FRANKENSO
 
@@ -407,8 +293,8 @@ void proteusDcWastegateTest() {
 	setTPS1Calibration(98, 926, 891, 69);
 
 	engineConfiguration->wastegatePositionSensor = EFI_ADC_6;
-	engineConfiguration->wastegatePositionMin = 700;
-	engineConfiguration->wastegatePositionMax = 4000;
+	engineConfiguration->wastegatePositionClosedVoltage = 0.7;
+	engineConfiguration->wastegatePositionOpenedVoltage = 4.0;
 
 	strncpy(config->luaScript, R"(
 
@@ -424,104 +310,36 @@ end
     )", efi::size(config->luaScript));
 }
 
-/**
- * PROTEUS_QC_TEST_BOARD
- * set engine_type 42
- */
-void proteusBoardTest() {
-	engineConfiguration->cylindersCount = 12;
-	engineConfiguration->firingOrder = FO_1_2_3_4_5_6_7_8_9_10_11_12;
-	engineConfiguration->triggerSimulatorRpm = 600;
-    engineConfiguration->injector.flow = 4.6; // longer blink
-
-	engineConfiguration->cranking.rpm = 100;
-	engineConfiguration->injectionMode = IM_SEQUENTIAL;
-	engineConfiguration->crankingInjectionMode = IM_SEQUENTIAL;
-
-	engineConfiguration->mainRelayPin = Gpio::Unassigned;
-	engineConfiguration->fanPin = Gpio::Unassigned;
-	engineConfiguration->fuelPumpPin = Gpio::Unassigned;
-
-#if EFI_PROD_CODE
-	engineConfiguration->injectionPins[0] = Gpio::PROTEUS_LS_1;
-	engineConfiguration->injectionPins[1] = Gpio::PROTEUS_LS_2;
-	engineConfiguration->injectionPins[2] = Gpio::PROTEUS_LS_3;
-	engineConfiguration->injectionPins[3] = Gpio::PROTEUS_LS_4;
-	engineConfiguration->injectionPins[4] = Gpio::PROTEUS_LS_5;
-	engineConfiguration->injectionPins[5] = Gpio::PROTEUS_LS_6;
-	engineConfiguration->injectionPins[6] = Gpio::PROTEUS_LS_9;
-	engineConfiguration->injectionPins[7] = Gpio::PROTEUS_LS_8;
-	engineConfiguration->injectionPins[8] = Gpio::PROTEUS_LS_11;
-	engineConfiguration->injectionPins[9] = Gpio::PROTEUS_LS_10;
-	engineConfiguration->injectionPins[10] = Gpio::PROTEUS_LS_12;
-	engineConfiguration->injectionPins[11] = Gpio::PROTEUS_LS_13;
-
-
-    engineConfiguration->luaOutputPins[0] = Gpio::PROTEUS_LS_7;
-    engineConfiguration->luaOutputPins[1] = Gpio::PROTEUS_LS_14;
-    engineConfiguration->luaOutputPins[2] = Gpio::PROTEUS_LS_15;
-    engineConfiguration->luaOutputPins[3] = Gpio::PROTEUS_LS_16;
-    engineConfiguration->luaOutputPins[4] = Gpio::PROTEUS_HS_2;
-    engineConfiguration->luaOutputPins[5] = Gpio::PROTEUS_HS_4;
-
-	engineConfiguration->ignitionPins[0] = Gpio::PROTEUS_IGN_1;
-	engineConfiguration->ignitionPins[1] = Gpio::PROTEUS_IGN_2;
-	engineConfiguration->ignitionPins[2] = Gpio::PROTEUS_IGN_4;
-	engineConfiguration->ignitionPins[3] = Gpio::PROTEUS_IGN_5;
-	engineConfiguration->ignitionPins[4] = Gpio::PROTEUS_IGN_6;
-	engineConfiguration->ignitionPins[5] = Gpio::PROTEUS_IGN_7;
-
-	engineConfiguration->ignitionPins[6] = Gpio::PROTEUS_HS_3;
-	engineConfiguration->ignitionPins[7] = Gpio::PROTEUS_IGN_3;
-	engineConfiguration->ignitionPins[8] = Gpio::PROTEUS_IGN_9;
-	engineConfiguration->ignitionPins[9] = Gpio::PROTEUS_IGN_8;
-	engineConfiguration->ignitionPins[10] = Gpio::PROTEUS_HS_1;
-	engineConfiguration->ignitionPins[11] = Gpio::PROTEUS_IGN_12;
-
-	strncpy(config->luaScript, R"(
-	startPwm(0, 10, 0.5)
-	startPwm(1, 11, 0.5)
-	startPwm(2, 12, 0.5)
-	startPwm(3, 13, 0.5)
-	startPwm(4, 14, 0.5)
-	startPwm(5, 15, 0.5)
-    startPwm(6, 16, 0.5)
-	startPwm(7, 17, 0.5)
-
-	function onTick()
-	end
-    )", efi::size(config->luaScript));
-
-#endif // EFI_PROD_CODE
-
-#if EFI_ELECTRONIC_THROTTLE_BODY
-	setProteusHitachiEtbDefaults();
-#endif // EFI_ELECTRONIC_THROTTLE_BODY
-}
 #endif // HW_PROTEUS
 
-void setBodyControlUnit() {
+static void setBasicNotECUmode() {
     engineConfiguration->trigger.type = trigger_type_e::TT_HALF_MOON;
 
-	engineConfiguration->mapAveragingSchedulingAtIndex = 999; // this should disable map averaging right?
+	// todo: shall we disable map averaging?
 
 	engineConfiguration->wwaeTau = 0.0;
 	engineConfiguration->wwaeBeta = 0.0;
 
-	for (int i = 0; i < MAX_CYLINDER_COUNT;i++) {
-		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
-		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
-	}
 	engineConfiguration->fanPin = Gpio::Unassigned;
 	engineConfiguration->triggerInputPins[0] = Gpio::Unassigned;
 
 	engineConfiguration->tps1_1AdcChannel = EFI_ADC_NONE;
 	engineConfiguration->tps2_1AdcChannel = EFI_ADC_NONE;
+	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_NONE;
+	engineConfiguration->throttlePedalPositionSecondAdcChannel = EFI_ADC_NONE;
+	engineConfiguration->vehicleSpeedSensorInputPin = Gpio::Unassigned;
 	engineConfiguration->clt.adcChannel = EFI_ADC_NONE;
 	engineConfiguration->iat.adcChannel = EFI_ADC_NONE;
 	engineConfiguration->map.sensor.hwChannel = EFI_ADC_NONE;
 }
 
+void setBodyControlUnit() {
+	for (int i = 0; i < MAX_CYLINDER_COUNT;i++) {
+		engineConfiguration->ignitionPins[i] = Gpio::Unassigned;
+		engineConfiguration->injectionPins[i] = Gpio::Unassigned;
+	}
+  setBasicNotECUmode();
+}
 
 void mreSecondaryCan() {
 	setBodyControlUnit();
@@ -566,143 +384,19 @@ void mreBCM() {
 	engineConfiguration->consumeObdSensors = true;
 }
 
-/**
- * MRE_BOARD_NEW_TEST
- * set engine_type 31
- */
-void mreBoardNewTest() {
-#if (BOARD_TLE8888_COUNT > 0)
-	engineConfiguration->debugMode = DBG_TLE8888;
-
-	engineConfiguration->triggerSimulatorRpm = 202;
-	// set cranking_rpm 500
-	engineConfiguration->cranking.rpm = 100;
-	// set cranking_dwell 200
-	engineConfiguration->ignitionDwellForCrankingMs = 200;
-	// set cranking_fuel 300
-	engineConfiguration->cranking.baseFuel = 190;
-	engineConfiguration->injectionMode = IM_SEQUENTIAL;
-	engineConfiguration->crankingInjectionMode = IM_SEQUENTIAL;
-
-	// EFI_ADC_1: "23 - AN temp 2"
-	// test harness: Red/Green, 2K PD. expected 2.0v
-	// iat in microrusefi/board_configuration.cpp
-
-	// EFI_ADC_2: "24 - AN temp 3"
-	// test harness: Blue/White, 2K PD. expected 2.0v
-
-
-	// EFI_ADC_10: "27 - AN volt 1"
-	// test harness: Blue/Red, 3.84K PD / 5.3 PU. expected 1.6v
-	engineConfiguration->mafAdcChannel = EFI_ADC_10;
-
-	// EFI_ADC_14: "32 - AN volt 6"
-	// test harness: Red/White 3.6K PD / 5.2 PU. expected 1.6v
-	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_14;
-
-	// EFI_ADC_4: "28 - AN volt 10"
-	// test harness: Red/Yellow
-	engineConfiguration->afr.hwChannel = EFI_ADC_4;
-
-	// EFI_ADC_7: "31 - AN volt 3"
-	// test harness: White/Red
-	engineConfiguration->map.sensor.hwChannel = EFI_ADC_7;
-
-	engineConfiguration->fuelPumpPin = Gpio::Unassigned;
-	engineConfiguration->idle.solenoidPin = Gpio::Unassigned;
-	engineConfiguration->fanPin = Gpio::Unassigned;
-
-
-#endif /* BOARD_TLE8888_COUNT */
-
-	engineConfiguration->cylindersCount = 12;
-	engineConfiguration->firingOrder = FO_1_2_3_4_5_6_7_8_9_10_11_12;
-    engineConfiguration->injector.flow = 5; // longer blink
-
-
-#if (BOARD_TLE8888_COUNT > 0)
-	engineConfiguration->ignitionPins[1 - 1] = Gpio::D6;
-	engineConfiguration->ignitionPins[2 - 1] = Gpio::D7;
-	engineConfiguration->ignitionPins[3 - 1] = Gpio::D1;
-	engineConfiguration->ignitionPins[4 - 1] = Gpio::D2;
-	engineConfiguration->ignitionPins[5 - 1] = Gpio::D3;
-	engineConfiguration->ignitionPins[6 - 1] = Gpio::D4;
-
-	engineConfiguration->ignitionPins[7 - 1] = Gpio::TLE8888_PIN_11;
-	engineConfiguration->ignitionPins[8 - 1] = Gpio::TLE8888_PIN_12;
-
-	// LED #8
-	// TLE8888 half bridges (pushpull, lowside, or high-low)  IN12
-	// Gpio::TLE8888_PIN_21: "35 - GP Out 1"
-	engineConfiguration->ignitionPins[9 - 1] = Gpio::TLE8888_PIN_21;
-
-	// LED #1
-	// Gpio::TLE8888_PIN_22: "34 - GP Out 2"
-	engineConfiguration->ignitionPins[10- 1] = Gpio::TLE8888_PIN_22;
-
-	// LED #2
-	// Gpio::TLE8888_PIN_23: "33 - GP Out 3"
-	engineConfiguration->ignitionPins[11 - 1] = MRE_GPOUT_3;
-
-	// LED #7
-	// Gpio::TLE8888_PIN_24: "43 - GP Out 4"
-	engineConfiguration->ignitionPins[12 - 1] = Gpio::TLE8888_PIN_24;
-
-	engineConfiguration->afr.hwChannel = EFI_ADC_6;
-	engineConfiguration->throttlePedalPositionAdcChannel = EFI_ADC_NONE;
-
-	// TLE8888 high current low side: IN10
-	// Gpio::TLE8888_PIN_6:  "7 - Lowside 1"
-	engineConfiguration->injectionPins[1 - 1] = Gpio::TLE8888_PIN_6;
-
-	// TLE8888 high current low side: VVT2 IN9 / OUT5
-	// Gpio::TLE8888_PIN_5: "3 - Lowside 2"
-	engineConfiguration->injectionPins[2 - 1] = Gpio::TLE8888_PIN_5;
-
-	// Gpio::TLE8888_PIN_4: INJ#4
-	engineConfiguration->injectionPins[3 - 1] = Gpio::TLE8888_PIN_4;
-	// Gpio::TLE8888_PIN_3: INJ#3
-	engineConfiguration->injectionPins[4 - 1] = Gpio::TLE8888_PIN_3;
-	// Gpio::TLE8888_PIN_2: INJ#2
-	engineConfiguration->injectionPins[5 - 1] = Gpio::TLE8888_PIN_2;
-	// Gpio::TLE8888_PIN_1: LED #3 - INJ#1
-	engineConfiguration->injectionPins[6 - 1] = Gpio::TLE8888_PIN_1;
-
-
-	engineConfiguration->injectionPins[7 - 1] = Gpio::A4; // AV10
-	engineConfiguration->injectionPins[8  - 1] = Gpio::B1; // AV9
-	engineConfiguration->injectionPins[9  - 1] = Gpio::B0; // AV8
-	engineConfiguration->injectionPins[10 - 1] = Gpio::C4; // AV6
-
-	engineConfiguration->injectionPins[11- 1] = Gpio::TLE8888_PIN_13;
-
-	engineConfiguration->injectionPins[12- 1] = Gpio::TLE8888_PIN_10;
-#endif /* BOARD_TLE8888_COUNT */
-
-}
-
+void setBoschHDEV_5_injectors() {
+#if HPFP_LOBE_PROFILE_SIZE == 16
 static const float hardCodedHpfpLobeProfileQuantityBins[16] = {0.0, 1.0, 4.5, 9.5,
 16.5, 25.0, 34.5, 45.0 ,
 55.0, 65.5, 75.0, 83.5,
 90.5, 95.5, 99.0, 100.0};
+	copyArray(config->hpfpLobeProfileQuantityBins, hardCodedHpfpLobeProfileQuantityBins);
+#endif // HPFP_LOBE_PROFILE_SIZE
+	setHpfpLobeProfileAngle(3);
+	setLinearCurve(config->hpfpDeadtimeVoltsBins, 8, 16, 0.5);
 
-static const float hardCodedHpfpLobeProfileAngle[16] = {0.0, 7.5, 16.5, 24.0,
-32.0 , 40.0, 48.0, 56.0,
-64.0 , 72.0, 80.0, 88.0,
-96.0 , 103.5, 112.5, 120.0
-};
-
-void setBoschHDEV_5_injectors() {
-	copyArray(engineConfiguration->hpfpLobeProfileQuantityBins, hardCodedHpfpLobeProfileQuantityBins);
-	copyArray(engineConfiguration->hpfpLobeProfileAngle, hardCodedHpfpLobeProfileAngle);
-	setLinearCurve(engineConfiguration->hpfpDeadtimeVoltsBins, 8, 16, 0.5);
-
-	setRpmTableBin(engineConfiguration->hpfpTargetRpmBins);
-	setLinearCurve(engineConfiguration->hpfpTargetLoadBins, 0, 180, 1);
-	setTable(engineConfiguration->hpfpTarget, 5000);
-
-	setRpmTableBin(engineConfiguration->hpfpCompensationRpmBins);
-	setLinearCurve(engineConfiguration->hpfpCompensationLoadBins, 0.005, 0.120, 0.001);
+	setRpmTableBin(config->hpfpCompensationRpmBins);
+	setLinearCurve(config->hpfpCompensationLoadBins, 0.005, 0.120, 0.001);
 
 	// This is the configuration for bosch HDEV 5 injectors
 	// all times in microseconds/us
@@ -722,6 +416,7 @@ void setBoschHDEV_5_injectors() {
 	engineConfiguration->mc33_hpfp_i_hold = 3;
 	engineConfiguration->mc33_hpfp_i_hold_off = 10; // us
 	engineConfiguration->mc33_hpfp_max_hold = 10; // this value in ms not us
+
 }
 
 /**
@@ -732,8 +427,7 @@ void setRotary() {
 	engineConfiguration->firingOrder = FO_1_2;
 
 	engineConfiguration->trigger.type = trigger_type_e::TT_36_2_2_2;
-	// todo: fix UI to make this possible via TS
-	setTwoStrokeOperationMode();
+	engineConfiguration->twoStroke = true;
 
 	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_MAZDA);
 	strcpy(engineConfiguration->engineCode, "13B");
@@ -790,7 +484,6 @@ void setTest33816EngineConfiguration() {
 	engineConfiguration->isSdCardEnabled = false;
 
 	engineConfiguration->mc33816spiDevice = SPI_DEVICE_3;
-	setBoschHDEV_5_injectors();
 }
 
 void proteusLuaDemo() {
@@ -917,24 +610,23 @@ end
 }
 
 void detectBoardType() {
-#if HW_HELLEN
-#if !EFI_UNIT_TEST
+#if HW_HELLEN && EFI_PROD_CODE
 	detectHellenBoardType();
-#endif /* EFI_UNIT_TEST */
-#endif //HW_HELLEN
+#endif //HW_HELLEN EFI_PROD_CODE
 	// todo: add board ID detection?
 	// see hellen128 which has/had alternative i2c board id?
 }
 
+// set engine_type 15
 void fuelBenchMode() {
     engineConfiguration->cranking.rpm = 12000;
 #if EFI_ENGINE_CONTROL
     setFlatInjectorLag(0);
 #endif // EFI_ENGINE_CONTROL
-	setTable(engineConfiguration->postCrankingFactor, 1.0f);
+	setTable(config->postCrankingFactor, 1.0f);
 	setArrayValues(config->crankingFuelCoef, 1.0f);
-	setArrayValues(config->crankingCycleCoef, 1.0f);
-    setBodyControlUnit();
+	setTable(config->crankingCycleBaseFuel, 1.0f);
+	setBasicNotECUmode();
 }
 
 #if HW_PROTEUS
@@ -978,19 +670,18 @@ void proteusStimQc() {
 }
 #endif // HW_PROTEUS
 
-#if HW_HELLEN_4CHAN
-// HELLEN_4CHAN_STIM_QC
-// set engine_type 74
-void alphax4chanStimQc() {
-    engineConfiguration->trigger.type = trigger_type_e::TT_ONE_PLUS_ONE;
-	engineConfiguration->vvtMode[0] = VVT_SINGLE_TOOTH;
-	engineConfiguration->vvtMode[1] = VVT_SINGLE_TOOTH;
+// set engine_type 93
+void testEngine6451() {
+#ifdef HW_FRANKENSO
+  setFrankensoConfiguration();
+#endif
+  engineConfiguration->trigger.type = trigger_type_e::TT_NARROW_SINGLE_TOOTH;
 
-   	engineConfiguration->triggerInputPins[0] = Gpio::H144_IN_CAM; // C7
-   	engineConfiguration->triggerInputPins[1] = Gpio::H144_IN_D_4; // E6
-   	engineConfiguration->camInputs[0] = Gpio::H144_IN_VSS; // C4
-   	engineConfiguration->camInputs[1] = Gpio::H144_IN_D_AUX4; // E7
-   	engineConfiguration->camInputs[2] = Gpio::H144_IN_SENS2; // E3
-   	engineConfiguration->camInputs[3] = Gpio::H144_IN_SENS3; // E4
+	setWholeTimingTable(30);
+	setTable(config->ignitionIatCorrTable, 0);
+	engineConfiguration->cylindersCount = 6;
+	engineConfiguration->firingOrder = FO_1_5_3_6_2_4;
+	engineConfiguration->ignitionMode = IM_INDIVIDUAL_COILS;
+	engineConfiguration->triggerSimulatorRpm = 4800;
 }
-#endif // HW_HELLEN_4CHAN
+

@@ -27,8 +27,14 @@ extern "C" int _gettimeofday(timeval* tv, void* tzvp) {
 #endif // EFI_PROD_CODE
 
 #if EFI_RTC
+
+void PUBLIC_API_WEAK hal_lld_rtc_fixup(void) {
+    /* nop */
+}
+
 void initRtc() {
 	efiPrintf("initRtc()");
+	hal_lld_rtc_fixup();
 	printDateTime(); // this would test RTC, see #311
 }
 
@@ -42,7 +48,7 @@ static const char * const monthAbbrs[] = {
 void printRtcDateTime() {
 	efidatetime_t dateTime = getRtcDateTime();
 	// prints the date like: 19 sep 2022 21:19:55
-	efiPrintf("Current RTC time: %02u %s %04u %02u:%02u:%02u",
+	efiPrintf("Current RTC time: %02u %s %04lu %02u:%02u:%02u",
 			dateTime.day, monthAbbrs[dateTime.month - 1], dateTime.year,
 			dateTime.hour, dateTime.minute, dateTime.second);
 }
@@ -50,6 +56,21 @@ void printRtcDateTime() {
 void setRtcDateTime(efidatetime_t const * const dateTime) {
 	RTCDateTime timespec = convertRtcDateTimeFromEfi(dateTime);
 	rtcSetTime(&RTCD1, &timespec);
+}
+
+static time_t rtc_encode(const RTCDateTime *timespec) {
+  struct tm tim;
+
+  // todo: looks like this pulls a lot of library code? 4K+?
+  // todo: reimplement lighter? https://github.com/rusefi/rusefi/issues/6876
+  rtcConvertDateTimeToStructTm(timespec, &tim, NULL);
+  return mktime(&tim);
+}
+
+uint32_t getEpochTime() {
+	RTCDateTime timespec;
+	rtcGetTime(&RTCD1, &timespec);
+	return rtc_encode(&timespec);
 }
 
 efidatetime_t getRtcDateTime() {
@@ -89,16 +110,16 @@ RTCDateTime convertRtcDateTimeFromEfi(efidatetime_t const * const dateTime) {
 
 // TODO(nms): move to e.g. efitime ?
 
-static void put2(int offset, char *lcd_str, int value) {
+static void putTwoSymbolDecimal(int offset, char *destination, int value) {
 	static char buff[_MAX_FILLER];
 	efiAssertVoid(ObdCode::CUSTOM_ERR_6666, value >=0 && value <100, "value");
 	itoa10(buff, value);
 	if (value < 10) {
-		lcd_str[offset] = '0';
-		lcd_str[offset + 1] = buff[0];
+		destination[offset] = '0';
+		destination[offset + 1] = buff[0];
 	} else {
-		lcd_str[offset] = buff[0];
-		lcd_str[offset + 1] = buff[1];
+		destination[offset] = buff[0];
+		destination[offset + 1] = buff[1];
 	}
 }
 #endif // EFI_RTC
@@ -107,47 +128,49 @@ static void put2(int offset, char *lcd_str, int value) {
 /**
  * @return true if we seem to know current date, false if no valid RTC state
  */
-bool dateToStringShort(char *lcd_str) {
+bool dateToStringShort(char *destination) {
 #if EFI_RTC
-	strcpy(lcd_str, "000000_000000\0");
+	strcpy(destination, "000000_000000\0");
 	efidatetime_t dateTime = getRtcDateTime();
 	if (dateTime.year < 2016 || dateTime.year > 2030) {
 		// 2016 to 2030 is the valid range
-		lcd_str[0] = 0;
+		destination[0] = 0;
 		return false;
 	}
 
-	put2(0, lcd_str, dateTime.year % 100);		// year, format as just the last two digits
-	put2(2, lcd_str, dateTime.month);		    // month	1-12
-	put2(4, lcd_str, dateTime.day);				// day of the month	1-31
+	putTwoSymbolDecimal(0, destination, dateTime.year % 100);		// year, format as just the last two digits
+	putTwoSymbolDecimal(2, destination, dateTime.month);		    // month	1-12
+	putTwoSymbolDecimal(4, destination, dateTime.day);				// day of the month	1-31
 
-	put2(7, lcd_str, dateTime.hour);			// hours since midnight	0-23
-	put2(9, lcd_str, dateTime.minute);			// minutes
-	put2(11, lcd_str, dateTime.second);			// seconds
+	putTwoSymbolDecimal(7, destination, dateTime.hour);			// hours since midnight	0-23
+	putTwoSymbolDecimal(9, destination, dateTime.minute);			// minutes
+	putTwoSymbolDecimal(11, destination, dateTime.second);			// seconds
 
 	return true;
 #else // EFI_RTC
-	lcd_str[0] = 0;
+	destination[0] = 0;
 	return false;
 #endif // EFI_RTC
 }
 
-void dateToString(char *lcd_str) {
+/*
+void dateToString(char *destination) {
 #if EFI_RTC
 	// todo:
 	// re-implement this along the lines of 	chvprintf("%04u-%02u-%02u %02u:%02u:%02u\r\n", timp.tm_year + 1900, timp.tm_mon + 1, timp.tm_mday, timp.tm_hour,
 	// timp.tm_min, timp.tm_sec);
 	// this would require a temporary mem stream - see datalogging and other existing usages
 
-	strcpy(lcd_str, "00/00 00:00:00\0");
+	strcpy(destination, "00/00 00:00:00\0");
 	efidatetime_t dateTime = getRtcDateTime();
-	
-	put2(0, lcd_str, dateTime.month);
-	put2(3, lcd_str, dateTime.day);
-	put2(6, lcd_str, dateTime.hour);
-	put2(9, lcd_str, dateTime.minute);
-	put2(12, lcd_str, dateTime.second);
+
+	putTwoSymbolDecimal(0, destination, dateTime.month);
+	putTwoSymbolDecimal(3, destination, dateTime.day);
+	putTwoSymbolDecimal(6, destination, dateTime.hour);
+	putTwoSymbolDecimal(9, destination, dateTime.minute);
+	putTwoSymbolDecimal(12, destination, dateTime.second);
 #else // EFI_RTC
-	lcd_str[0] = 0;
+	destination[0] = 0;
 #endif // EFI_RTC
 }
+*/

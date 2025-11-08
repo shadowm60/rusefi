@@ -124,8 +124,8 @@ void turnOnSpi(spi_device_e device) {
 				engineConfiguration->spi6MosiMode,
 				engineConfiguration->spi6MisoMode);
 #else
-		criticalError("SPI5 not available in this binary");
-#endif /* STM32_SPI_USE_SPI5 */
+		criticalError("SPI6 not available in this binary");
+#endif /* STM32_SPI_USE_SPI6 */
 	}
 }
 
@@ -139,15 +139,15 @@ void initSpiModule(SPIDriver *driver,
 	 * Info on the silicon defect can be found in this document, section 2.5.2:
 	 * https://www.st.com/content/ccc/resource/technical/document/errata_sheet/0a/98/58/84/86/b6/47/a2/DM00037591.pdf/files/DM00037591.pdf/jcr:content/translations/en.DM00037591.pdf
 	 */
-	efiSetPadMode("SPI clock", sck,	PAL_MODE_ALTERNATE(getSpiAf(driver)) | sckMode | PAL_STM32_OSPEED_HIGHEST);
+	efiSetPadMode("SPI CLK ", sck,	PAL_MODE_ALTERNATE(getSpiAf(driver)) | sckMode | PAL_STM32_OSPEED_HIGHEST);
 
-	efiSetPadMode("SPI master out", mosi, PAL_MODE_ALTERNATE(getSpiAf(driver)) | mosiMode | PAL_STM32_OSPEED_HIGHEST);
+	efiSetPadMode("SPI MOSI", mosi, PAL_MODE_ALTERNATE(getSpiAf(driver)) | mosiMode | PAL_STM32_OSPEED_HIGHEST);
 
 	// Activate the internal pullup on MISO: SD cards indicate "busy" by holding MOSI low,
 	// so in case there is no SD card installed, the line could float low and indicate that
 	// the (non existent) card is busy.  We pull the line high to indicate "not busy" in case
 	// of a missing card.
-	efiSetPadMode("SPI master in ", miso, PAL_MODE_ALTERNATE(getSpiAf(driver)) | misoMode | PAL_STM32_OSPEED_HIGHEST | PAL_STM32_PUPDR_PULLUP);
+	efiSetPadMode("SPI MISO", miso, PAL_MODE_ALTERNATE(getSpiAf(driver)) | misoMode | PAL_STM32_OSPEED_HIGHEST | PAL_STM32_PUPDR_PULLUP);
 }
 
 void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
@@ -159,34 +159,142 @@ void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
 
 void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
 	/* TODO: why this is here? */
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
 	spiConfig->end_cb = nullptr;
+#else
+	spiConfig->data_cb = nullptr;
+	spiConfig->error_cb = nullptr;
+#endif
 
 	initSpiCsNoOccupy(spiConfig, csPin);
 	efiSetPadMode("chip select", csPin, PAL_STM32_MODE_OUTPUT);
 }
 
+int spiGetBaseClock(SPIDriver *spip)
+{
+#if STM32_SPI_USE_SPI1
+	if (spip == &SPID1) {
+		// APB2
+		return STM32_PCLK2;
+	}
+#endif
+#if STM32_SPI_USE_SPI2
+	if (spip == &SPID2) {
+		// APB1
+		return STM32_PCLK1;
+	}
+#endif
+#if STM32_SPI_USE_SPI3
+	if (spip == &SPID3) {
+		// APB1
+		return STM32_PCLK1;
+	}
+#endif
+#if STM32_SPI_USE_SPI4
+	if (spip == &SPID4) {
+		// APB2
+		return STM32_PCLK2;
+	}
+#endif
+#if STM32_SPI_USE_SPI5
+	if (spip == &SPID5) {
+		// APB2
+		return STM32_PCLK2;
+	}
+#endif
+#if STM32_SPI_USE_SPI6
+	if (spip == &SPID6) {
+		// APB2
+		return STM32_PCLK2;
+	}
+#endif
+
+	return 0;
+}
+
+#ifdef STM32H7XX
+
+int spiCalcClockDiv(SPIDriver*, SPIConfig*, unsigned int)
+{
+	// TODO: implement
+	return -1;
+}
+
+#else
+
+int spiCalcClockDiv(SPIDriver *spip, SPIConfig *spiConfig, unsigned int clk)
+{
+	if (clk == 0) {
+		return -1;
+	}
+
+	unsigned int baseClock = spiGetBaseClock(spip);
+
+	if (baseClock == 0) {
+		return -1;
+	}
+
+	// round down
+	int div = (baseClock + clk - 1) / clk;
+
+	spiConfig->cr1 &= ~SPI_CR1_BR_Msk;
+	if (div <= 2) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_2;
+	} else if (div <= 4) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_4;
+	} else if (div <= 8) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_8;
+	} else if (div <= 16) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_16;
+	} else if (div <= 32) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_32;
+	} else if (div <= 64) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_64;
+	} else if (div <= 128) {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_128;
+	} else {
+		spiConfig->cr1 |= SPI_BaudRatePrescaler_256;
+	}
+
+	return 0;
+}
+
+#endif
+
 #ifdef STM32H7XX
 // H7 SPI clock is set to 80MHz
 // fast mode is 80mhz/2 = 40MHz
 SPIConfig mmc_hs_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cfg1 = 7 // 8 bits per byte
-			| 0 /* MBR = 0, divider = 2 */,
-		.cfg2 = 0
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cfg1 = 7 // 8 bits per byte
+		| 0 /* MBR = 0, divider = 2 */,
+	.cfg2 = 0
 };
 
 // Slow mode is 80mhz/4 = 20MHz
 SPIConfig mmc_ls_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cfg1 = 7 // 8 bits per byte
-			| SPI_CFG1_MBR_0 /* MBR = 001, divider = 4 */,
-		.cfg2 = 0
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cfg1 = 7 // 8 bits per byte
+		| SPI_CFG1_MBR_0 /* MBR = 001, divider = 4 */,
+	.cfg2 = 0
 };
 
 #else /* not STM32H7XX */
@@ -199,21 +307,33 @@ SPIConfig mmc_ls_spicfg = {
 // Slow mode is 13.5 or 6.75 MHz
 // Fast mode is 54 or 27 MHz (technically out of spec, needs testing!)
 SPIConfig mmc_hs_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_2,
-		.cr2 = 0
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+	.slave = false,
+	.data_cb = NULL,
+	.error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cr1 = SPI_BaudRatePrescaler_2,
+	.cr2 = 0
 };
 
 SPIConfig mmc_ls_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_8,
-		.cr2 = 0
+	.circular = false,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+	.slave = false,
+	.data_cb = NULL,
+	.error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cr1 = SPI_BaudRatePrescaler_8,
+	.cr2 = 0
 };
 #endif
 

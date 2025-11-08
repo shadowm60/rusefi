@@ -1,7 +1,9 @@
+// file rusefi_halconf.h
+
 #pragma once
 
 #define _CHIBIOS_HAL_CONF_
-#define _CHIBIOS_HAL_CONF_VER_7_1_
+#define _CHIBIOS_HAL_CONF_VER_8_4_
 
 #include "mcuconf.h"
 
@@ -111,13 +113,6 @@
 #define HAL_USE_SDC                         FALSE
 #endif
 
-/**
- * @brief   Enables the WDG subsystem.
- */
-#if !defined(HAL_USE_WDG) || defined(__DOXYGEN__)
-#define HAL_USE_WDG                 FALSE
-#endif
-
 /*===========================================================================*/
 /* SERIAL driver related settings.                                           */
 /*===========================================================================*/
@@ -167,11 +162,28 @@
 #define PAL_USE_CALLBACKS           TRUE
 
 // USB Serial
-#define SERIAL_USB_BUFFERS_SIZE     768
-#define SERIAL_USB_BUFFERS_NUMBER   2
+#ifndef SERIAL_USB_BUFFERS_RX_SIZE
+#define SERIAL_USB_BUFFERS_RX_SIZE     64
+#endif
+
+#if (SERIAL_USB_BUFFERS_RX_SIZE != 64)
+#error Please keep SERIAL_USB_BUFFERS_SIZE until https://forum.chibios.org/viewtopic.php?f=35&t=6395 is properly fixed!
+#endif
+
+#ifndef SERIAL_USB_BUFFERS_RX_NUMBER
+#define SERIAL_USB_BUFFERS_RX_NUMBER   2
+#endif
+
+#ifndef SERIAL_USB_BUFFERS_TX_SIZE
+#define SERIAL_USB_BUFFERS_TX_SIZE     512
+#endif
+
+#ifndef SERIAL_USB_BUFFERS_TX_NUMBER
+#define SERIAL_USB_BUFFERS_TX_NUMBER   2
+#endif
 
 // USB Mass Storage
-#ifdef EFI_USE_COMPRESSED_INI_MSD
+#if EFI_USE_COMPRESSED_INI_MSD
 // if enabled, we do gzip decompression on the MSD thread - it requires more stack space
 #define USB_MSD_THREAD_WA_SIZE 2048
 #endif
@@ -186,3 +198,20 @@
 // Ethernet MAC
 #define MAC_USE_ZERO_COPY FALSE
 #define MAC_USE_EVENTS TRUE
+
+#include "error_handling_c.h"
+
+// WARNING:
+// this while loop has non-determinited timeout! Current value is almost random.
+// Please consider CPU speed, IRQ load, expected and worst case event wait time!
+// Currently this is used instead of simple while (condition) loop in polling SPI driver.
+// We exect problems when SPI clock is low and CPU speed is high
+#define LIMITED_WHILE_LOOP(condition, ...) \
+  { int limit = 1000000 ;                  \
+    while (condition) {                    \
+      if (limit-- == 0) {                  \
+        criticalErrorC(__VA_ARGS__);       \
+        break;                             \
+      }                                    \
+    }                                      \
+  }

@@ -13,7 +13,7 @@
 #include <time.h>
 
 #include "common_headers.h"
-#include "global_execution_queue.h"
+#include "test_executor.h"
 
 #define EFU_UNIT_TESTS fail("typo please EFU_UNIT_TEST");
 
@@ -53,12 +53,7 @@ void chDbgAssert(int c, char *msg, void *arg);
 }
 #endif /* __cplusplus */
 
-
-#define US_TO_NT_MULTIPLIER 100
-#define VCS_VERSION "321"
 #define RUS_EFI_VERSION_TAG "rusEfiVersion"
-
-#define INLINE inline
 
 #define EFI_ERROR_CODE 0xffffffff
 
@@ -75,7 +70,9 @@ namespace chibios_rt {
 }
 #endif
 
-#define UNIT_TEST_BUSY_WAIT_CALLBACK() { 	timeNowUs++; }
+#define UNIT_TEST_BUSY_WAIT_CALLBACK() { advanceTimeUs(1); }
 
 #define chsnprintf snprintf
 #define chvsnprintf vsnprintf
+
+bool mcuCanFlashWhileRunning() ;

@@ -6,11 +6,19 @@ import java.net.URL;
 import java.util.concurrent.atomic.AtomicReference;
 
 public interface rusEFIVersion {
-    int CONSOLE_VERSION = 20240227;
+    /**
+     * *** BE CAREFUL WE HAVE SEPARATE AUTOUPDATE_VERSION also managed manually ***
+     * @see com.rusefi.autoupdate.Autoupdate#AUTOUPDATE_VERSION
+     */
+    int CONSOLE_VERSION = 20251103;
     AtomicReference<String> firmwareVersion = new AtomicReference<>("N/A");
 
     static long classBuildTimeMillis() {
         Class<?> clazz = rusEFIVersion.class;
+        return classBuildTimeMillis(clazz);
+    }
+
+    static long classBuildTimeMillis(Class<?> clazz) {
         URL resource = clazz.getResource(clazz.getSimpleName() + ".class");
         if (resource == null) {
             throw new IllegalStateException("Failed to find class file for class: " +

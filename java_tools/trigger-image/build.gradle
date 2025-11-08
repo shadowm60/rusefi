@@ -1,3 +1,4 @@
-plugins {
-    id 'java'
+
+dependencies {
+  api project(':logging-api')
 }

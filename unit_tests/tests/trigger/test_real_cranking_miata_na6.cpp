@@ -9,9 +9,6 @@
 
 #include "logicdata_csv_reader.h"
 
-extern int timeNowUs;
-extern WarningCodeState unitTestWarningCodeState;
-
 static void fireTriggerEvent(EngineTestHelper*eth, double timestampS, TriggerWheel channel, bool isFall) {
 	trigger_event_e event;
 	// in this trigger data file second channel is the primary
@@ -28,9 +25,9 @@ static void fireTriggerEvent(EngineTestHelper*eth, double timestampS, TriggerWhe
 	}
 
 	Engine *engine = &eth->engine;
-	
-	timeNowUs = 1'000'000 * timestampS;
-	printf("MIATANA: posting time=%d event=%d\n", timeNowUs, event);
+
+	setTimeNowUs(1'000'000 * timestampS);
+	printf("MIATANA: posting time=%d event=%d\n", getTimeNowUs(), event);
 	hwHandleShaftSignal((int)channel, !isFall, getTimeNowNt());
 }
 
@@ -160,7 +157,7 @@ TEST(cranking, hardcodedRealCranking) {
 	/* 133 */ EVENT(/* timestamp*/3.00650825, TriggerWheel::T_SECONDARY, /*value*/true);
 	/* 134 */ EVENT(/* timestamp*/3.031735, TriggerWheel::T_PRIMARY, /*value*/true);
 
-	EXPECT_EQ( 0,  unitTestWarningCodeState.recentWarnings.getCount()) << "warningCounter#realCranking";
+	EXPECT_EQ( 0u,  getRecentWarnings()->getCount()) << "warningCounter#realCranking";
 
 	EXPECT_EQ(623,  round(Sensor::getOrZero(SensorType::Rpm))) << "RPM at the end";
 }
@@ -176,6 +173,6 @@ TEST(cranking, naCrankFromFile) {
 		reader.processLine(&eth);
 	}
 
-	EXPECT_EQ(0, eth.recentWarnings()->getCount());
+	EXPECT_EQ(0u, eth.recentWarnings()->getCount());
 	EXPECT_EQ(669, round(Sensor::getOrZero(SensorType::Rpm)));
 }

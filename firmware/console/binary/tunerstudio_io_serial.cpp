@@ -11,7 +11,7 @@ void SerialTsChannel::start(uint32_t baud) {
 		#if EFI_PROD_CODE
 			.speed = baud,
 			.cr1 = 0,
-			.cr2 = USART_CR2_STOP1_BITS | USART_CR2_LINEN,
+			.cr2 = USART_CR2_STOP1_BITS,
 			.cr3 = 0
 		#endif // EFI_PROD_CODE
 	};
@@ -46,7 +46,7 @@ void UartTsChannel::start(uint32_t baud) {
 		.rxchar_cb		= NULL,
 		.rxerr_cb		= NULL,
 		.timeout_cb		= NULL,
-#if defined(STM32F7XX)
+#if defined(STM32F7XX) || defined(STM32H7XX)
 		.timeout        = 0,
 #endif
 		.speed 			= baud,

@@ -61,6 +61,19 @@ bool BitbangI2c::init(brain_pin_e scl, brain_pin_e sda) {
 	return true;
 }
 
+void BitbangI2c::deinit() {
+#if EFI_PROD_CODE
+	if (m_sclPort) {
+		gpio_pin_markUnused(m_sclPort, m_sclPin);
+		m_sclPort = NULL;
+	}
+	if (m_sdaPort) {
+		gpio_pin_markUnused(m_sdaPort, m_sdaPin);
+		m_sdaPort = NULL;
+	}
+#endif
+}
+
 void BitbangI2c::start() {
 	// Start with both lines high (bus idle)
 	sda_high();
@@ -161,6 +174,9 @@ uint8_t BitbangI2c::readByte(bool ack) {
 	// 1 -> nack
 	sendBit(!ack);
 
+	// release SDA
+	sda_high();
+
 	return result;
 }
 
@@ -186,15 +202,7 @@ void BitbangI2c::write(uint8_t addr, const uint8_t* writeData, size_t writeSize)
 }
 
 void BitbangI2c::writeRead(uint8_t addr, const uint8_t* writeData, size_t writeSize, uint8_t* readData, size_t readSize) {
-	start();
-
-	// Address + write
-	writeByte(addr << 1 | 0);
-
-	// Write outbound bytes
-	for (size_t i = 0; i < writeSize; i++) {
-		writeByte(writeData[i]);
-	}
+	write(addr, writeData, writeSize);
 
 	read(addr, readData, readSize);
 }

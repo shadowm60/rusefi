@@ -1,9 +1,4 @@
-plugins {
-    id 'java-library'
-    id 'com.github.johnrengelman.shadow' version "${shadowVersion}"
-}
-
-apply from: '../../java_tools/dependencies.gradle'
+apply from: dependenciesPath
 
 dependencies {
     api project(':ecu_io')
@@ -15,7 +10,7 @@ task simulatorFunctionalTestLauncherWithSimulator(type: Exec) {
     group = "Execution"
     description = "Run the main class with ExecTask"
     workingDir = rootProject.projectDir
-    commandLine "java", "-classpath", sourceSets.main.runtimeClasspath.getAsPath(), "com.rusefi.SimulatorFunctionalTestLauncher", "start"
+    commandLine "java", "-classpath", sourceSets.main.runtimeClasspath.getAsPath(), "com.rusefi.SimulatorFunctionalTestLauncher", "../firmware/tunerstudio/generated/rusefi_f407-discovery.ini", "start"
 }
 
 task simulatorFunctionalTestLauncherAssumungSimulatorWasStartedExternally(type: Exec) {
@@ -23,5 +18,5 @@ task simulatorFunctionalTestLauncherAssumungSimulatorWasStartedExternally(type: 
     group = "Execution"
     description = "Run the main class with ExecTask"
     workingDir = rootProject.projectDir
-    commandLine "java", "-classpath", sourceSets.main.runtimeClasspath.getAsPath(), "com.rusefi.SimulatorFunctionalTestLauncher"
+    commandLine "java", "-classpath", sourceSets.main.runtimeClasspath.getAsPath(), "com.rusefi.SimulatorFunctionalTestLauncher", "../firmware/tunerstudio/generated/rusefi_f407-discovery.ini"
 }

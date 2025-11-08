@@ -8,6 +8,7 @@
  */
 
 #include "pch.h"
+#include "board_overrides.h"
 
 #ifdef STM32F469xx
 static bool is469 = true;
@@ -40,10 +41,8 @@ static void setPrometheusDefaults() {
 	engineConfiguration->displacement = 1.645;
 	engineConfiguration->injector.flow = 200;
 
-	engineConfiguration->cranking.baseFuel = 25;
+	setTable(config->crankingCycleBaseFuel, 25);
 	engineConfiguration->cranking.rpm = 600;
-
-	engineConfiguration->rpmHardLimit = 8500;
 
 	engineConfiguration->map.sensor.type = MT_MPX4250;
 
@@ -109,7 +108,7 @@ void setPinConfigurationOverrides() {
  * @brief   Board-specific configuration defaults.
 
  */
-void setBoardDefaultConfiguration() {
+static void prometheus_boardDefaultConfiguration() {
 	// give a chance to trigger SWD programmer... Wait for 2 secs (=2000 ms).
 //	chThdSleepMilliseconds(2000);
 
@@ -182,14 +181,6 @@ void setBoardDefaultConfiguration() {
 	engineConfiguration->spi3sckPin = Gpio::C10;
 	engineConfiguration->spi3SckMode = PO_OPENDRAIN; // 4
 
-	engineConfiguration->hip9011SpiDevice = SPI_DEVICE_3;
-	engineConfiguration->hip9011CsPin = is469 ? Gpio::D1 : Gpio::D2;
-	engineConfiguration->hip9011CsPinMode = OM_OPENDRAIN;
-	engineConfiguration->hip9011IntHoldPin = Gpio::C14;
-	engineConfiguration->hip9011IntHoldPinMode = OM_OPENDRAIN;
-    engineConfiguration->hipOutputChannel = EFI_ADC_10; // PC0
-    engineConfiguration->isHip9011Enabled = true;
-
 	engineConfiguration->canTxPin = Gpio::B9;
 	engineConfiguration->canRxPin = Gpio::B8;
 
@@ -203,4 +194,8 @@ void setBoardDefaultConfiguration() {
 
 Gpio getRunningLedPin() {
 	return Gpio::A13; //Gpio::A13; // yellow LED
+}
+
+void setup_custom_board_overrides() {
+	custom_board_DefaultConfiguration = prometheus_boardDefaultConfiguration;
 }

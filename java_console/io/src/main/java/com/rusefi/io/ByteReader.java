@@ -2,7 +2,6 @@ package com.rusefi.io;
 
 import com.devexperts.logging.Logging;
 import com.opensr5.io.DataListener;
-import com.rusefi.config.generated.Fields;
 import com.rusefi.io.serial.AbstractIoStream;
 import com.rusefi.io.tcp.BinaryProtocolServer;
 
@@ -27,7 +26,7 @@ public interface ByteReader {
         threadExecutor.execute(() -> {
             log.info(loggingPrefix + "Running TCP connection loop");
 
-            byte[] inputBuffer = new byte[Fields.BLOCKING_FACTOR * 2];
+            byte[] inputBuffer = new byte[64 * 1024];
             while (!ioStream.isClosed()) {
                 try {
                     int result = reader.read(inputBuffer);

@@ -12,7 +12,7 @@ import java.io.Reader;
 import java.util.Arrays;
 import java.util.function.Function;
 
-public class TableData implements HoHo {
+public class TableData implements CannableEntity {
     private final int rows;
     private final int columns;
     public final float[][] floats;
@@ -27,7 +27,7 @@ public class TableData implements HoHo {
 
     @Nullable
     public static TableData readTable(String msqFileName, String tableName, IniFileModel model) throws IOException {
-        IniField iniField = model.allIniFields.get(tableName);
+        IniField iniField = model.getAllIniFields().get(tableName);
         if (!(iniField instanceof ArrayIniField)) {
             // this could happen if older tune is not compatible with newer .ini
             return null;
@@ -79,7 +79,7 @@ public class TableData implements HoHo {
                     throw new IllegalStateException("While reading " + str, e);
                 }
             }
-            System.out.println("Got line " + rowIndex + ": " + Arrays.toString(table[rowIndex]));
+//            System.out.println("Got line " + rowIndex + ": " + Arrays.toString(table[rowIndex]));
             rowIndex++;
         }
     }
@@ -90,8 +90,8 @@ public class TableData implements HoHo {
         return output.toString();
     }
 
-    private String getCannedMethod() {
-        return "canned" + tableName + "()";
+    private String getCannedMethod(String methodNamePrefix) {
+        return methodNamePrefix + "canned" + tableName + "()";
     }
 
     private String getCannedName() {
@@ -107,15 +107,26 @@ public class TableData implements HoHo {
     }
 
     @Override
-    public String getCsourceMethod(String reference) {
-        return "static void " + getCannedMethod() + " {\n"
+    public String getCsourceMethod(String reference, String methodNamePrefix, String name) {
+        String scale = "";
+/*
+        if (tableName.equals("lambdaTable"))
+            scale = ", 1.0 / 14.7";
+*/
+        return "static void " + getCannedMethod(methodNamePrefix) + " {\n"
             + "\t" + getCsourceCode() +
-            "\tcopyTable(" + reference + tableName + ", " + getCannedName() + ");\n" +
+            "\tcopyTable(" + reference + name + ", " + getCannedName() + scale + ");\n" +
             "}\n\n";
     }
 
+
     @Override
-    public String getCinvokeMethod() {
-        return "\t" + getCannedMethod() + ";\n";
+    public String getName() {
+        return tableName;
+    }
+
+    @Override
+    public String getCinvokeMethod(String methodNamePrefix) {
+        return "\t" + getCannedMethod(methodNamePrefix) + ";\n";
     }
 }

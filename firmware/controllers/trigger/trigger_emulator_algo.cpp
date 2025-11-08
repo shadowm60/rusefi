@@ -95,6 +95,8 @@ static float getRpmMultiplier(operation_mode_e mode) {
 }
 
 void setTriggerEmulatorRPM(int rpm) {
+  criticalAssertVoid(rpm >= 0 && rpm <= 30000, "emulator RPM out of range");
+
 	engineConfiguration->triggerSimulatorRpm = rpm;
 	/**
 	 * All we need to do here is to change the periodMs
@@ -122,7 +124,7 @@ static void updateTriggerWaveformIfNeeded(PwmConfig *state) {
 
     if (atTriggerVersions[channel] < triggerEmulatorWaveforms[channel]->version) {
 			atTriggerVersions[channel] = triggerEmulatorWaveforms[channel]->version;
-			efiPrintf("Stimulator: updating trigger shape for ch%d: %d/%d %d", channel, atTriggerVersions[channel],
+			efiPrintf("Stimulator: updating trigger shape for ch%d: %d/%d %ld", channel, atTriggerVersions[channel],
 				engine->getGlobalConfigurationVersion(), getTimeNowMs());
 
 			copyPwmParameters(state, &triggerEmulatorWaveforms[channel]->wave);
@@ -135,6 +137,10 @@ static TriggerEmulatorHelper helper;
 static bool hasStimPins = false;
 
 static bool hasInitTriggerEmulator = false;
+
+#if EFI_PROD_CODE
+PUBLIC_API_WEAK void onTriggerEmulatorPinState(int, int) { }
+#endif /* EFI_PROD_CODE */
 
 # if !EFI_UNIT_TEST
 
@@ -157,6 +163,13 @@ static void emulatorApplyPinState(int stateIndex, PwmConfig *state) /* pwm_gen_c
 	// Only set pins if they're configured - no need to waste the cycles otherwise
 	else if (hasStimPins) {
 		applyPinState(stateIndex, state);
+
+		// this allows any arbitrary code to synchronize with the trigger emulator
+		for (int channel = 0; channel < NUM_EMULATOR_CHANNELS; channel++) {
+			if (state != &triggerEmulatorSignals[channel])
+				continue;
+			onTriggerEmulatorPinState(stateIndex, channel);
+		}
 	}
 #endif /* EFI_PROD_CODE */
 }
@@ -180,7 +193,7 @@ static void startSimulatedTriggerSignal() {
 		if (s->getSize() == 0)
 			continue;
 		triggerEmulatorSignals[channel].weComplexInit(
-			&engine->executor,
+			&engine->scheduler,
 			&s->wave,
 			updateTriggerWaveformIfNeeded, emulatorApplyPinState);
 	}
@@ -224,8 +237,6 @@ void onConfigurationChangeRpmEmulatorCallback(engine_configuration_s *previousCo
 }
 
 void initTriggerEmulator() {
-	efiPrintf("Emulating %s", getEngine_type_e(engineConfiguration->engineType));
-
 	startTriggerEmulatorPins();
 
 	addConsoleActionI(CMD_RPM, setTriggerEmulatorRPM);
@@ -239,20 +250,29 @@ void startTriggerEmulatorPins() {
 		for (size_t i = 0; i < efi::size(emulatorOutputs[channel]); i++) {
 			triggerEmulatorSignals[channel].outputPins[i] = &emulatorOutputs[channel][i];
 
-			// todo: add pin configs for cam simulator channels
-			if (channel != 0)
-				continue;
-			brain_pin_e pin = engineConfiguration->triggerSimulatorPins[i];
+#if EFI_PROD_CODE
+      brain_pin_e pin;
+
+      pin_output_mode_e outputMode;
+			if (channel == 0) {
+  			pin = engineConfiguration->triggerSimulatorPins[i];
+  			outputMode = engineConfiguration->triggerSimulatorPinModes[i];
+  		} else if (channel == 1 && i == 0) {
+  		  pin = engineConfiguration->camSimulatorPin;
+  		  outputMode = engineConfiguration->camSimulatorPinMode;
+  		} else {
+			  // todo: add pin configs for cam simulator channels
+  		  continue;
+  		}
 
 			// Only bother trying to set output pins if they're configured
 			if (isBrainPinValid(pin)) {
 				hasStimPins = true;
 			}
 
-#if EFI_PROD_CODE
 			if (isConfigurationChanged(triggerSimulatorPins[i])) {
 				triggerEmulatorSignals[channel].outputPins[i]->initPin("Trigger emulator", pin,
-					engineConfiguration->triggerSimulatorPinModes[i]);
+					outputMode);
 			}
 #endif // EFI_PROD_CODE
 		}

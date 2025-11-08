@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 
 fileName="rusefi_$SHORT_BOARD_NAME.ini"
-# user=$1
-# pass=$2
-# host=$3
+USER=$1
+PASS=$2
+HOST=$3
+
+SCRIPT_NAME=$(basename "$0")
 
 if [ ! "$SHORT_BOARD_NAME" ]; then
  echo "No SHORT_BOARD_NAME"
  exit 1
 fi
 
-if [ ! "$1" ] || [ ! "$2" ] || [ ! "$3" ]; then
+if [ ! "$USER" ] || [ ! "$PASS" ] || [ ! "$HOST" ]; then
  echo "upload_ini.sh says No Secrets, exiting"
  exit 0
 fi
 
 pwd
-echo -e "\nUploading all .ini files"
+echo -e "\nUploading all .ini files into [$INI_DESTINATION_FOLDER] subfolder"
 ls -l .
 
 if [ "$fileName" == "no" ]; then
@@ -39,8 +41,9 @@ if [ ! -z "$sig" -a "$sig" != " " ]; then
     echo "* found path: $path"
     # we do not have ssh for this user
     # sftp does not support -p flag on mkdir :(
-    sshpass -p $2 sftp -o StrictHostKeyChecking=no $1@$3 <<SSHCMD
-cd rusefi
+    sshpass -p $PASS sftp -o StrictHostKeyChecking=no ${USER}@${HOST} <<SSHCMD
+mkdir ${INI_DESTINATION_FOLDER}rusefi
+cd ${INI_DESTINATION_FOLDER}rusefi
 mkdir $branch
 mkdir $branch/$year
 mkdir $branch/$year/$month
@@ -50,12 +53,12 @@ put $fileName $path
 SSHCMD
     retVal=$?
     if [ $retVal -ne 0 ]; then
-      echo "Upload failed"
+      echo "${SCRIPT_NAME} Upload failed"
       exit 1
     fi
-    echo "* upload done!"
+    echo "${SCRIPT_NAME} * upload done!"
   else
-    echo "[upload_ini] Unexpected Signature: [$sig]"
+    echo "${SCRIPT_NAME} Unexpected Signature: [$sig]"
   fi
 else
   echo "Signature not found in $fileName"

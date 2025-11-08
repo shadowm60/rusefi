@@ -1,6 +1,6 @@
 package com.rusefi.waves;
 
-import com.rusefi.config.generated.Fields;
+import com.rusefi.config.generated.Integration;
 
 import java.util.Map;
 
@@ -39,7 +39,7 @@ public class EngineChart {
     }
 
     public RevolutionLog getRevolutionsLog() {
-        StringBuilder revolutions = get(Fields.TOP_DEAD_CENTER_MESSAGE);
+        StringBuilder revolutions = get(Integration.TOP_DEAD_CENTER_MESSAGE);
         return RevolutionLog.parseRevolutions(revolutions);
     }
 

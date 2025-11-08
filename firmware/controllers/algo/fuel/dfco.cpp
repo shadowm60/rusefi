@@ -1,12 +1,17 @@
+// Deceleration Fuel Cut-off
 
-#include "engine_configuration.h"
-#include "sensor.h"
+#include "pch.h"
 
 #include "dfco.h"
+#include "closed_loop_fuel.h"
 
 bool DfcoController::getState() const {
 	if (!engineConfiguration->coastingFuelCutEnabled) {
 		return false;
+	}
+
+	if (checkIfTuningVeNow()) {
+	  return false;
 	}
 
 	const auto tps = Sensor::get(SensorType::DriverThrottleIntent);
@@ -14,14 +19,24 @@ bool DfcoController::getState() const {
 	const auto map = Sensor::get(SensorType::Map);
 
 	// If some sensor is broken, inhibit DFCO
-	if (!tps || !clt || !map) {
+	if (!tps || !clt) {
+		return false;
+	}
+
+	// MAP sensor is optional, only inhibit if the sensor is present but broken
+	bool hasMap = Sensor::hasSensor(SensorType::Map);
+	if (hasMap && !map) {
+		return false;
+	}
+	if (engine->engineState.lua.disableDecelerationFuelCutOff) {
+	  // Lua might have reasons to disable
 		return false;
 	}
 
 	float rpm = Sensor::getOrZero(SensorType::Rpm);
 	float vss = Sensor::getOrZero(SensorType::VehicleSpeed);
 
-	bool mapActivate = map.Value < engineConfiguration->coastingFuelCutMap;
+	bool mapActivate = !hasMap || !m_mapHysteresis.test(map.value_or(0), engineConfiguration->coastingFuelCutMap + 1, engineConfiguration->coastingFuelCutMap - 1);
 	bool tpsActivate = tps.Value < engineConfiguration->coastingFuelCutTps;
 	bool cltActivate = clt.Value > engineConfiguration->coastingFuelCutClt;
 	// True if throttle, MAP, and CLT are all acceptable for DFCO to occur
@@ -74,4 +89,23 @@ bool DfcoController::cutFuel() const {
 
 float DfcoController::getTimeSinceCut() const {
 	return m_timeSinceCut.getElapsedSeconds();
+}
+
+float DfcoController::getTimingRetard() const {
+	float cutTiming = clampF(0, engineConfiguration->dfcoRetardDeg, 30);
+
+	if (m_isDfco) {
+		// While cut, always retard timing
+		return cutTiming;
+	} else {
+		float timeSinceCut = m_timeSinceCut.getElapsedSeconds();
+		float rampInTime = engineConfiguration->dfcoRetardRampInTime;
+
+		if (timeSinceCut > rampInTime) {
+			// Normal operation, no retard
+			return 0;
+		} else {
+			return interpolateClamped(0, cutTiming, 0.5, 0, timeSinceCut);
+		}
+	}
 }

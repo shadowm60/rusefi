@@ -7,9 +7,16 @@ extern "C" {
 	#include "rs232.h"
 }
 
+extern blt_bool stayInBootloader;
+
 void Rs232Init() {
-	// Set up USB serial
-	usb_serial_start();
+#if (BOOT_BACKDOOR_ENTRY_TIMEOUT_MS == 0)
+	if (stayInBootloader || (NvmVerifyChecksum() == BLT_FALSE))
+#endif
+	{
+	  // Set up USB serial
+  	usb_serial_start();
+	}
 }
 
 #define RS232_CTO_RX_PACKET_TIMEOUT_MS (100u)
@@ -26,7 +33,6 @@ static void     Rs232TransmitByte(blt_int8u data);
 ****************************************************************************************/
 void Rs232TransmitPacket(blt_int8u *data, blt_int8u len)
 {
-  blt_int16u data_index;
 
   /* verify validity of the len-paramenter */
   // ASSERT_RT(len <= BOOT_COM_RS232_TX_MAX_DATA);
@@ -34,15 +40,19 @@ void Rs232TransmitPacket(blt_int8u *data, blt_int8u len)
   /* first transmit the length of the packet */
   Rs232TransmitByte(len);
 
-  /* transmit all the packet bytes one-by-one */
-  for (data_index = 0; data_index < len; data_index++)
-  {
-    /* keep the watchdog happy */
-    CopService();
-    /* write byte */
-    Rs232TransmitByte(data[data_index]);
-  }
+  chnWriteTimeout(&SDU1, data, len, TIME_INFINITE);
 } /*** end of Rs232TransmitPacket ***/
+
+PUBLIC_API_WEAK void openBltUnexpectedByte(blt_int8u firstByte) {
+#if defined(OPEN_BLT_TEST_COMMAND)
+// 'z' is right at the end of 128 ascii range
+static_assert(BOOT_COM_RS232_RX_MAX_DATA < 'z');
+  if (firstByte == 'z') {
+  const char * bltTest = "openblt\n";
+    chnWriteTimeout(&SDU1, (const uint8_t*)bltTest, sizeof(bltTest), TIME_INFINITE);
+  }
+#endif // OPEN_BLT_TEST_COMMAND
+}
 
 /************************************************************************************//**
 ** \brief     Receives a communication interface packet if one is present.
@@ -73,6 +83,8 @@ blt_bool Rs232ReceivePacket(blt_int8u *data, blt_int8u *len)
         xcpCtoRxLength = 0;
         /* indicate that a cto packet is being received */
         xcpCtoRxInProgress = BLT_TRUE;
+      } else {
+        openBltUnexpectedByte(xcpCtoReqPacket[0]);
       }
     }
   }

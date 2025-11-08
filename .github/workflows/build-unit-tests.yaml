@@ -1,6 +1,9 @@
 name: Unit Tests
 
-on: [push,pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,16 +14,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
-    - name: Checkout Submodules
+    - name: Checkout Submodules Without ChibiOS
       run: |
-        git submodule update --init --depth=1 unit_tests/googletest
-        git submodule update --init --depth=1 firmware/libfirmware
-        git submodule update --init --depth=1 firmware/ext/lua
-        git submodule update --init --depth=1 firmware/controllers/lua/luaaa
-        git submodule update --init --depth=1 firmware/controllers/can/wideband_firmware
-        git submodule update --init --depth=1 java_console/peak-can-basic
+        misc/git_scripts/common_submodule_init_without_chibios.sh
 
     - name: Discover cores
       if: ${{ matrix.os != 'macos-latest' }}
@@ -30,7 +28,9 @@ jobs:
       if: ${{ matrix.os != 'macos-latest' }}
       run: |
         sudo bash misc/actions/add-ubuntu-latest-apt-mirrors.sh
-        sudo apt-get install mtools zip dosfstools sshpass lcov valgrind
+        sudo bash misc/actions/ubuntu-install-tools.sh
+        sudo apt-get install python3-pip valgrind
+        pip install gcovr
 
     - name: Install required software (macos)
       if: ${{ matrix.os == 'macos-latest' }}
@@ -43,17 +43,29 @@ jobs:
     - name: Test Java Compiler
       run: javac -version
 
-    - name: Generate Enums & Live Documentation
-      working-directory: ./firmware/
-      run: bash gen_live_documentation.sh
-
     - name: Print Compiler version
       # NOTE: on mac, this is actually symlink'd to clang, not gcc, but that's ok - we want to build on both
       run: gcc -v
 
+    - name: Handle docs-enums separately just to make github logs more readable
+      working-directory: ./unit_tests/
+      run: make -j4 docs-enums
+
+    - name: Handle configs separately just to make github logs more readable
+      working-directory: ./unit_tests/
+      run: make -j4 config
+
     - name: Build Tests
       working-directory: ./unit_tests/
-      run: make -j4 COVERAGE=yes
+      run: |
+        TIMEFORMAT=%R
+        time make -j4 COVERAGE=yes
+
+    - name: Build Tests again to assert incremental
+      working-directory: ./unit_tests/
+      run: |
+        TIMEFORMAT=%R
+        timeout 30s make -j4 COVERAGE=yes
 
     - name: Run Tests
       working-directory: ./unit_tests/
@@ -70,13 +82,26 @@ jobs:
         fi
 
     - name: Generate Code Coverage
-      if: ${{ matrix.os != 'macos-latest' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ matrix.os != 'macos-latest' }}
       working-directory: ./unit_tests/
-      run: ./ci_gcov.sh ${{ secrets.RUSEFI_SSH_USER }} ${{ secrets.RUSEFI_SSH_PASS }} ${{ secrets.RUSEFI_SSH_SERVER }}
+      run: ./ci_gcov.sh
 
-    - name: Run Tests (sharded)
-      working-directory: ./unit_tests/
-      run: bash ./run_sharded_tests.sh
+    - name: Upload code coverage artifacts
+      if: ${{ matrix.os != 'macos-latest' }}
+      uses: actions/upload-artifact@v5
+      with:
+        name: rusefi_code_coverage.txt
+        path: ./unit_tests/gcov_working_area/gcov
+
+    - name: upload test coverage to remote server
+      if: ${{ matrix.os != 'macos-latest' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      working-directory: ./unit_tests
+      run: ./upload_coverage.sh
+
+
+#   - name: Run Tests (sharded)
+#      working-directory: ./unit_tests/
+#      run: bash ./run_sharded_tests.sh
 
     - name: Rebuild Tests For Valgrind
       # Valgrind isn't compatible with address sanitizer, so we have to rebuild the code
@@ -84,9 +109,9 @@ jobs:
       working-directory: ./unit_tests/
       run: |
         make clean
-        make -j4 SANITIZE=no
+        ./make_for_valgrind.sh
 
     - name: Run Tests (Valgrind)
       if: ${{ matrix.os != 'macos-latest' }}
       working-directory: ./unit_tests/
-      run: valgrind --error-exitcode=1 --exit-on-first-error=yes --leak-check=no --show-error-list=yes build/rusefi_test
+      run: ./run_with_valgrind.sh

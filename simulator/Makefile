@@ -12,15 +12,22 @@
 #
 
 
-
 CHIBIOS = ../firmware/ChibiOS
-CHIBIOS_CONTRIB= ../firmware/ChibiOS-Contrib
+CHIBIOS_CONTRIB = ../firmware/ChibiOS-Contrib
 RULESPATH = $(CHIBIOS)/os/common/startup/SIMIA32/compilers/GCC
+
+US_TO_NT_MULTIPLIER = 100
 
 PROJECT_CPU=simulator
 
+# OS is a windows-specific environment variable
+ifneq ($(OS),Windows_NT)
+  OS = $(shell uname)
+endif
+$(info OS is [${OS}])
+
 include ../firmware/rusefi.mk
-RULESFILE = ../firmware/rusefi_rules.mk
+include ../firmware/rusefi_rules.mk
 
 # Configure precompiled header
 PCH_DIR = $(PROJECT_DIR)/pch
@@ -44,19 +51,26 @@ endif
 # Compiler options here.
 ifeq ($(USE_OPT),)
   USE_OPT = -Wall -Wno-error=implicit-fallthrough -Wno-error=write-strings -Wno-error=strict-aliasing -Werror=nonnull
+  USE_OPT += -D US_TO_NT_MULTIPLIER=$(US_TO_NT_MULTIPLIER)
 
   ifeq ($(OS),Windows_NT)
-    USE_OPT += -DEFI_SIM_IS_WINDOWS=1
+    USE_OPT += -DEFI_SIM_IS_WINDOWS=1 -DIS_WINDOWS_COMPILER=1
   else
-    USE_OPT += -m32 -DEFI_SIM_IS_WINDOWS=0
+    USE_OPT += -m32 -DEFI_SIM_IS_WINDOWS=0 -DIS_WINDOWS_COMPILER=0
   endif
 endif
 
 # Pretend we are all different hardware so that all canned engine configs are included
 # [CannedTunes]
 USE_OPT += -DHW_HELLEN_HYUNDAI=1
+USE_OPT += -DHW_HELLEN_NISSAN=1
+USE_OPT += -DHW_HELLEN_NB1=1
+USE_OPT += -DHW_HELLEN_NB2=1
+USE_OPT += -DHW_HELLEN=1
 USE_OPT += -DHW_PROTEUS=1
 USE_OPT += -DHW_MICRO_RUSEFI=1
+
+USE_OPT += -DEFI_LUA_LOOKUP=1
 
 # See explanation in main firmware Makefile for these three defines
 USE_OPT += $(SIMULATOR_DEBUG_LEVEL_OPT) $(RUSEFI_OPT) -DEFI_UNIT_TEST=0 -DEFI_PROD_CODE=0 -DEFI_SIMULATOR=1
@@ -130,10 +144,7 @@ PROJECT_DIR = ../firmware
 
 # Imported source files and paths
 
-# Configure libfirmware Paths/Includes
-RUSEFI_LIB = $(PROJECT_DIR)/libfirmware
-include $(RUSEFI_LIB)/util/util.mk
-include $(RUSEFI_LIB)/pt2001/pt2001.mk
+include $(PROJECT_DIR)/common_libfirmware.mk
 
 # Licensing files.
 include $(CHIBIOS)/os/license/license.mk
@@ -158,7 +169,16 @@ endif
 include $(PROJECT_DIR)/console/binary/tunerstudio.mk
 include $(PROJECT_DIR)/console/console.mk
 include $(PROJECT_DIR)/common.mk
+include $(PROJECT_DIR)/controllers/modules/modules.mk
 
+ifneq ($(BOARD_DIR),)
+  # used by custom board custom live data
+  INCDIR += $(BOARD_DIR)/firmware
+  ifneq ("$(wildcard $(BOARD_DIR)/board_common.mk)","")
+    # part common between PROD, simulator and unit tests
+    include $(BOARD_DIR)/board_common.mk
+  endif
+endif
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
@@ -169,6 +189,7 @@ CSRC =  $(ALLCSRC) \
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
 CPPSRC = $(ALLCPPSRC) \
+  $(BOARDCPPSRC) \
   $(CHIBIOS)/os/various/cpp_wrappers/ch.cpp \
   $(HW_LAYER_DRIVERS_CPP) \
   $(HW_LAYER_DRIVERS_CORE_CPP) \
@@ -180,6 +201,7 @@ CPPSRC = $(ALLCPPSRC) \
   simulator/system/signal_executor_sleep.cpp \
   simulator/boards.cpp \
   $(TEST_SRC_CPP) \
+  $(MODULES_CPPSRC) \
   $(RUSEFI_LIB_CPP) \
   main.cpp
 
@@ -187,9 +209,10 @@ CPPSRC = $(ALLCPPSRC) \
 # List ASM source files here
 ASMSRC = $(PORTASM)
 
-INCDIR = . \
+INCDIR += . \
   $(PCH_DIR) \
   $(ALLINC) \
+  $(MODULES_INC) \
   $(CHIBIOS)/os/various/cpp_wrappers \
   $(PROJECT_DIR)/hw_layer/drivers/can \
   ${CHIBIOS}/os/various \
@@ -211,8 +234,6 @@ ASMXSRC = $(STARTUPASM) $(PORTASM) $(OSALASM)
 ##############################################################################
 # Compiler settings
 #
-
-$(info OS is [${OS}])
 
 ifeq ($(OS),Windows_NT)
   # ChibiOS seem to require 32 bit compiler at least on Windows
@@ -256,7 +277,7 @@ CPPWARN = -Wall -Wextra -Wundef
 
 # List all user C define here, like -D_DEBUG=1
 UDEFS = -DSIMULATOR
-DDEFS += -DFIRMWARE_ID=\"simulator\" -DSHORT_BOARD_NAME=f407-discovery
+DDEFS += -DFIRMWARE_ID=\"simulator\" -DSHORT_BOARD_NAME=$(SHORT_BOARD_NAME)
 
 
 # Define ASM defines here
@@ -285,10 +306,27 @@ endif
 
 include $(RULESPATH)/rules.mk
 
+ifneq (yes,$(SUBMAKE))
+ifeq ($(SHORT_BOARD_NAME),)
+  SHORT_BOARD_NAME = f407-discovery
+endif
+include $(PROJECT_DIR)/rusefi_config.mk
+endif
+
 # Enable precompiled header
 include $(PROJECT_DIR)/rusefi_pch.mk
 
-CLEAN_RULE_HOOK:
+$(OBJS): .os-sentinel
+
+.os-sentinel: .FORCE
+	if [ "$$(cat $@ 2>/dev/null)" != $(OS) ]; then \
+	echo $(OS) >$@; fi
+
+.FORCE:
+
+.PHONY: CLEAN_RULE_HOOK CLEAN_PCH_HOOK
+
+CLEAN_RULE_HOOK: CLEAN_PCH_HOOK
 	@echo Cleaning Simulator
 	rm -rf build
 	rm -rf .dep

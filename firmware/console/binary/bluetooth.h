@@ -25,7 +25,9 @@ typedef enum {
 	 * See https://rusefi.com/forum/viewtopic.php?f=13&t=1999
 	 */
 	BLUETOOTH_BK3231,
+	// fun fact: those use BK3232 see above
 	BLUETOOTH_JDY_3x,
+  BLUETOOTH_JDY_31,
 } bluetooth_module_e;
 
 /**
@@ -43,3 +45,8 @@ void bluetoothStart(bluetooth_module_e moduleType, const char *baudRate, const c
  */
 void bluetoothSoftwareDisconnectNotify(SerialTsChannelBase* tsChannel);
 
+/**
+ * Called during bluetooth initialization. Checks to see if module responds to common baud rates
+ * returns the index of the found baud
+ */
+uint8_t findBaudIndex(SerialTsChannelBase* tsChannel);

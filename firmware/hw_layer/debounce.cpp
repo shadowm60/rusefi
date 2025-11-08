@@ -20,7 +20,7 @@ ButtonDebounce::ButtonDebounce(const char *name)
 /**
 We need to have a separate init function because we do not have the pin or mode in the context in which the class is originally created
 */
-void ButtonDebounce::init (efitimems_t threshold, brain_pin_e &pin, pin_input_mode_e &mode) {
+void ButtonDebounce::init (efitimems_t threshold, brain_pin_e &pin, pin_input_mode_e &mode, bool inverted) {
    // we need to keep track of whether we have already been initialized due to the way unit tests run.
     if (!isInstanceRegisteredInGlobalList) {
 	// Link us to the list that is used to track ButtonDebounce instances, so that when the configuration changes,
@@ -31,13 +31,16 @@ void ButtonDebounce::init (efitimems_t threshold, brain_pin_e &pin, pin_input_mo
     m_threshold = MS2NT(threshold);
     m_pin = &pin;
     m_mode = &mode;
+    m_inverted = inverted;
     startConfiguration();
     isInstanceRegisteredInGlobalList = true;
 }
 
 void ButtonDebounce::stopConfigurationList() {
     ButtonDebounce *listItem = s_firstDebounce;
+    int loopLimitCounter = 0;
     while (listItem != nullptr) {
+    	criticalAssertVoid(loopLimitCounter++ < 10000, "dead stopConfigurationList?");
         listItem->stopConfiguration();
         listItem = listItem->nextDebounce;
     }
@@ -45,7 +48,9 @@ void ButtonDebounce::stopConfigurationList() {
 
 void ButtonDebounce::startConfigurationList() {
     ButtonDebounce *listItem = s_firstDebounce;
+    int loopLimitCounter = 0;
     while (listItem != nullptr) {
+    	criticalAssertVoid(loopLimitCounter++ < 10000, "dead startConfigurationList?");
         listItem->startConfiguration();
         listItem = listItem->nextDebounce;
     }
@@ -86,7 +91,7 @@ bool ButtonDebounce::readPinEvent() {
 
 bool ButtonDebounce::getPhysicalState() {
 #if EFI_PROD_CODE || EFI_UNIT_TEST
-    return efiReadPin(active_pin);
+    return efiReadPin(active_pin) ^ m_inverted;
 #else
     return false;
 #endif
@@ -128,7 +133,7 @@ void ButtonDebounce::debug() {
     ButtonDebounce *listItem = s_firstDebounce;
     while (listItem != nullptr) {
 #if EFI_PROD_CODE || EFI_UNIT_TEST
-        efiPrintf("%s timeLast %d", listItem->m_name, listItem->timeLast);
+        efiPrintf("%s timeLast %f", listItem->m_name, listItem->timeLast.getElapsedSeconds());
         efiPrintf("physical pin state %d", listItem->getPhysicalState());
         efiPrintf("state %d", listItem->storedValue);
         efiPrintf("mode %d", listItem->active_mode);

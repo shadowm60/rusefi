@@ -1,30 +1,44 @@
 package com.rusefi;
 
+import com.opensr5.ini.IniFileModelImpl;
+import com.rusefi.binaryprotocol.BinaryProtocol;
 import com.rusefi.io.LinkManager;
 import com.rusefi.simulator.SimulatorFunctionalTest;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+
+import static com.opensr5.ini.IniFileModelImpl.readIniFile;
 
 /**
  * this class runs rusEFI functional tests against rusEFI simulator
  */
 public class SimulatorFunctionalTestLauncher {
     static volatile boolean isHappy;
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             e.printStackTrace();
             System.exit(66);
         });
-        boolean startSimulator = args.length == 1 && args[0].equalsIgnoreCase("start");
+        if (args.length == 0)
+            throw new IllegalArgumentException("Required argument: .ini filename");
+        String iniFileName = args[0];
+        BinaryProtocol.iniFileProvider = signature -> {
+            try {
+                return readIniFile(iniFileName);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        };
+        boolean startSimulator = args.length > 1 && args[1].equalsIgnoreCase("start");
 
 //        if (startSimulator) {
 //            buildSimulator();
 //        }
 
         long start = System.currentTimeMillis();
-        FileLog.SIMULATOR_CONSOLE.start();
-        FileLog.MAIN.start();
+        AutotestLogging.INSTANCE.start();
 
         boolean failed = false;
         try {
@@ -41,11 +55,11 @@ public class SimulatorFunctionalTestLauncher {
         if (failed)
             System.exit(-1);
         isHappy = true;
-        FileLog.MAIN.logLine("*******************************************************************************");
-        FileLog.MAIN.logLine("**** SimulatorFunctionalTestLauncher  Looks good! *****************************");
-        FileLog.MAIN.logLine("*******************************************************************************");
+        AutotestLogging.INSTANCE.logLine("*******************************************************************************");
+        AutotestLogging.INSTANCE.logLine("**** SimulatorFunctionalTestLauncher  Looks good! *****************************");
+        AutotestLogging.INSTANCE.logLine("*******************************************************************************");
         long time = (System.currentTimeMillis() - start) / 1000;
-        FileLog.MAIN.logLine("Done in " + time + "secs");
+        AutotestLogging.INSTANCE.logLine("Done in " + time + "secs");
         System.exit(0); // this is a safer method eliminating the issue of non-daemon threads
     }
 

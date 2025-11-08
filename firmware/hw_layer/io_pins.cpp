@@ -66,7 +66,7 @@ void efiSetPadModeWithoutOwnershipAcquisition(const char *msg, brain_pin_e brain
 		ioportid_t port = getHwPort(msg, brainPin);
 		ioportmask_t pin = getHwPin(msg, brainPin);
 		/* paranoid */
-		if (port == GPIO_NULL)
+		if (!port)
 			return;
 
 		palSetPadMode(port, pin, mode);
@@ -103,10 +103,13 @@ bool efiReadPin(brain_pin_e pin) {
 iomode_t getInputMode(pin_input_mode_e mode) {
 	switch (mode) {
 	case PI_PULLUP:
+	case PI_INVERTED_PULLUP:
 		return PAL_MODE_INPUT_PULLUP;
 	case PI_PULLDOWN:
+	case PI_INVERTED_PULLDOWN:
 		return PAL_MODE_INPUT_PULLDOWN;
 	case PI_DEFAULT:
+	case PI_INVERTED_DEFAULT:
 	default:
 		return PAL_MODE_INPUT;
 	}
@@ -131,3 +134,13 @@ void setMockState(brain_pin_e pin, bool state) {
 }
 
 #endif /* EFI_PROD_CODE */
+
+bool efiIsInputPinInverted(pin_input_mode_e mode) {
+	return ((mode == PI_INVERTED_DEFAULT) ||
+			(mode == PI_INVERTED_PULLUP) ||
+			(mode == PI_INVERTED_PULLDOWN));
+}
+
+bool efiReadPin(brain_pin_e pin, pin_input_mode_e mode) {
+	return efiReadPin(pin) ^ efiIsInputPinInverted(mode);
+}

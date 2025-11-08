@@ -9,6 +9,7 @@
 #pragma once
 #include "global.h"
 #include "tunerstudio_impl.h"
+#include "page_1_generated.h"
 
 #if EFI_USB_SERIAL
 #include "usbconsole.h"
@@ -23,7 +24,8 @@
 #define USART_CR2_STOP1_BITS 0
 #endif
 
-#define SCRATCH_BUFFER_PREFIX_SIZE 3
+#define TS_PACKET_HEADER_SIZE	3
+#define TS_PACKET_TAIL_SIZE		4
 
 class TsChannelBase {
 public:
@@ -50,16 +52,30 @@ public:
 	void writeCrcPacket(uint8_t responseCode, const uint8_t* buf, size_t size, bool allowLongPackets = false);
 	void sendResponse(ts_response_format_e mode, const uint8_t * buffer, int size, bool allowLongPackets = false);
 
+#ifdef CUSTOM_TS_BUFFER_SIZE
+  #define scratchBuffer_SIZE CUSTOM_TS_BUFFER_SIZE
+#else
+  #define scratchBuffer_SIZE BLOCKING_FACTOR
+#endif // CUSTOM_TS_BUFFER
+
 	/**
 	 * See 'blockingFactor' in rusefi.ini
 	 */
-	char scratchBuffer[BLOCKING_FACTOR + 30];
+	char scratchBuffer[scratchBuffer_SIZE + 30];
+#if EFI_TS_SCATTER
+	page1_s page1;
+#endif
 	const char *name;
 
 	void assertPacketSize(size_t size, bool allowLongPackets);
 	uint32_t writePacketHeader(const uint8_t responseCode, const size_t size);
 	void crcAndWriteBuffer(const uint8_t responseCode, const size_t size);
 	void copyAndWriteSmallCrcPacket(uint8_t responseCode, const uint8_t* buf, size_t size);
+
+	// Write a response code with no data
+	void writeCrcResponse(uint8_t responseCode) {
+		writeCrcPacketLarge(responseCode, nullptr, 0);
+	}
 
 	/* When TsChannel is in "not in sync" state tsProcessOne will silently try to find
 	 * begining of packet.
@@ -74,6 +90,7 @@ public:
 	bool in_sync = false;
 
 private:
+	bool isBigPacket(size_t size);
 	void writeCrcPacketLarge(uint8_t responseCode, const uint8_t* buf, size_t size);
 };
 
@@ -120,8 +137,6 @@ protected:
 };
 #endif // HAL_USE_UART
 
-#define CRC_VALUE_SIZE 4
-
 // that's 1 second
 #define BINARY_IO_TIMEOUT TIME_MS2I(1000)
 
@@ -132,5 +147,3 @@ void startSerialChannels();
 SerialTsChannelBase* getBluetoothChannel();
 
 void startCanConsole();
-
-void sendOkResponse(TsChannelBase *tsChannel, ts_response_format_e mode);

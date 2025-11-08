@@ -8,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Objects;
 
 import static com.rusefi.config.FieldType.*;
@@ -21,6 +22,7 @@ public class Field {
     public static final int FIELD_PRECISION = 5;
 
     private final String name;
+    // offset within binary page
     private final int offset;
     private final int stringSize;
     private final FieldType type;
@@ -62,7 +64,7 @@ public class Field {
     /**
      * Finds field by name, ignoring case
      */
-    public static Field findFieldOrNull(Field[] values, String instancePrefix, String fieldName) {
+    public static Field findFieldOrNull(Collection<Field> values, String instancePrefix, String fieldName) {
         Objects.requireNonNull(fieldName);
         for (Field f : values) {
             if (fieldName.equalsIgnoreCase(f.getName()))
@@ -269,8 +271,12 @@ public class Field {
         Objects.requireNonNull(image, "image");
         if (type != STRING)
             throw new IllegalStateException("Not a string parameter " + name);
-        ByteBuffer bb = image.getByteBuffer(offset, stringSize);
-        byte[] bytes = new byte[stringSize];
+        return getString(image, offset, stringSize);
+    }
+
+    public static @NotNull String getString(ConfigurationImage image, int offset, int size) {
+        ByteBuffer bb = image.getByteBuffer(offset, size);
+        byte[] bytes = new byte[size];
         bb.get(bytes);
         return new String(bytes).trim();
     }

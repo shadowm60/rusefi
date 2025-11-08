@@ -66,8 +66,8 @@ public:
 	void smartFireRise(float delayMs);
 	void smartFireFall(float delayMs);
 	void moveTimeForwardAndInvokeEventsUs(int deltaTimeUs);
+	void setTimeNtAndInvokeCallBacks(efitick_t nt);
 	void setTimeAndInvokeEventsUs(int timeNowUs);
-	void executeUntil(int timeUs);
 	void moveTimeForwardAndInvokeEventsSec(int deltaTimeSeconds);
 	/**
 	 * both Rise and Fall
@@ -91,21 +91,26 @@ public:
 	 */
 	void clearQueue();
 
-	scheduling_s * assertEvent5(const char *msg, int index, void *callback, efitimeus_t expectedTimestamp);
-	scheduling_s * assertScheduling(const char *msg, int index, scheduling_s *expected, void *callback, efitimeus_t expectedTimestamp);
+	scheduling_s * assertEvent5(const char *msg, int index, action_s const& action, efitimeus_t expectedTimestamp);
+	scheduling_s * assertScheduling(const char *msg, int index, scheduling_s *expected, action_s const& action, efitimeus_t expectedTimestamp);
 
-	const AngleBasedEvent* assertTriggerEvent(const char *msg, int index, AngleBasedEvent *expected, void *callback, angle_t enginePhase);
+	const AngleBasedEvent* assertTriggerEvent(const char *msg, int index, AngleBasedEvent *expected, action_s const& action, angle_t enginePhase);
 
-	void assertEvent(const char *msg, int index, void *callback, efitimeus_t momentX, InjectionEvent *event);
-	void assertInjectorUpEvent(const char *msg, int eventIndex, efitimeus_t momentX, long injectorIndex);
-	void assertInjectorDownEvent(const char *msg, int eventIndex, efitimeus_t momentX, long injectorIndex);
+	void assertEvent(const char *msg, int index, action_s const& action, efitimeus_t momentUs, InjectionEvent *event);
+	void assertInjectorUpEvent(const char *msg, int eventIndex, efitimeus_t momentUs, long injectorIndex);
+	void assertInjectorDownEvent(const char *msg, int eventIndex, efitimeus_t momentUs, long injectorIndex);
 	// todo: open question if this is worth a helper method or should be inlined?
 	void assertRpm(int expectedRpm, const char *msg = "RPM");
+
+	// read all scheluder queue and search for the requested callback, then asserts the expected angle, return true if we found the callback
+	bool assertEventExistsAtEnginePhase(const char *msg, action_s const& action, angle_t expectedEventEnginePhase);
+
+	// spins the engine using 60-2 trigger pattern, at target RPM, by X crank degree, not engine phase degree
+	void spin60_2UntilDeg(struct testSpinEngineUntilData& spinInfo, int targetRpm, float targetDegree);
 
 	int executeActions();
 	void moveTimeForwardMs(float deltaTimeMs);
 	void moveTimeForwardSec(float deltaTimeSec);
-	efitimeus_t getTimeNowUs();
 
 	Engine engine;
 	persistent_config_s persistentConfig;
@@ -113,10 +118,20 @@ public:
 	std::unique_ptr<::testing::NiceMock<MockAirmass>> mockAirmass;
 
 private:
-	void writeEvents(const char *fileName);
+	void writeEventsLogicData(const char *fileName);
+	void writeEvents2(const char *fileName);
 };
 
 void setupSimpleTestEngineWithMafAndTT_ONE_trigger(EngineTestHelper *eth, injection_mode_e injMode = IM_BATCH);
 void setupSimpleTestEngineWithMaf(EngineTestHelper *eth, injection_mode_e injectionMode, trigger_type_e trigger);
 
 void setVerboseTrigger(bool isEnabled);
+
+warningBuffer_t * getRecentWarnings();
+
+// used by EngineTestHelper::spin60_2UntilDeg func
+struct testSpinEngineUntilData {
+	float currentDegree;
+	int currentTooth;
+	int toothCount;
+};

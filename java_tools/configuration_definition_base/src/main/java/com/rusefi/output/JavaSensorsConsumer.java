@@ -6,10 +6,18 @@ import com.rusefi.VariableRegistry;
 
 import java.io.IOException;
 
+/**
+ * One day this generator should generate what is still manually maintained Sensor.java
+ */
 public class JavaSensorsConsumer implements ConfigurationConsumer {
-    public int sensorTsPosition;
+    private final int sensorTsPosition;
 
     private final StringBuilder sb = new StringBuilder();
+    private int structSize;
+
+    public JavaSensorsConsumer(int sensorTsPosition) {
+        this.sensorTsPosition = sensorTsPosition;
+    }
 
     @Override
     public void startFile() {
@@ -54,10 +62,10 @@ public class JavaSensorsConsumer implements ConfigurationConsumer {
 
 
                 }
-                tsPosition += configField.getSize(next);
+                tsPosition = iterator.adjustSize(tsPosition);
                 // this value would be consumed by LiveDataProcessor
                 // todo: too many variables that's fragile shall we move tsPosition to iterator state?
-                sensorTsPosition  = tsPosition;
+                structSize = tsPosition - sensorTsPosition;
 
                 return tsPosition;
             }
@@ -71,5 +79,9 @@ public class JavaSensorsConsumer implements ConfigurationConsumer {
 
     public String getContent() {
         return sb.toString();
+    }
+
+    public int getStructSize() {
+        return structSize;
     }
 }

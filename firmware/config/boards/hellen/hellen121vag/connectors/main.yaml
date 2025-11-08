@@ -1,6 +1,53 @@
+meta: config/boards/hellen_mm176_meta.h
+
 pins:
+  - pin: auxP2
+    meta: MM176_IN_O2S2_ANALOG
+    class: analog_inputs
+    ts_name: ___ analog
+    function: Aux P2 analog input
+
+  - pin: auxP3
+    meta: MM176_IN_RES3
+    class: switch_inputs
+    ts_name: ___ switch
+    function: Aux P3 switch input
+
+  - pin: auxP4
+    meta: MM176_IN_MAP3_ANALOG
+    class: analog_inputs
+    ts_name: ___ analog
+    function: Aux P4 analog input
+
+  - pin: auxP5
+    meta: MM176_IN_AUX3_ANALOG
+    class: analog_inputs
+    ts_name: ___ analog
+    function: Aux P5 analog input
+
+  - pin: auxP6
+    meta: MM176_OUT_PWM8
+    class: outputs
+    type: ls
+    ts_name: ___ output
+    function: Aux P6 output
+
+  - pin: auxP7
+    meta: MM176_OUT_IO5
+    class: outputs
+    type: ls
+    ts_name: ___ output
+    function: Aux P7 output
+
+  - pin: auxP8
+    meta: MM176_OUT_IO6
+    class: outputs
+    type: ls
+    ts_name: ___ output
+    function: Aux P8 output
+
   - pin: MR
-    id: I2
+    meta: MM176_OUT_PWM17
     class: outputs
     ts_name: Main Relay
     function: OUT_MAIN
@@ -17,6 +64,8 @@ pins:
   - pin: 3a
     function: +12v
     type: vign
+    id: EFI_ADC_5
+    class: analog_inputs
 
   - pin: 5a
     function: LSU Heat -
@@ -40,7 +89,7 @@ pins:
     function: O2 sensor signal
 
   - pin: 18a
-    id: C9
+    meta: MM176_OUT_PWM5
     class: outputs
     ts_name: 18 - VVT2 B1
     function: OUT_VVT2_B1
@@ -180,7 +229,7 @@ pins:
     function: EVAP unused
 
   - pin: 65a
-    id: H14
+    meta: MM176_GP13
     class: outputs
     ts_name: 65 - Fuel Pump
     function: Fuel Pump Relay
@@ -211,7 +260,7 @@ pins:
     function: IN_D4
 
   - pin: 81a
-    id: D15
+    meta: MM176_OUT_PWM7
     class: outputs
     function: OUT_FUEL_CONSUMPTION
 
@@ -357,8 +406,6 @@ pins:
     type: ls
 
   - pin: 106a
-    id: EFI_ADC_5
-    class: analog_inputs
     ts_name: 106 - KNOCK
     function: Knock sens. in
 
@@ -395,7 +442,7 @@ pins:
     type: inj
 
   - pin: 115a
-    id: G3
+    meta: MM176_OUT_IO7
     class: outputs
     ts_name: 115 - VVT1_2
     function: OUT_VVT1_2
@@ -424,6 +471,7 @@ pins:
 
 info:
   title: Hellen 121 VAG
+  cid: main
   name: Hellen 121 VAG
   board_url: https://github.com/rusefi/rusefi/wiki/Hellen121VAG
   directory: hellen/hellen121vag

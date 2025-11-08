@@ -3,6 +3,7 @@
  *
  *  @date 10. sep. 2019
  *      Author: Ola Ruud
+ *      Rework: Patryk Chmura
  */
 
 #include "pch.h"
@@ -10,11 +11,9 @@
 #if EFI_LAUNCH_CONTROL
 #include "boost_control.h"
 #include "launch_control.h"
-#include "periodic_task.h"
-#include "advance_map.h"
 #include "engine_state.h"
-#include "advance_map.h"
-#include "tinymt32.h"
+#include "tinymt32.h" // TL,DR: basic implementation of 'random'
+#include "gppwm_channel_reader.h"
 
 /**
  * We can have active condition from switch or from clutch.
@@ -23,21 +22,21 @@
 bool LaunchControlBase::isInsideSwitchCondition() {
 	isSwitchActivated = engineConfiguration->launchActivationMode == SWITCH_INPUT_LAUNCH;
 	isClutchActivated = engineConfiguration->launchActivationMode == CLUTCH_INPUT_LAUNCH;
-
+	isBrakePedalActivated = engineConfiguration->launchActivationMode == STOP_INPUT_LAUNCH;
 
 	if (isSwitchActivated) {
 #if !EFI_SIMULATOR
 		if (isBrainPinValid(engineConfiguration->launchActivatePin)) {
-			launchActivatePinState = engineConfiguration->launchActivateInverted ^ efiReadPin(engineConfiguration->launchActivatePin);
+			launchActivatePinState = efiReadPin(engineConfiguration->launchActivatePin, engineConfiguration->launchActivatePinMode);
 		}
 #endif // EFI_PROD_CODE
 		return launchActivatePinState;
 	} else if (isClutchActivated) {
-		if (isBrainPinValid(engineConfiguration->clutchDownPin)) {
-			return engine->engineState.clutchDownState;
-		} else {
-			return false;
-		}
+		return getClutchDownState();
+	} else if (isBrakePedalActivated) {
+		return getBrakePedalState();
+	} else if (engineConfiguration->launchActivationMode == LUA_LAUNCH) {
+		return luaLaunchState;
 	} else {
 		// ALWAYS_ACTIVE_LAUNCH
 		return true;
@@ -72,27 +71,47 @@ bool LaunchControlBase::isInsideTpsCondition() const {
 	return engineConfiguration->launchTpsThreshold < tps.Value;
 }
 
-/**
- * Condition is true as soon as we are above LaunchRpm
- */
-bool LaunchControlBase::isInsideRPMCondition(int rpm) const {
-	int launchRpm = engineConfiguration->launchRpm;
-	return (launchRpm < rpm);
+LaunchCondition LaunchControlBase::calculateRPMLaunchCondition(const float rpm) {
+	if ((engineConfiguration->launchActivationMode == SWITCH_INPUT_LAUNCH)
+		&& (engineConfiguration->torqueReductionActivationMode == LAUNCH_BUTTON)
+		&& engineConfiguration->torqueReductionEnabled
+		&& (engineConfiguration->torqueReductionArmingRpm <= rpm)
+	) {
+		// We need perform Shift Torque Reduction stuff (see
+		// https://github.com/rusefi/rusefi/issues/5608#issuecomment-2391500472 and
+		// https://github.com/rusefi/rusefi/issues/5608#issuecomment-2391772899 for details)
+		return LaunchCondition::NotMet;
+	}
+
+	const int launchRpm = engineConfiguration->launchRpm;
+	const int preLaunchRpm = launchRpm - engineConfiguration->launchRpmWindow;
+	if (rpm < preLaunchRpm) {
+		return LaunchCondition::NotMet;
+	} else if (launchRpm <= rpm) {
+		return LaunchCondition::Launch;
+	} else {
+		return LaunchCondition::PreLaunch;
+	}
 }
 
-bool LaunchControlBase::isLaunchConditionMet(int rpm) {
-
+LaunchCondition LaunchControlBase::calculateLaunchCondition(const float rpm) {
+	const LaunchCondition currentRpmLaunchCondition = calculateRPMLaunchCondition(rpm);
 	activateSwitchCondition = isInsideSwitchCondition();
-	rpmCondition = isInsideRPMCondition(rpm);
+	rpmLaunchCondition = (currentRpmLaunchCondition == LaunchCondition::Launch);
+	rpmPreLaunchCondition = (currentRpmLaunchCondition == LaunchCondition::PreLaunch);
 	speedCondition = isInsideSpeedCondition();
 	tpsCondition = isInsideTpsCondition();
 
-	return speedCondition && activateSwitchCondition && rpmCondition && tpsCondition;
+	if(speedCondition && activateSwitchCondition && tpsCondition) {
+		return currentRpmLaunchCondition;
+	} else {
+		return LaunchCondition::NotMet;
+	}
 }
 
 LaunchControlBase::LaunchControlBase() {
 	launchActivatePinState = false;
-	isLaunchPreCondition = false;
+	isPreLaunchCondition = false;
 	isLaunchCondition = false;
 }
 
@@ -105,30 +124,19 @@ void LaunchControlBase::update() {
 		return;
 	}
 
-	int rpm = Sensor::getOrZero(SensorType::Rpm);
-	combinedConditions = isLaunchConditionMet(rpm);
+	const float rpm = Sensor::getOrZero(SensorType::Rpm);
+	const LaunchCondition launchCondition = calculateLaunchCondition(rpm);
+	isLaunchCondition = (launchCondition == LaunchCondition::Launch);
+	isPreLaunchCondition = (launchCondition == LaunchCondition::PreLaunch);
 
 	//and still recalculate in case user changed the values
-	retardThresholdRpm = engineConfiguration->launchRpm
-	/*
-	we never had UI for 'launchAdvanceRpmRange' so it was always zero. are we supposed to forget about this dead line
-	or it is supposed to be referencing 'launchTimingRpmRange'?
-	         + (engineConfiguration->enableLaunchRetard ? engineConfiguration->launchAdvanceRpmRange : 0)
-*/
-			+ engineConfiguration->hardCutRpmRange;
+	retardThresholdRpm = engineConfiguration->launchRpm;
 
-	if (!combinedConditions) {
-		// conditions not met, reset timer
-		m_launchTimer.reset();
-		isLaunchCondition = false;
-	} else {
-		// If conditions are met...
-		isLaunchCondition = m_launchTimer.hasElapsedSec(engineConfiguration->launchActivateDelay);
-	}
+	sparkSkipRatio = calculateSparkSkipRatio(rpm);
 }
 
 bool LaunchControlBase::isLaunchRpmRetardCondition() const {
-	return isLaunchCondition && (retardThresholdRpm < Sensor::getOrZero(SensorType::Rpm));
+	return isLaunchCondition && engineConfiguration->launchControlEnabled && (retardThresholdRpm < Sensor::getOrZero(SensorType::Rpm));
 }
 
 bool LaunchControlBase::isLaunchSparkRpmRetardCondition() const {
@@ -139,15 +147,53 @@ bool LaunchControlBase::isLaunchFuelRpmRetardCondition() const {
 	return isLaunchRpmRetardCondition() && engineConfiguration->launchFuelCutEnable;
 }
 
-SoftSparkLimiter::SoftSparkLimiter(bool p_allowHardCut) {
-    this->allowHardCut = p_allowHardCut;
+float LaunchControlBase::calculateSparkSkipRatio(const float rpm) const {
+	float result = 0.0f;
+	if (engineConfiguration->launchControlEnabled && engineConfiguration->launchSparkCutEnable) {
+		if (isLaunchCondition) {
+			result = 1.0f;
+		} else if (isPreLaunchCondition) {
+			const int launchRpm = engineConfiguration->launchRpm;
+			const int sparkSkipStartRpm = launchRpm - engineConfiguration->launchRpmWindow;
+			if (sparkSkipStartRpm <= rpm) {
+				const float initialIgnitionCutRatio = engineConfiguration->initialIgnitionCutPercent / 100.0f;
+				const int sparkSkipEndRpm = launchRpm - engineConfiguration->launchCorrectionsEndRpm;
+				const float finalIgnitionCutRatio = engineConfiguration->finalIgnitionCutPercentBeforeLaunch / 100.0f;
+				result = interpolateClamped(sparkSkipStartRpm, initialIgnitionCutRatio, sparkSkipEndRpm, finalIgnitionCutRatio, rpm);
+			}
+		}
+	}
+	return result;
+}
+
+SoftSparkLimiter::SoftSparkLimiter(const bool p_allowHardCut)
+	: allowHardCut(p_allowHardCut) {
 #if EFI_UNIT_TEST
     initLaunchControl();
 #endif // EFI_UNIT_TEST
 }
 
-void SoftSparkLimiter::setTargetSkipRatio(float p_targetSkipRatio) {
-	this->targetSkipRatio = p_targetSkipRatio;
+void SoftSparkLimiter::updateTargetSkipRatio(
+	const float luaSparkSkip,
+	const float tractionControlSparkSkip,
+	const float launchOrShiftTorqueReductionControllerSparkSkipRatio
+) {
+	targetSkipRatio = luaSparkSkip;
+	if (engineConfiguration->useHardSkipInTraction) {
+		if (allowHardCut) {
+			targetSkipRatio += tractionControlSparkSkip;
+		}
+	} else if (!allowHardCut) {
+		targetSkipRatio += tractionControlSparkSkip;
+	}
+
+	if (allowHardCut) {
+		/*
+		 * We are applying launch controller spark skip ratio only for hard skip limiter (see
+		 * https://github.com/rusefi/rusefi/issues/6566#issuecomment-2153149902).
+		 */
+		targetSkipRatio += launchOrShiftTorqueReductionControllerSparkSkipRatio;
+	}
 }
 
 static tinymt32_t tinymt;
@@ -158,8 +204,8 @@ bool SoftSparkLimiter::shouldSkip()  {
 		return false;
 	}
 
-	float r = tinymt32_generate_float(&tinymt);
-	wasJustSkipped = r < (allowHardCut ? 1 : 2) * targetSkipRatio;
+	float random = tinymt32_generate_float(&tinymt);
+	wasJustSkipped = random < (allowHardCut ? 1 : 2) * targetSkipRatio;
 	return wasJustSkipped;
 }
 

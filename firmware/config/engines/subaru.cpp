@@ -12,6 +12,7 @@
 
 #include "subaru.h"
 #include "custom_engine.h"
+#include "proteus_meta.h"
 #include "defaults.h"
 #include "mre_meta.h"
 
@@ -20,7 +21,7 @@
  * set engine_type 37
  */
 void setSubaruEJ18_MRE() {
-	engineConfiguration->trigger.type = trigger_type_e::TT_SUBARU_7_WITHOUT_6;
+	engineConfiguration->trigger.type = trigger_type_e::TT_VVT_SUBARU_7_WITHOUT_6;
 
 
 //	engineConfiguration->isDoubleSolenoidIdle = true;
@@ -63,12 +64,12 @@ void setSubaruEG33Defaults() {
 	/* TODO: */
 	engineConfiguration->globalTriggerAngleOffset = 114;	// the end of 19th tooth?
 
-	engineConfiguration->fuelAlgorithm = LM_REAL_MAF;
+	engineConfiguration->fuelAlgorithm = engine_load_mode_e::LM_REAL_MAF;
 
 	engineConfiguration->displacement = 3.30;
 	engineConfiguration->injector.flow = 250;
 
-	engineConfiguration->cranking.baseFuel = 5;		// ???
+	setTable(config->crankingCycleBaseFuel, 5);		// ???
 	engineConfiguration->cranking.rpm = 400;
 
 	engineConfiguration->rpmHardLimit = 6500;
@@ -89,10 +90,42 @@ void setSubaruEG33Defaults() {
 	engineConfiguration->mapMinBufferLength = 4;
 
 	/* idle configuration */
-	engineConfiguration->manIdlePosition = 30;
+	setTable(config->cltIdleCorrTable, 30.0);
 
 	engineConfiguration->maxAcRpm = 3000;
 
 	/* Check this */
 	engineConfiguration->tachPulsePerRev = 2;
+}
+
+void setSubaru2011() {
+  engineConfiguration->allowIdenticalPps = true;
+  setPPSCalibration(0.69, 3.38, 0.69, 3.38);
+
+	engineConfiguration->displacement = 2.5;
+	strcpy(engineConfiguration->engineMake, ENGINE_MAKE_SUBARU);
+	engineConfiguration->trigger.type = trigger_type_e::TT_36_2_2_2;
+  engineConfiguration->vvtMode[0] = VVT_BOSCH_QUICK_START;
+  engineConfiguration->vvtMode[1] = VVT_BOSCH_QUICK_START;
+	engineConfiguration->firingOrder = FO_1_3_2_4;
+	engineConfiguration->injectionMode = IM_SEQUENTIAL;
+
+#if HW_PROTEUS && EFI_PROD_CODE
+	setProteusEtbIO();
+  engineConfiguration->triggerInputPins[0] = PROTEUS_VR_1;
+  engineConfiguration->camInputs[0] = PROTEUS_DIGITAL_1;
+  engineConfiguration->camInputs[1] = PROTEUS_DIGITAL_2;
+  engineConfiguration->camInputs[2] = PROTEUS_DIGITAL_3;
+  engineConfiguration->camInputs[3] = PROTEUS_DIGITAL_4;
+
+
+	engineConfiguration->starterControlPin = Gpio::PROTEUS_LS_14;
+	engineConfiguration->startStopButtonPin = PROTEUS_IN_AV_6_DIGITAL;
+#endif // HW_PROTEUS
+
+	engineConfiguration->tpsMin = convertVoltageTo10bitADC(0.68);
+	engineConfiguration->tpsMax = convertVoltageTo10bitADC(3.96);
+  engineConfiguration->tps1SecondaryMin = convertVoltageTo10bitADC(1.55);
+  engineConfiguration->tps1SecondaryMax = convertVoltageTo10bitADC(4.17);
+
 }

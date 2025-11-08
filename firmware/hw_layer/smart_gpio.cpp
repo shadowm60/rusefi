@@ -17,7 +17,9 @@
 #include "drivers/gpio/drv8860.h"
 #include "drivers/gpio/l9779.h"
 #include "drivers/gpio/tle9104.h"
-#include "drivers/gpio/can_gpio.h"
+#include "drivers/gpio/can_gpio_msiobox.h"
+
+#if EFI_PROD_CODE
 
 #if (BOARD_TLE6240_COUNT > 0)
 // todo: migrate to TS or board config
@@ -50,7 +52,13 @@ struct tle6240_config tle6240 = {
 	.spi_bus = NULL,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
 		.ssport = NULL,
 		.sspad = 0,
 		.cr1 =
@@ -78,7 +86,13 @@ struct mc33972_config mc33972 = {
 	.spi_bus = NULL,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
 		.ssport = NULL,
 		.sspad = 0,
 		.cr1 =
@@ -102,7 +116,13 @@ struct l9779_config l9779_cfg = {
 	.spi_bus = NULL,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
 		.ssport = NULL,
 		.sspad = 0,
 		.cr1 =
@@ -142,7 +162,13 @@ struct tle8888_config tle8888_cfg = {
 	.spi_bus = NULL,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
 		.ssport = NULL,
 		.sspad = 0,
 		.cr1 =
@@ -198,7 +224,13 @@ struct drv8860_config drv8860 = {
 	.spi_bus = NULL,
 	.spi_config = {
 		.circular = false,
-		.end_cb = NULL,
+#ifdef _CHIBIOS_RT_CONF_VER_6_1_
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
 		.ssport = NULL,
 		.sspad = 0,
 		.cr1 =
@@ -215,9 +247,11 @@ struct drv8860_config drv8860 = {
 };
 #endif /* (BOARD_DRV8860_COUNT > 0) */
 
+#endif // EFI_PROD_CODE
+
 void initSmartGpio() {
 	startSmartCsPins();
-
+#if EFI_PROD_CODE
 #if (BOARD_TLE6240_COUNT > 0)
 	if (isBrainPinValid(engineConfiguration->tle6240_cs)) {
 		tle6240.spi_config.ssport = getHwPort("tle6240 CS", engineConfiguration->tle6240_cs);
@@ -272,7 +306,7 @@ void initSmartGpio() {
 	}
 #endif /* (BOARD_TLE8888_COUNT > 0) */
 
-#if (BOARD_DRV8860_COUNT > 0)
+#if EFI_PROD_CODE && (BOARD_DRV8860_COUNT > 0)
 	if (isBrainPinValid(engineConfiguration->drv8860_cs)) {
 		drv8860.spi_config.ssport = getHwPort("drv8860 CS", engineConfiguration->drv8860_cs);
 		drv8860.spi_config.sspad = getHwPin("drv8860 CS", engineConfiguration->drv8860_cs);
@@ -284,7 +318,7 @@ void initSmartGpio() {
 #endif /* (BOARD_DRV8860_COUNT > 0) */
 
 #if EFI_CAN_GPIO
-    initCanGpio();
+    initCanGpioMsiobox();
 #endif // EFI_CAN_GPIO
 
 #if (BOARD_MC33810_COUNT > 0)
@@ -295,12 +329,15 @@ void initSmartGpio() {
 	// No official boards have this IC
 #endif
 
+#endif // EFI_PROD_CODE
+
 	/* external chip init */
 	gpiochips_init();
 }
 
 void tle8888startup() {
-#if (BOARD_TLE8888_COUNT > 0)
+#if EFI_PROD_CODE && (BOARD_TLE8888_COUNT > 0)
+  // TODO: use a timer instead
 	static efitick_t tle8888CrankingResetTime = 0;
 
 	if (engineConfiguration->useTLE8888_cranking_hack && engine->rpmCalculator.isCranking()) {
@@ -316,6 +353,7 @@ void tle8888startup() {
 }
 
 void stopSmartCsPins() {
+#if EFI_PROD_CODE
 #if (BOARD_TLE8888_COUNT > 0)
 	efiSetPadUnused(activeConfiguration.tle8888_cs);
 #endif /* BOARD_TLE8888_COUNT */
@@ -336,9 +374,11 @@ void stopSmartCsPins() {
 #if (BOARD_TLE9104_COUNT > 0)
 	// No official boards have this IC
 #endif
+#endif // EFI_PROD_CODE
 }
 
 void startSmartCsPins() {
+#if EFI_PROD_CODE
 #if (BOARD_TLE8888_COUNT > 0)
 	tle8888Cs.initPin("tle8888 CS", engineConfiguration->tle8888_cs,
 				engineConfiguration->tle8888_csPinMode);
@@ -364,6 +404,7 @@ void startSmartCsPins() {
 #endif /* BOARD_DRV8860_COUNT */
 #if (BOARD_MC33810_COUNT > 0)
     for (size_t i = 0;i<C_MC33810_COUNT;i++) {
+      // huh?! most boards are NOT using mc33810_cs we are directly initializing CS pin(s)?!
 	    mc33810Cs[i].initPin("mc33810 CS", engineConfiguration->mc33810_cs[i],
 				engineConfiguration->mc33810_csPinMode);
 	    mc33810Cs[i].setValue(true);
@@ -376,4 +417,5 @@ void startSmartCsPins() {
     // todo: use existing l9779_cs and l9779_csPinMode settings
     // todo: no official boards have this IC yet
 #endif
+#endif // EFI_PROD_CODE
 }

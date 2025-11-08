@@ -36,14 +36,14 @@ public:
 
 		// These timers are only 16 bit - don't risk overflow
 		if (m_period > 0xFFF0) {
-			firmwareError(ObdCode::CUSTOM_OBD_LOW_FREQUENCY, "PWM Frequency too low %f hz on pin \"%s\"", frequency, msg);
+			firmwareError(ObdCode::CUSTOM_OBD_LOW_FREQUENCY, "PWM Frequency too low %.1f hz on pin \"%s\"", frequency, msg);
 			return;
 		}
 
 		// If we have too few usable bits, we run out of resolution, so don't allow that either.
 		// 200 counts = 0.5% resolution
 		if (m_period < 200) {
-			firmwareError(ObdCode::CUSTOM_OBD_HIGH_FREQUENCY, "PWM Frequency too high %d hz on pin \"%s\"", frequency, msg);
+			firmwareError(ObdCode::CUSTOM_OBD_HIGH_FREQUENCY, "PWM Frequency too high %.1f hz on pin \"%s\"", frequency, msg);
 			return;
 		}
 
@@ -58,9 +58,7 @@ public:
 				{PWM_OUTPUT_ACTIVE_HIGH, nullptr}
 			},
 			.cr2 = 0,
-		    #if STM32_PWM_USE_ADVANCED
-		    .bdtr = 0,
-		    #endif
+			.bdtr = 0,
 			.dier = 0,
 		};
 
@@ -139,6 +137,8 @@ static expected<stm32_pwm_config> getConfigForPin(brain_pin_e pin) {
 #endif
 #if STM32_PWM_USE_TIM8
 
+	/* TIM8 may be used for ADC trigger */
+#ifndef EFI_INTERNAL_FAST_ADC_PWM
 #if !STM32_PWM_USE_TIM3
 	// If TIM3 is not used, put these pins on TIM8 instead..
 	// See https://github.com/rusefi/rusefi/issues/639
@@ -150,6 +150,8 @@ static expected<stm32_pwm_config> getConfigForPin(brain_pin_e pin) {
 	case Gpio::C8:  return stm32_pwm_config{&PWMD8, 2, 3};
 	case Gpio::C9:  return stm32_pwm_config{&PWMD8, 3, 3};
 #endif
+#endif
+
 #if STM32_PWM_USE_TIM9
 	case Gpio::E5:  return stm32_pwm_config{&PWMD9, 0, 3};
 	case Gpio::E6:  return stm32_pwm_config{&PWMD9, 1, 3};

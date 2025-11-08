@@ -13,7 +13,7 @@
 #include "drivers/gpio/gpio_ext.h"
 
 #if HW_HELLEN
-#include "hellen_meta.h"
+#include "hellen_all_meta.h"
 #endif // HW_HELLEN
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
@@ -32,31 +32,31 @@ static const char* const trailNames[] = { "Trail 1", "Trail 2", "Trail 3", "Trai
 static const char* const trailShortNames[] = { "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "rA", "rB", "rD" };
 
 const char *vvtNames[] = {
-		PROTOCOL_VVT1_NAME,
-		PROTOCOL_VVT2_NAME,
-		PROTOCOL_VVT3_NAME,
-		PROTOCOL_VVT4_NAME};
+		"VVT1",
+		"VVT2",
+		"VVT3",
+		"VVT4"};
 
 const char *laNames[] = {
-		PROTOCOL_WA_CHANNEL_1,
-		PROTOCOL_WA_CHANNEL_2,
-		PROTOCOL_WA_CHANNEL_3,
-		PROTOCOL_WA_CHANNEL_4};
+		"input1",
+		"input2",
+		"input3",
+		"input4"};
 
 // these short names are part of engine sniffer protocol
-static const char* const sparkShortNames[] = { PROTOCOL_COIL1_SHORT_NAME, "c2", "c3", "c4", "c5", "c6", "c7", "c8",
+static const char* const sparkShortNames[] = { PROTOCOL_COIL_SHORT_PREFIX "1", PROTOCOL_COIL_SHORT_PREFIX "2", "c3", "c4", "c5", "c6", "c7", "c8",
 		"c9", "cA", "cB", "cD"};
 
 static const char* const injectorNames[] = { "Injector 1", "Injector 2", "Injector 3", "Injector 4", "Injector 5", "Injector 6",
 		"Injector 7", "Injector 8", "Injector 9", "Injector 10", "Injector 11", "Injector 12"};
 
-static const char* const injectorShortNames[] = { PROTOCOL_INJ1_SHORT_NAME, "i2", "i3", "i4", "i5", "i6", "i7", "i8",
+static const char* const injectorShortNames[] = { PROTOCOL_INJ_SHORT_PREFIX "1", PROTOCOL_INJ_SHORT_PREFIX "2", "i3", "i4", "i5", "i6", "i7", "i8",
 		"i9", "iA", "iB", "iC"};
 
 static const char* const injectorStage2Names[] = { "Injector Second Stage 1", "Injector Second Stage 2", "Injector Second Stage 3", "Injector Second Stage 4", "Injector Second Stage 5", "Injector Second Stage 6",
 		"Injector Second Stage 7", "Injector Second Stage 8", "Injector Second Stage 9", "Injector Second Stage 10", "Injector Second Stage 11", "Injector Second Stage 12"};
 
-static const char* const injectorStage2ShortNames[] = { PROTOCOL_INJ1_STAGE2_SHORT_NAME, "j2", "j3", "j4", "j5", "j6", "j7", "j8",
+static const char* const injectorStage2ShortNames[] = { PROTOCOL_INJ_STAGE2_SHORT_PREFIX "1", PROTOCOL_INJ_STAGE2_SHORT_PREFIX "2", "j3", "j4", "j5", "j6", "j7", "j8",
 		"j9", "jA", "jB", "jC"};
 
 static const char* const auxValveShortNames[] = { "a1", "a2"};
@@ -95,7 +95,6 @@ RegisteredOutputPin::RegisteredOutputPin(const char *p_registrationName, size_t 
 }
 
 bool RegisteredOutputPin::isPinConfigurationChanged() {
-#if EFI_PROD_CODE
 	brain_pin_e        curPin = *(brain_pin_e       *) ((void *) (&((char*)&activeConfiguration)[m_pinOffset]));
 	brain_pin_e        newPin = *(brain_pin_e       *) ((void *) (&((char*) engineConfiguration)[m_pinOffset]));
 	bool pinChanged = curPin != newPin;
@@ -107,9 +106,6 @@ bool RegisteredOutputPin::isPinConfigurationChanged() {
 	pin_output_mode_e curMode = *(pin_output_mode_e *) ((void *) (&((char*)&activeConfiguration)[m_pinModeOffset]));
 	pin_output_mode_e newMode = *(pin_output_mode_e *) ((void *) (&((char*) engineConfiguration)[m_pinModeOffset]));
 	return pinChanged || curMode != newMode;
-#else
-    return true;
-#endif // EFI_PROD_CODE
 }
 
 void RegisteredOutputPin::init() {
@@ -144,6 +140,7 @@ void RegisteredOutputPin::unregister() {
 #define CONFIG_PIN_OFFSETS2(x, y) CONFIG_OFFSET2(x, y##Pin), CONFIG_OFFSET2(x, y##PinMode)
 
 EnginePins::EnginePins() :
+ // [tag:coding_by_convention] 'mainRelay' member here uses 'mainRelayPin' and 'mainRelayPinMode' configuration fields
 		mainRelay("Main Relay", CONFIG_PIN_OFFSETS(mainRelay)),
 		hpfpValve("HPFP Valve", CONFIG_PIN_OFFSETS(hpfpValve)),
 		starterControl("Starter Relay", CONFIG_PIN_OFFSETS(starterControl)),
@@ -152,6 +149,8 @@ EnginePins::EnginePins() :
 		fanRelay2("Fan Relay 2", CONFIG_PIN_OFFSETS(fan2)),
 		acRelay("A/C Relay", CONFIG_PIN_OFFSETS(acRelay)),
 		fuelPumpRelay("Fuel pump Relay", CONFIG_PIN_OFFSETS(fuelPump)),
+		nitrousRelay("Nitrous Relay", CONFIG_PIN_OFFSETS(nitrousRelay)),
+		vvlRelay("VVL Relay", CONFIG_PIN_OFFSETS(vvlRelay)),
 #if EFI_HD_ACR
 		harleyAcr("Harley ACR", CONFIG_OFFSET(acrPin)),
 		harleyAcr2("Harley ACR 2", CONFIG_OFFSET(acrPin2)),
@@ -165,9 +164,9 @@ EnginePins::EnginePins() :
 		triggerDecoderErrorPin("led: trigger debug", CONFIG_PIN_OFFSETS(triggerError)),
 		speedoOut("speedoOut", CONFIG_OFFSET(speedometerOutputPin))
 {
-	hpfpValve.setName(PROTOCOL_HPFP_NAME);
+	hpfpValve.setName("hpfp");
 #if EFI_HD_ACR
-	harleyAcr.setName(PROTOCOL_ACR_NAME);
+	harleyAcr.setName("acr");
 #endif // EFI_HD_ACR
 
 	static_assert(efi::size(sparkNames) >= MAX_CYLINDER_COUNT, "Too many ignition pins");
@@ -229,7 +228,9 @@ bool EnginePins::stopPins() {
 void EnginePins::unregisterPins() {
 	stopInjectionPins();
 	stopIgnitionPins();
+#if EFI_AUX_VALVES
 	stopAuxValves();
+#endif
 
 #if EFI_ELECTRONIC_THROTTLE_BODY
 	unregisterEtbPins();
@@ -258,8 +259,11 @@ void EnginePins::startPins() {
 #if EFI_ENGINE_CONTROL
 	startInjectionPins();
 	startIgnitionPins();
-	startAuxValves();
 #endif /* EFI_ENGINE_CONTROL */
+
+#if EFI_AUX_VALVES
+	startAuxValves();
+#endif // EFI_AUX_VALVES
 
 	RegisteredOutputPin * pin = registeredOutputHead;
 	while (pin != nullptr) {
@@ -290,6 +294,7 @@ void EnginePins::stopInjectionPins() {
 	}
 }
 
+#if EFI_AUX_VALVES
 void EnginePins::stopAuxValves() {
 	for (int i = 0; i < AUX_DIGITAL_VALVE_COUNT; i++) {
 		NamedOutputPin *output = &enginePins.auxValve[i];
@@ -311,6 +316,7 @@ void EnginePins::startAuxValves() {
 	}
 #endif /* EFI_PROD_CODE */
 }
+#endif // EFI_AUX_VALVES
 
 void EnginePins::startIgnitionPins() {
 #if EFI_PROD_CODE
@@ -389,6 +395,23 @@ OutputPin *EnginePins::getOutputPinForBenchMode(bench_mode_e index) {
 	return nullptr;
 }
 
+#if EFI_UNIT_TEST
+/*
+* this function goes through the whole pin repository and sets them all to "GPIO::Unassigned",
+* this is done as a clean-up for testing, since several motor configurations can have conflicting pins
+* at the same time the productive de-init uses "isPinConfigurationChanged" to reset only the pins that have been changed,
+* so in order for it to be properly de-initialized as it is done in prod, all pins are re-configured as unassigned,
+* previously unused pins by tests will not be de-initialized since the configuration on them will be the same (Unassigned => Unassigned)
+*/
+void EnginePins::resetForUnitTest() {
+	RegisteredOutputPin * pin = registeredOutputHead;
+	while (pin != nullptr) {
+		pin->brainPin = Gpio::Unassigned;
+		pin = pin->next;
+	}
+}
+#endif
+
 NamedOutputPin::NamedOutputPin() : OutputPin() {
 }
 
@@ -422,9 +445,9 @@ void NamedOutputPin::setHigh(const char *msg) {
 		efiPrintf("pin %s goes high", name);
 	}
 #endif // EFI_UNIT_TEST
-#if EFI_DEFAILED_LOGGING
+#if EFI_DETAILED_LOGGING
 //	signal->hi_time = hTimeNow();
-#endif /* EFI_DEFAILED_LOGGING */
+#endif /* EFI_DETAILED_LOGGING */
 
 	// turn the output level ACTIVE
 	setValue(msg, true);
@@ -530,7 +553,6 @@ void IgnitionOutputPin::setLow() {
 }
 
 void IgnitionOutputPin::reset() {
-	outOfOrder = false;
 	signalFallSparkId = 0;
 }
 
@@ -579,11 +601,9 @@ void OutputPin::resetToggleStats() {
 }
 #endif // EFI_SIMULATOR
 
-extern bool qcDirectPinControlMode;
-
 void OutputPin::setValue(const char *msg, int logicValue, bool isForce) {
     UNUSED(msg);
-    if ((qcDirectPinControlMode || getOutputOnTheBenchTest() == this) && !isForce) {
+    if ((isHwQcMode() || getOutputOnTheBenchTest() == this) && !isForce) {
         return;
     }
 
@@ -734,7 +754,7 @@ void OutputPin::initPin(const char *msg, brain_pin_e p_brainPin, pin_output_mode
 		m_pin = getHwPin(msg, p_brainPin);
 
 		// Validate port
-		if (m_port == GPIO_NULL) {
+		if (!m_port) {
 			criticalError("OutputPin::initPin got invalid port for pin idx %d", static_cast<int>(p_brainPin));
 			return;
 		}
@@ -780,6 +800,8 @@ void OutputPin::initPin(const char *msg, brain_pin_e p_brainPin, pin_output_mode
 }
 
 void OutputPin::deInit() {
+	efiPrintf("unregistering %s", hwPortname(brainPin));
+
 	// Unregister under lock - we don't want other threads mucking with the pin while we're trying to turn it off
 	chibios_rt::CriticalSectionLocker csl;
 
@@ -791,8 +813,6 @@ void OutputPin::deInit() {
 #if (BOARD_EXT_GPIOCHIPS > 0)
 	ext = false;
 #endif // (BOARD_EXT_GPIOCHIPS > 0)
-
-	efiPrintf("unregistering %s", hwPortname(brainPin));
 
 #if EFI_GPIO_HARDWARE && EFI_PROD_CODE
 	efiSetPadUnused(brainPin);
@@ -831,7 +851,7 @@ void initPrimaryPins() {
  * This method is part of fatal error handling.
  * The whole method is pretty naive, but that's at least something.
  */
-void turnAllPinsOff(void) {
+void turnAllPinsOff() {
 	for (int i = 0; i < MAX_CYLINDER_COUNT; i++) {
 		enginePins.injectors[i].setValue(false);
 		enginePins.coils[i].setValue(false);
@@ -840,6 +860,9 @@ void turnAllPinsOff(void) {
 	enginePins.mainRelay.setValue(false);
 	enginePins.fuelPumpRelay.setValue(false);
 	enginePins.checkEnginePin.setValue(true); // yes this one can go ON
+#if EFI_PROD_CODE && HW_HELLEN
+  hellenDisableEnSilently();
+#endif
 }
 #endif /* EFI_GPIO_HARDWARE */
 

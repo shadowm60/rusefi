@@ -59,14 +59,13 @@ TEST_P(AllTriggersFixture, TestTrigger) {
 
 	printf("Exporting %s\r\n", getTrigger_type_e(tt));
 
-	persistent_config_s pc;
-	memset(&pc, 0, sizeof(pc));
+	persistent_config_s pc{};
 	Engine e;
 	Engine* engine = &e;
 	EngineTestHelperBase base(engine, &pc.engineConfiguration, &pc);
 
 #if EFI_UNIT_TEST
-extern TriggerDecoderBase initState;
+	extern TriggerDecoderBase initState;
     for (size_t i = 0;i<efi::size(initState.gapRatio);i++) {
       initState.gapRatio[i] = NAN;
     }
@@ -77,7 +76,7 @@ extern TriggerDecoderBase initState;
 
 	TriggerWaveform *shape = &engine->triggerCentral.triggerShape;
 	TriggerFormDetails *triggerFormDetails = &engine->triggerCentral.triggerFormDetails;
-	engine->updateTriggerWaveform();
+	engine->updateTriggerConfiguration();
 
 	ASSERT_FALSE(shape->shapeDefinitionError) << "Trigger shapeDefinitionError";
 

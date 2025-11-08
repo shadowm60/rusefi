@@ -19,15 +19,15 @@ DDEFS += -DBOARD_L9779_COUNT=1
 
 # This board has no storage
 DDEFS += -DEFI_FILE_LOGGING=FALSE
+DDEFS += -DEFI_STORAGE_SD=FALSE
 USE_FATFS = no
 
 # Configuration directorys
 CONFDIR = $(PROJECT_DIR)/hw_layer/ports/at32/at32f4/cfg
 
 # This board uses ChibiOS MFS driver on internal flash
-DDEFS += -DEFI_STORAGE_INT_FLASH=FLASE -DHAL_USE_EFL=TRUE -DEFI_STORAGE_MFS=TRUE
-# This board has chip with dual-bank flash, bank 2 can be flashed in background
-DDEFS += -DEFI_FLASH_WRITE_THREAD=TRUE
+DDEFS += -DHAL_USE_EFL=TRUE
+include $(PROJECT_DIR)/hw_layer/ports/stm32/use_higher_level_flash_api.mk
 
 DDEFS += -DFIRMWARE_ID=\"m74_9\"
 DDEFS += -DDEFAULT_ENGINE_TYPE=engine_type_e::MINIMAL_PINS

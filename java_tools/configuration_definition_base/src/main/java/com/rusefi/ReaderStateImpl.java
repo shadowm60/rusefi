@@ -3,13 +3,14 @@ package com.rusefi;
 import com.devexperts.logging.Logging;
 import com.opensr5.ini.RawIniFile;
 import com.opensr5.ini.field.EnumIniField;
+import com.rusefi.config.FieldType;
 import com.rusefi.core.Pair;
 import com.rusefi.enum_reader.Value;
 import com.rusefi.output.*;
 import com.rusefi.parse.TokenUtil;
 import com.rusefi.parse.TypesHelper;
+import com.rusefi.tools.tune.FileLinesHelper;
 import com.rusefi.util.LazyFile;
-import com.rusefi.util.SystemOut;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
@@ -29,10 +30,12 @@ public class ReaderStateImpl implements ReaderState {
     private static final Logging log = getLogging(ReaderStateImpl.class);
 
     public static final String BIT = "bit";
-    private static final String CUSTOM = "custom";
+    public static final String CUSTOM = "custom";
     private static final String END_STRUCT = "end_struct";
     private static final String STRUCT_NO_PREFIX = "struct_no_prefix ";
     private static final String STRUCT = "struct ";
+    public static final String SPLIT_LINES = "split_lines";
+    public static final String INCLUDE_FILE = "include_file";
     // used to update other files
     private final List<String> inputFiles = new ArrayList<>();
     private final Stack<ConfigStructureImpl> stack = new Stack<>();
@@ -52,6 +55,8 @@ public class ReaderStateImpl implements ReaderState {
 
     private final EnumsReader enumsReader = new EnumsReader();
     private final VariableRegistry variableRegistry = new VariableRegistry();
+    private final Map<String, EnumGenerator.Parser.EnumDefinition> enumDefinitionMap = new HashMap<>();
+    private int defaultBitNameCounter;
 
     public ReaderStateImpl() {
         this(ReaderProvider.REAL, LazyFile.REAL);
@@ -60,6 +65,20 @@ public class ReaderStateImpl implements ReaderState {
     public ReaderStateImpl(ReaderProvider readerProvider, LazyFile.LazyFileFactory fileFactory) {
         this.readerProvider = readerProvider;
         this.fileFactory = fileFactory;
+    }
+
+    @Override
+    public int getDefaultBitNameCounter() {
+        return defaultBitNameCounter;
+    }
+
+    @Override
+    public void intDefaultBitNameCounter() {
+        defaultBitNameCounter++;
+    }
+
+    public Map<String, EnumGenerator.Parser.EnumDefinition> getEnumDefinitionMap() {
+        return enumDefinitionMap;
     }
 
     @Override
@@ -99,7 +118,7 @@ public class ReaderStateImpl implements ReaderState {
         String falseName = bitNameParts.length > 2 ? bitNameParts[2].replaceAll("\"", "") : null;
 
         ConfigFieldImpl bitField = new ConfigFieldImpl(state, bitNameParts[0], comment, null, BOOLEAN_T, new int[0], null, false, false, trueName, falseName);
-        if (state.stack.isEmpty())
+        if (state.isStackEmpty())
             throw new IllegalStateException("Parent structure expected");
         ConfigStructureImpl structure = state.stack.peek();
         structure.addBitField(bitField);
@@ -110,18 +129,18 @@ public class ReaderStateImpl implements ReaderState {
     public void doJob() throws IOException {
 
         for (String prependFile : prependFiles)
-            variableRegistry.readPrependValues(prependFile);
+            variableRegistry.readPrependValues(prependFile, false);
 
         /*
          * this is the most important invocation - here we read the primary input file and generated code into all
          * the destinations/writers
          */
-        SystemOut.println("Reading definition from " + Objects.requireNonNull(definitionInputFile));
+        log.info("Reading definition from " + Objects.requireNonNull(definitionInputFile));
         String fileNameWithRoot = RootHolder.ROOT + definitionInputFile;
         try (BufferedReader definitionReader = new BufferedReader(readerProvider.read(fileNameWithRoot))) {
             readBufferedReader(definitionReader, destinations);
         } catch (Throwable e) {
-            throw new IllegalStateException("While processing " + fileNameWithRoot);
+            throw new IllegalStateException("While processing " + fileNameWithRoot, e);
         }
 
         if (destCDefinesFileName != null) {
@@ -152,7 +171,7 @@ public class ReaderStateImpl implements ReaderState {
         enumsReader.enums.putAll(newEnums);
     }
 
-    private void handleCustomLine(String customLineWithPrefix) {
+    public void handleCustomLine(String customLineWithPrefix) {
         String withoutPrefix = customLineWithPrefix.substring(CUSTOM.length() + 1).trim();
         Pair<String, String> nameAndRest = TokenUtil.grabFirstTokenAndTheRest(withoutPrefix);
         String name = nameAndRest.first;
@@ -173,6 +192,10 @@ public class ReaderStateImpl implements ReaderState {
 
         RawIniFile.Line rawLine = new RawIniFile.Line(tunerStudioLine);
         if (rawLine.getTokens()[0].equals("bits")) {
+            String tsTypeString = rawLine.getTokens()[1];
+            FieldType typeInTsString = FieldType.parseTs(tsTypeString);
+            if (size != typeInTsString.getStorageSize())
+                throw new SizeMismatchException("Size mismatch " + customSize + " vs " + tsTypeString + " in " + customLineWithPrefix);
             EnumIniField.ParseBitRange bitRange = new EnumIniField.ParseBitRange().invoke(rawLine.getTokens()[3]);
             int totalCount = 1 << (bitRange.getBitSize0() + 1);
             List<String> enums = Arrays.asList(rawLine.getTokens()).subList(4, rawLine.getTokens().length);
@@ -224,14 +247,16 @@ public class ReaderStateImpl implements ReaderState {
     }
 
     private void handleEndStruct(List<ConfigurationConsumer> consumers) throws IOException {
-        if (stack.isEmpty())
+        if (isStackEmpty())
             throw new IllegalStateException("Unexpected end_struct");
         ConfigStructureImpl structure = stack.pop();
         if (log.debugEnabled())
             log.debug("Ending structure " + structure.getName());
         structure.addAlignmentFill(this, 4);
 
-        structures.put(structure.getName(), structure);
+        ConfigStructureImpl existing = structures.put(structure.getName(), structure);
+        if (existing != null)
+            throw new IllegalStateException("Same struct again: " + structure.getName());
 
         for (ConfigurationConsumer consumer : consumers)
             consumer.handleEndStruct(this, structure);
@@ -249,11 +274,27 @@ public class ReaderStateImpl implements ReaderState {
         for (ConfigurationConsumer consumer : consumers)
             consumer.startFile();
 
+        List<String> lines = new ArrayList<>();
+        String lineReaded;
+        while ((lineReaded = definitionReader.readLine()) != null) {
+            lineReaded = ToolUtil.trimLine(lineReaded);
+            if (lineReaded.startsWith(INCLUDE_FILE)) {
+                String fileName = lineReaded.substring(INCLUDE_FILE.length()).trim();
+                log.info("Including " + fileName);
+                lines.addAll(FileLinesHelper.readAllLinesWithRoot(fileName));
+            } else if (lineReaded.startsWith(SPLIT_LINES)) {
+                String template = lineReaded.substring(SPLIT_LINES.length());
+                String lineExpanded = variableRegistry.applyVariables(template);
+                String[] sublines = lineExpanded.split("\\r?\\n");
+                lines.addAll(Arrays.asList(sublines));
+            } else {
+                lines.add(lineReaded);
+	        }
+        }
+
         int lineIndex = 0;
-        String line;
-        while ((line = definitionReader.readLine()) != null) {
+        for (final String line : lines) {
             lineIndex++;
-            line = ToolUtil.trimLine(line);
             /**
              * we should ignore empty lines and comments
              */
@@ -273,14 +314,14 @@ public class ReaderStateImpl implements ReaderState {
             } else if (ToolUtil.startsWithToken(line, CUSTOM)) {
                 handleCustomLine(line);
 
-            } else if (ToolUtil.startsWithToken(line, VariableRegistry.DEFINE)) {
+            } else if (VariableRegistry.looksLikeDefineLine(line)) {
                 /**
                  * for example
                  * #define CLT_CURVE_SIZE 16
                  */
-                variableRegistry.processDefine(line.substring(VariableRegistry.DEFINE.length()).trim());
+                variableRegistry.processLine(line);
             } else {
-                if (stack.isEmpty())
+                if (isStackEmpty())
                     throw new IllegalStateException("Expected to be within structure at line " + lineIndex + ": " + line);
                 addBitPadding();
                 processField(this, line);
@@ -292,13 +333,13 @@ public class ReaderStateImpl implements ReaderState {
     }
 
     private void addBitPadding() {
-        ConfigStructureImpl structure = stack.peek();
+        ConfigStructure structure = peek();
         structure.addBitPadding(this);
     }
 
     public void ensureEmptyAfterProcessing() {
-        if (!stack.isEmpty())
-            throw new IllegalStateException("Unclosed structure: " + stack.peek().getName());
+        if (!isStackEmpty())
+            throw new IllegalStateException("Unclosed structure: " + peek().getName());
     }
 
     private static void handleStartStructure(ReaderStateImpl state, String line, boolean withPrefix) {
@@ -312,7 +353,7 @@ public class ReaderStateImpl implements ReaderState {
             name = line;
             comment = null;
         }
-        ConfigStructure parent = state.stack.isEmpty() ? null : state.stack.peek();
+        ConfigStructure parent = state.isStackEmpty() ? null : state.peek();
         ConfigStructureImpl structure = new ConfigStructureImpl(name, comment, withPrefix, parent);
         state.stack.push(structure);
         if (log.debugEnabled())
@@ -320,8 +361,12 @@ public class ReaderStateImpl implements ReaderState {
     }
 
     private static void processField(ReaderStateImpl state, String line) {
-
-        ConfigFieldImpl cf = ConfigFieldImpl.parse(state, line);
+        ConfigFieldImpl cf;
+        try {
+            cf = ConfigFieldImpl.parse(state, line);
+        } catch (Throwable e) {
+            throw new ParsingException("While parsing " + line, e);
+        }
 
         if (cf == null) {
             if (ConfigFieldImpl.isPreprocessorDirective(line)) {
@@ -333,17 +378,17 @@ public class ReaderStateImpl implements ReaderState {
             }
         }
 
-        if (state.stack.isEmpty())
+        if (state.isStackEmpty())
             throw new IllegalStateException(cf.getName() + ": Not enclosed in a struct");
         ConfigStructureImpl structure = state.stack.peek();
 
-        Integer getPrimitiveSize = TypesHelper.getPrimitiveSize(cf.getType());
-        Integer customTypeSize = state.tsCustomSize.get(cf.getType());
+        Integer getPrimitiveSize = TypesHelper.getPrimitiveSize(cf.getTypeName());
+        Integer customTypeSize = state.tsCustomSize.get(cf.getTypeName());
         if (getPrimitiveSize != null && getPrimitiveSize > 1) {
             if (log.debugEnabled())
                 log.debug("Need to align before " + cf.getName());
             structure.addAlignmentFill(state, getPrimitiveSize);
-        } else if (state.structures.containsKey(cf.getType())) {
+        } else if (state.structures.containsKey(cf.getTypeName())) {
             // we are here for struct members
             structure.addAlignmentFill(state, 4);
         } else if (customTypeSize != null) {
@@ -355,7 +400,7 @@ public class ReaderStateImpl implements ReaderState {
             for (int i = 1; i <= cf.getArraySizes()[0]; i++) {
                 String commentWithIndex = getCommentWithIndex(cf, i);
                 ConfigFieldImpl element = new ConfigFieldImpl(state, cf.getName() + i, commentWithIndex, null,
-                        cf.getType(), new int[0], cf.getTsInfo(), false, cf.isHasAutoscale(), null, null);
+                        cf.getTypeName(), new int[0], cf.getTsInfo(), false, cf.isHasAutoscale(), null, null);
                 element.setFromIterate(cf.getName(), i);
                 structure.addTs(element);
             }
@@ -383,7 +428,7 @@ public class ReaderStateImpl implements ReaderState {
     @Override
     public void setDefinitionInputFile(String definitionInputFile) {
         this.definitionInputFile = definitionInputFile;
-        headerMessage = ToolUtil.getGeneratedAutomaticallyTag() + definitionInputFile + " " + new Date();
+        headerMessage = ToolUtil.getGeneratedAutomaticallyTag() + definitionInputFile;
         inputFiles.add(definitionInputFile);
     }
 
@@ -393,7 +438,6 @@ public class ReaderStateImpl implements ReaderState {
     }
 
     public void addJavaDestination(String fileName) {
-        destinations.add(new FileJavaFieldsConsumer(this, fileName, 0, fileFactory));
     }
 
     @Override
@@ -402,8 +446,26 @@ public class ReaderStateImpl implements ReaderState {
             // see LiveDataProcessor use-case with dynamic prepend usage
             return;
         }
-        prependFiles.add(fileName);
+        variableRegistry.readPrependValues(fileName, false);
         inputFiles.add(fileName);
+    }
+
+    @Override
+    public void addSoftPrepend(String fileName){
+        if (fileName == null || fileName.isEmpty()) {
+            return;
+        }
+        File file = new File(IoUtil3.prependIfNotAbsolute(RootHolder.ROOT, fileName));
+        if (!file.exists()){
+            return;
+        }
+        variableRegistry.readPrependValues(fileName, false);
+        inputFiles.add(fileName);
+    }
+
+    @Override
+    public void addPostponedPrependNotInput(String fileName) {
+        prependFiles.add(fileName);
     }
 
     @Override
@@ -448,11 +510,6 @@ public class ReaderStateImpl implements ReaderState {
     @Override
     public void setTsFileOutputName(String tsFileOutputName) {
         this.tsFileOutputName = tsFileOutputName;
-    }
-
-    @Override
-    public List<String> getPrependFiles() {
-        return prependFiles;
     }
 
     @Override

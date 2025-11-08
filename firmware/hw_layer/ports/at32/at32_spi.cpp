@@ -217,17 +217,17 @@ void initSpiModule(SPIDriver *driver, brain_pin_e sck, brain_pin_e miso,
 		criticalError("Incorrect SPI pin configuration");
 	}
 
-	efiSetPadMode("SPI clock", sck,
+	efiSetPadMode("SPI CLK ", sck,
 		PAL_MODE_ALTERNATE(sckAf) | sckMode | PAL_STM32_OSPEED_HIGHEST);
 
-	efiSetPadMode("SPI master out", mosi,
+	efiSetPadMode("SPI MOSI", mosi,
 		PAL_MODE_ALTERNATE(mosiAf) | mosiMode | PAL_STM32_OSPEED_HIGHEST);
 
 	// Activate the internal pullup on MISO: SD cards indicate "busy" by holding MOSI low,
 	// so in case there is no SD card installed, the line could float low and indicate that
 	// the (non existent) card is busy.  We pull the line high to indicate "not busy" in case
 	// of a missing card.
-	efiSetPadMode("SPI master in ", miso,
+	efiSetPadMode("SPI MISO ", miso,
 		PAL_MODE_ALTERNATE(misoAf) | misoMode | PAL_STM32_OSPEED_HIGHEST | PAL_STM32_PUPDR_PULLUP);
 }
 
@@ -240,10 +240,27 @@ void initSpiCsNoOccupy(SPIConfig *spiConfig, brain_pin_e csPin) {
 
 void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
 	/* TODO: why this is here? */
+#if !defined(HAL_LLD_SELECT_SPI_V2)
 	spiConfig->end_cb = nullptr;
+#else
+	spiConfig->data_cb = nullptr;
+	spiConfig->error_cb = nullptr;
+#endif
 
 	initSpiCsNoOccupy(spiConfig, csPin);
 	efiSetPadMode("chip select", csPin, PAL_STM32_MODE_OUTPUT);
+}
+
+int spiGetBaseClock(SPIDriver*)
+{
+	// TODO: implement
+	return 0;
+}
+
+int spiCalcClockDiv(SPIDriver*, SPIConfig*, unsigned int)
+{
+	// TODO: implement
+	return -1;
 }
 
 // SD cards are good up to 25MHz in "slow" mode, and 50MHz in "fast" mode
@@ -254,21 +271,33 @@ void initSpiCs(SPIConfig *spiConfig, brain_pin_e csPin) {
 // Slow mode is 13.5 or 6.75 MHz
 // Fast mode is 54 or 27 MHz (technically out of spec, needs testing!)
 SPIConfig mmc_hs_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_2,
-		.cr2 = 0
+	.circular = false,
+#if !defined(HAL_LLD_SELECT_SPI_V2)
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cr1 = SPI_BaudRatePrescaler_2,
+	.cr2 = 0
 };
 
 SPIConfig mmc_ls_spicfg = {
-		.circular = false,
-		.end_cb = NULL,
-		.ssport = NULL,
-		.sspad = 0,
-		.cr1 = SPI_BaudRatePrescaler_8,
-		.cr2 = 0
+	.circular = false,
+#if !defined(HAL_LLD_SELECT_SPI_V2)
+	.end_cb = NULL,
+#else
+        .slave = false,
+        .data_cb = NULL,
+        .error_cb = NULL,
+#endif
+	.ssport = NULL,
+	.sspad = 0,
+	.cr1 = SPI_BaudRatePrescaler_8,
+	.cr2 = 0
 };
 
 #endif /* HAL_USE_SPI */

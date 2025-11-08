@@ -28,16 +28,12 @@
 #include "dc_motors.h"
 #include "idle_hardware.h"
 
-void setIdleMode(idle_mode_e value) {
-	engineConfiguration->idleMode = value ? IM_AUTO : IM_MANUAL;
-}
-
 void setManualIdleValvePosition(int positionPercent) {
 	if (positionPercent < 1 || positionPercent > 99)
 		return;
 	efiPrintf("setting idle valve position %d", positionPercent);
 	// todo: this is not great that we have to write into configuration here
-	engineConfiguration->manIdlePosition = positionPercent;
+	setTable(config->cltIdleCorrTable, positionPercent);
 }
 
 #endif /* EFI_UNIT_TEST */
@@ -64,19 +60,18 @@ void startSwitchPins() {
 
 	startInputPinIfValid("clutch up switch", engineConfiguration->clutchUpPin, engineConfiguration->clutchUpPinMode);
 
-	startInputPinIfValid("throttle pedal up switch", engineConfiguration->throttlePedalUpPin, engineConfiguration->throttlePedalUpPinMode);
-
 	startInputPinIfValid("brake pedal switch", engineConfiguration->brakePedalPin, engineConfiguration->brakePedalPinMode);
 	startInputPinIfValid("Launch Button", engineConfiguration->launchActivatePin, engineConfiguration->launchActivatePinMode);
 	startInputPinIfValid("Antilag Button", engineConfiguration->ALSActivatePin, engineConfiguration->ALSActivatePinMode);
 	startInputPinIfValid("Ignition Switch", engineConfiguration->ignitionKeyDigitalPin, engineConfiguration->ignitionKeyDigitalPinMode);
+	startInputPinIfValid("Torque Reduction Button", engineConfiguration->torqueReductionTriggerPin, engineConfiguration->torqueReductionTriggerPinMode);
+	startInputPinIfValid("Nitrous Button", engineConfiguration->nitrousControlTriggerPin, engineConfiguration->nitrousControlTriggerPinMode);
 #endif /* EFI_PROD_CODE */
 }
 
 void stopSwitchPins() {
 	brain_pin_markUnused(activeConfiguration.clutchUpPin);
 	brain_pin_markUnused(activeConfiguration.clutchDownPin);
-	brain_pin_markUnused(activeConfiguration.throttlePedalUpPin);
 	brain_pin_markUnused(activeConfiguration.brakePedalPin);
 	brain_pin_markUnused(activeConfiguration.launchActivatePin);
 	brain_pin_markUnused(activeConfiguration.ALSActivatePin);
@@ -129,19 +124,7 @@ void setDefaultIdleParameters() {
 	engineConfiguration->idlePidRpmUpperLimit = 300;
 
 	engineConfiguration->idlePidRpmDeadZone = 50;
-}
-
-/**
- * I use this questionable feature to tune acceleration enrichment
- */
-static void blipIdle(int idlePosition, int durationMs) {
-#if ! EFI_UNIT_TEST
-	if (engine->timeToStopBlip != 0) {
-		return; // already in idle blip
-	}
-	engine->blipIdlePosition = idlePosition;
-	engine->timeToStopBlip = getTimeNowUs() + 1000 * durationMs;
-#endif // EFI_UNIT_TEST
+	engineConfiguration->idleReturnTargetRampDuration = 3;
 }
 
 void startIdleThread() {
@@ -163,9 +146,6 @@ void startIdleThread() {
 	controller->currentIdlePosition = -100.0f;
 
 #if ! EFI_UNIT_TEST
-
-	addConsoleActionII("blipidle", blipIdle);
-
 	// split this whole file into manual controller and auto controller? move these commands into the file
 	// which would be dedicated to just auto-controller?
 

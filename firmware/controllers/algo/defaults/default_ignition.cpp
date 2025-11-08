@@ -16,32 +16,64 @@ static void setDefaultMultisparkParameters() {
 }
 
 static void setDefaultIatTimingCorrection() {
-	copyArray(config->ignitionIatCorrTempBins, { -40, 0, 10, 20, 30, 40, 50, 60});
 	setLinearCurve(config->ignitionIatCorrLoadBins, /*from=*/ 0, /*to*/ 140, 1);
+#if IAT_IGN_CORR_COUNT == 8
+	copyArray(config->ignitionIatCorrTempBins, { -40, 0, 10, 20, 30, 40, 50, 60});
 
 	// top 5 rows are the same
-	for (size_t i = 3; i < 8; i++) {
+	for (size_t i = 3; i < IAT_IGN_CORR_COUNT; i++) {
 		//                                                         40  50  60 deg C
-		copyArray(config->ignitionIatCorrTable[i], {0, 0, 0, 0, 0, -1, -2, -3});
+		copyArray(config->ignitionIatCorrTable[i], {0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -2.0, -3.0});
 	}
 
 	// 6th row tapers out
 	//                                                        40  50  60 deg C
-	copyArray(config->ignitionIatCorrTable[2], {0, 0, 0, 0, 0, 0, -1, -2});
+	copyArray(config->ignitionIatCorrTable[2], {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -2.0});
+#else
+  setLinearCurve(config->ignitionIatCorrTempBins, /*from=*/ -40, /*to*/ 60, 1);
+#endif
 }
 
-static float getAdvanceForRpm(int rpm, float advanceMax) {
-        if (rpm >= 3000)
-            return advanceMax;
-        if (rpm < 600)
-            return 10;
-       return interpolateMsg("advance", 600, 10, 3000, advanceMax, rpm);
+static void setDefaultCltTimingCorrection() {
+	setLinearCurve(config->ignitionCltCorrLoadBins, /*from=*/ 0, /*to*/ 140, 1);
+  setLinearCurve(config->ignitionCltCorrTempBins, -20, 60, 1);
+
+#if CLT_TIMING_TEMP_AXIS_SIZE == 5
+	for (size_t i = 0; i < CLT_TIMING_TEMP_AXIS_SIZE; i++) {
+	  // huh? use setArrayValues? and we probably get all zeros by default anyway?
+		copyArray(config->ignitionCltCorrTable[i], {0.0, 0.0, 0.0, 0.0, 0.0});
+	}
+#endif
+}
+
+static void setDefaultTrailingSparkTable() {
+	setLinearCurve(config->trailingSparkLoadBins, 20, 100, 1);
+	setRpmTableBin(config->trailingSparkRpmBins);
+
+#if TRAILING_SPARK_SIZE == 4
+	for (size_t i = 0; i < TRAILING_SPARK_SIZE; i++) {
+		copyArray(config->trailingSparkTable[i], {7,9,10,12});
+	}
+#endif
+
+}
+
+static float getAdvanceForRpm(float rpm, float advanceMax) {
+	if (rpm >= 3000) {
+		return advanceMax;
+	}
+
+	if (rpm < 600) {
+		return 10;
+	}
+
+	return interpolateMsg("advance", 600, 10, 3000, advanceMax, rpm);
 }
 
 #define round10(x) efiRound(x, 0.1)
 
-float getInitialAdvance(int rpm, float map, float advanceMax) {
-	map = minF(map, 100);
+float getInitialAdvance(float rpm, float map, float advanceMax) {
+	map = std::min(map, 100.0f);
 	float advance = getAdvanceForRpm(rpm, advanceMax);
 
 	if (rpm >= 3000)
@@ -53,7 +85,7 @@ float getInitialAdvance(int rpm, float map, float advanceMax) {
  * this method builds a good-enough base timing advance map bases on a number of heuristics
  */
 static void buildTimingMap(float advanceMax) {
-	if (engineConfiguration->fuelAlgorithm != LM_SPEED_DENSITY) {
+	if (engineConfiguration->fuelAlgorithm != engine_load_mode_e::LM_SPEED_DENSITY) {
 		warning(ObdCode::CUSTOM_WRONG_ALGORITHM, "wrong algorithm for MAP-based timing");
 		return;
 	}
@@ -79,11 +111,11 @@ void setDefaultIgnition() {
 	engineConfiguration->minimumIgnitionTiming = -10;
 	engineConfiguration->maximumIgnitionTiming = 60;
 
-	// Dwell table
+	// Dwell table - a bit conservative but reasonable
 	setConstantDwell(4);
 
-	setLinearCurve(engineConfiguration->dwellVoltageCorrVoltBins, 8, 15, 0.1);
-	setLinearCurve(engineConfiguration->dwellVoltageCorrValues, 1, 1, 1);
+	setLinearCurve(config->dwellVoltageCorrVoltBins, 8, 15, 0.1);
+	setLinearCurve(config->dwellVoltageCorrValues, 1, 1, 1);
 
 	// Multispark
 	setDefaultMultisparkParameters();
@@ -93,18 +125,22 @@ void setDefaultIgnition() {
 	setTimingRpmBin(800, 7000);
 	buildTimingMap(35);
 
-	engineConfiguration->trailingSparkAngle = 10;
+	setDefaultTrailingSparkTable();
 
 	// CLT correction
-	setLinearCurve(config->cltTimingBins, CLT_CURVE_RANGE_FROM, 120, 1);
-	setArrayValues(config->cltTimingExtra, 0.0f);
+	setDefaultCltTimingCorrection();
 
 	// IAT correction
 	setDefaultIatTimingCorrection();
 
 	// Give default axes for cylinder trim tables
+#if IGN_TRIM_SIZE == 4
 	copyArray(config->ignTrimRpmBins, { 1000, 3000, 5000, 7000 });
 	copyArray(config->ignTrimLoadBins, { 20, 50, 80, 100 });
+#else
+  setRpmTableBin(config->ignTrimRpmBins);
+  setLinearCurve(config->ignTrimLoadBins, 20, 100);
+#endif
 
 	// Default axes for VE blends
 	for (size_t i = 0; i < efi::size(config->ignBlends); i++) {

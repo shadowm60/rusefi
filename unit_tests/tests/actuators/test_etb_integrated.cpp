@@ -2,6 +2,9 @@
 #include "init.h"
 #include "electronic_throttle_impl.h"
 #include "live_data.h"
+#include "live_data_ids.h"
+
+extern int ebtResetCounter;
 
 static EtbController * initEtbIntegratedTest() {
 	etbPidReset(); // ETB controlles are global shared instances :(
@@ -16,7 +19,7 @@ static EtbController * initEtbIntegratedTest() {
 	Sensor::setMockValue(SensorType::Tps1, 25.0f, true);
 
 	initTps();
-	doInitElectronicThrottle();
+	doInitElectronicThrottle(/*isInit*/true);
 
 	engine->etbControllers[0]->setIdlePosition(0);
 
@@ -25,49 +28,42 @@ static EtbController * initEtbIntegratedTest() {
 
 TEST(etb, integrated) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE); // we have a destructor so cannot move EngineTestHelper into utility method
+  etbPidReset();
+  ASSERT_EQ(0, ebtResetCounter);
 	EtbController *etb = initEtbIntegratedTest();
+  ASSERT_EQ(1, ebtResetCounter);
+	doInitElectronicThrottle(/*isInit*/false);
+  ASSERT_EQ(1, ebtResetCounter);
 
 	Sensor::setMockValue(SensorType::AcceleratorPedalPrimary, 40);
 	Sensor::setMockValue(SensorType::AcceleratorPedalSecondary, 40);
 
 	etb->update();
 
-	ASSERT_EQ(engine->outputChannels.etbTarget, 40);
-	ASSERT_NEAR(etb->prevOutput, 120.363, EPS3D);
-	ASSERT_NEAR(etb->etbDutyAverage, 60.1813, EPS3D);
+	ASSERT_EQ(etb->m_adjustedTarget, 40);
 
 	Sensor::setMockValue(SensorType::AcceleratorPedal, 10, true);
 	etb->update();
-	ASSERT_NEAR(etb->etbDutyAverage, 70.0741, EPS3D);
-	ASSERT_NEAR(etb->etbDutyRateOfChange, 130.2554, EPS3D);
-
-	float destination;
-	int offset = ELECTRONIC_THROTTLE_BASE_ADDRESS + offsetof(electronic_throttle_s, etbDutyRateOfChange);
-	copyRange((uint8_t*)&destination, getLiveDataFragments(), offset, sizeof(destination));
-	ASSERT_NEAR(destination, 130.2554, EPS3D);
 }
-
-extern int timeNowUs;
-extern WarningCodeState unitTestWarningCodeState;
 
 TEST(etb, intermittentTps) {
 	EngineTestHelper eth(engine_type_e::TEST_ENGINE); // we have a destructor so cannot move EngineTestHelper into utility method
 	EtbController *etb = initEtbIntegratedTest();
-	warningBuffer_t &recentWarnings = unitTestWarningCodeState.recentWarnings;
-	recentWarnings.clear();
+	warningBuffer_t *recentWarnings = getRecentWarnings();
+	recentWarnings->clear();
 
 	// Tell the sensor checker that the ignition is on
 	engine->module<SensorChecker>()->onIgnitionStateChanged(true);
 	engine->module<SensorChecker>()->onSlowCallback();
-	timeNowUs += MS2US(1000);
+	advanceTimeUs(MS2US(1000));
 	engine->module<SensorChecker>()->onSlowCallback();
 	// todo: fix me https://github.com/rusefi/rusefi/issues/5233
 	// EXPECT_EQ( 3,  recentWarnings.getCount()) << "intermittentTps";
-	EXPECT_TRUE( recentWarnings.getCount() > 0) << "intermittentTps";
+	EXPECT_TRUE( recentWarnings->getCount() > 0) << "intermittentTps";
 
 	ASSERT_TRUE(engine->module<SensorChecker>()->analogSensorsShouldWork());
 
-	ASSERT_FALSE(isTps1Error());
+	ASSERT_TRUE(Sensor::get(SensorType::Tps1).Valid);
 
 	etb->update();
 
@@ -79,28 +75,28 @@ TEST(etb, intermittentTps) {
 	// Do some bad/good/bad/good cycles, make sure count keeps up
 	for (size_t i = 0; i < 50; i++) {
 		Sensor::setInvalidMockValue(SensorType::Tps1);
-		ASSERT_TRUE(isTps1Error());
+		ASSERT_FALSE(Sensor::get(SensorType::Tps1).Valid);
 		etb->update();
 
 		badCount++;
 		EXPECT_EQ(badCount, etb->etbTpsErrorCounter);
-		EXPECT_EQ(0, etb->etbErrorCode);
+		EXPECT_EQ((int)EtbStatus::TpsError, etb->etbErrorCode);
 
 		Sensor::setMockValue(SensorType::Tps1, 20);
-		ASSERT_FALSE(isTps1Error());
+		ASSERT_TRUE(Sensor::get(SensorType::Tps1).Valid);
 		etb->update();
 	}
 
 	// 51st bad TPS should set etbErrorCode
 	Sensor::setInvalidMockValue(SensorType::Tps1);
-	ASSERT_TRUE(isTps1Error());
+	ASSERT_FALSE(Sensor::get(SensorType::Tps1).Valid);
 	etb->update();
 
 	EXPECT_NE(0, etb->etbErrorCode);
 
 	// todo: fix me https://github.com/rusefi/rusefi/issues/5233
 	// EXPECT_EQ( 3,  recentWarnings.getCount()) << "intermittentTps";
-	EXPECT_TRUE( recentWarnings.getCount() > 0) << "intermittentTps";
+	EXPECT_TRUE( recentWarnings->getCount() > 0) << "intermittentTps";
 	// todo: fix me https://github.com/rusefi/rusefi/issues/5233
 //	EXPECT_EQ(OBD_PPS_Correlation, recentWarnings.get(0).Code);
 //	EXPECT_EQ(OBD_TPS1_Primary_Timeout, recentWarnings.get(1).Code);
@@ -116,12 +112,12 @@ TEST(etb, intermittentPps) {
 	// Tell the sensor checker that the ignition is on
 	engine->module<SensorChecker>()->onIgnitionStateChanged(true);
 	engine->module<SensorChecker>()->onSlowCallback();
-	timeNowUs += 10e6;
+	advanceTimeUs(10e6);
 	engine->module<SensorChecker>()->onSlowCallback();
 
 	ASSERT_TRUE(engine->module<SensorChecker>()->analogSensorsShouldWork());
 
-	ASSERT_FALSE(isPedalError());
+	ASSERT_TRUE(Sensor::get(SensorType::AcceleratorPedal).Valid);
 
 	etb->update();
 
@@ -133,7 +129,7 @@ TEST(etb, intermittentPps) {
 	// Do some bad/good/bad/good cycles, make sure count keeps up
 	for (size_t i = 0; i < 50; i++) {
 		Sensor::setInvalidMockValue(SensorType::AcceleratorPedal);
-		ASSERT_TRUE(isPedalError());
+		ASSERT_FALSE(Sensor::get(SensorType::AcceleratorPedal).Valid);
 		etb->update();
 
 		badCount++;
@@ -141,13 +137,13 @@ TEST(etb, intermittentPps) {
 		EXPECT_EQ(0, etb->etbErrorCode);
 
 		Sensor::setMockValue(SensorType::AcceleratorPedal, 20);
-		ASSERT_FALSE(isPedalError());
+		ASSERT_TRUE(Sensor::get(SensorType::AcceleratorPedal).Valid);
 		etb->update();
 	}
 
 	// 51st bad TPS should set etbErrorCode
 	Sensor::setInvalidMockValue(SensorType::AcceleratorPedal);
-	ASSERT_TRUE(isPedalError());
+	ASSERT_FALSE(Sensor::get(SensorType::AcceleratorPedal).Valid);
 	etb->update();
 	EXPECT_NE(0, etb->etbErrorCode);
 }
@@ -164,7 +160,7 @@ TEST(etb, sentTpsIntegrated) {
 	Sensor::setMockValue(SensorType::Tps1, 25.0f, true);
 
 	initTps();
-	doInitElectronicThrottle();
+	doInitElectronicThrottle(/*isInit*/true);
 }
 
 TEST(etb, sentTpsIntegratedDecode) {

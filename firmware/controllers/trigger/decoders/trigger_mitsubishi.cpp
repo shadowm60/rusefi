@@ -41,25 +41,39 @@ void initializeMitsubishi4gSymmetricalCrank(TriggerWaveform *s) {
 
 // https://github.com/rusefi/rusefi/issues/5593
 void initializeVvt6G72(TriggerWaveform *s) {
-	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::Rise);
+	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::Both);
 
-    s->setTriggerSynchronizationGap(0.8);
-    s->setSecondTriggerSynchronizationGap(1.9);
-    int narrowWidth = 30;
+    //happy ratio 0.548387 @ 0
+    //happy ratio 0.941176 @ 1
+    //happy ratio 0.500000 @ 2
+    //happy ratio 3.750002 @ 3
+    //happy ratio 0.266667 @ 4
+    //happy ratio 3.250000 @ 5
+    //happy ratio 0.307692 @ 6
+    //happy ratio 3.875000 @ 7
 
-    // special wider tooth
-    s->addToothRiseFall(90 * 1, 60);
+    // real working ranges for all of the engine states
+    s->setTriggerSynchronizationGap3(0, 1.3, 3.2);
+    s->setTriggerSynchronizationGap3(1, 0.3, 0.66);
+    s->setTriggerSynchronizationGap3(2, 1.3, 3.2);
+    s->setTriggerSynchronizationGap3(3, 0.3, 0.66);
+    s->setTriggerSynchronizationGap3(4, 1.3, 3.2);
 
-    s->addToothRiseFall(90 * 2, narrowWidth);
-    s->addToothRiseFall(90 * 3, narrowWidth);
-    s->addToothRiseFall(90 * 4, narrowWidth);
+    s->addEvent360(52.5, TriggerValue::FALL);
+    s->addEvent360(82.5, TriggerValue::RISE);
+    s->addEvent360(112.5, TriggerValue::FALL);
+    s->addEvent360(177.5, TriggerValue::RISE);
+    s->addEvent360(207.5, TriggerValue::FALL);
+    s->addEvent360(262.5, TriggerValue::RISE);
+    s->addEvent360(292.5, TriggerValue::FALL);
+    s->addEvent360(360, TriggerValue::RISE);
 }
 
-void initializeMitsubishi4g9xCam(TriggerWaveform *s) {
+void initializeMitsubishi4g63Cam(TriggerWaveform *s) {
 	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::Both);
 
 	// nominal gap 0.5
-	s->setSecondTriggerSynchronizationGap2(0.2, 0.8);
+	s->setSecondTriggerSynchronizationGap2(0.2, 0.95);
 
 	// nominal gap 3.0
 	s->setTriggerSynchronizationGap2(2.0f, 5.0f);
@@ -71,11 +85,6 @@ void initializeMitsubishi4g9xCam(TriggerWaveform *s) {
 	// 131 deg before #4 TDC
 	// 41 deg before #4 TDC
 	s->addToothRiseFall(360, /*width*/45);
-}
-
-void initializeMitsubishi4g63Cam(TriggerWaveform *s) {
-	// TODO: is this actually the same as 4G9x or not?
-	initializeMitsubishi4g9xCam(s);
 }
 
 void initialize36_2_1_1(TriggerWaveform *s) {
@@ -109,6 +118,7 @@ void initialize36_2_1_1(TriggerWaveform *s) {
 }
 
 // Mitsubishi 4B11
+// https://github.com/rusefi/rusefi/wiki/All-Supported-Triggers#36-2-1
 void initialize36_2_1(TriggerWaveform *s) {
 	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::RiseOnly);
 	s->tdcPosition = 90;

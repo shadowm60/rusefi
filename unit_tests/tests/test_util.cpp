@@ -7,7 +7,7 @@
 
 #include "pch.h"
 
-#include <string.h>
+#include <cstring>
 
 #include "histogram.h"
 
@@ -15,8 +15,9 @@
 #include "cli_registry.h"
 
 #include "nmea.h"
-#include "mmc_card.h"
 #include "fl_stack.h"
+
+using namespace rusefi::stringutil;
 
 TEST(util, testitoa) {
 	char buffer[12];
@@ -47,16 +48,16 @@ TEST(util, crc) {
 
 	uint32_t c = crc32(A, 1);
 	printf("crc32(A)=%x\r\n", c);
-	assertEqualsM("crc32 1", 0xd3d99e8b, c);
+	ASSERT_NEAR(0xd3d99e8b, c, EPS4D) << "crc32 1";
 
 	const char * line = "AbcDEFGF";
 	c = crc32(line, 8);
 	printf("crc32(line)=%x\r\n", c);
-	assertEqualsM("crc32 line", 0x4775a7b1, c);
+	ASSERT_NEAR(0x4775a7b1, c, EPS4D) << "crc32 line";
 
 	c = crc32(line, 1);
 	c = crc32inc(line + 1, c, 8 - 1);
-	assertEqualsM("crc32 line inc", 0x4775a7b1, c);
+	ASSERT_NEAR(0x4775a7b1, c, EPS4D) << "crc32 line inc";
 }
 
 TEST(util, histogram) {
@@ -225,8 +226,9 @@ TEST(misc, testGpsParser) {
 	strcpy(nmeaMessage, "$GPRMC,173843,A,3349.896,N,11808.521,W,000.0,360.0,230108,013.4,E*69");
 	gps_location(&GPSdata, nmeaMessage);
 	ASSERT_EQ( 4,  GPSdata.quality) << "1 valid";
-	assertEqualsM("1 latitude", 3349.896, GPSdata.latitude);
-	assertEqualsM("1 longitude", 11808.521, GPSdata.longitude);
+	ASSERT_NEAR(3349.896, GPSdata.latitude, EPS3D) << "1 latitude";
+	ASSERT_NEAR(11808.521, GPSdata.longitude, EPS3D) << "1 longitude";
+
 	ASSERT_EQ( 0,  GPSdata.speed) << "1 speed";
 // 	ASSERT_EQ( 0,  GPSdata.altitude) << "1 altitude";	// GPRMC not overwrite altitude
 	ASSERT_EQ( 360,  GPSdata.course) << "1 course";
@@ -234,34 +236,34 @@ TEST(misc, testGpsParser) {
 	strcpy(nmeaMessage, "$GPGGA,111609.14,5001.27,N,3613.06,E,3,08,0.0,10.2,M,0.0,M,0.0,0000*70");
 	gps_location(&GPSdata, nmeaMessage);
 	ASSERT_EQ( 3,  GPSdata.quality) << "2 valid";		// see field details
-	assertEqualsM("2 latitude", 50.0212, GPSdata.latitude);
-	assertEqualsM("2 longitude", 36.2177, GPSdata.longitude);
+	ASSERT_NEAR(50.0212, GPSdata.latitude, EPS3D) << "2 latitude";
+	ASSERT_NEAR(36.2177, GPSdata.longitude, EPS3D) << "2 longitude";
 	ASSERT_EQ( 0,  GPSdata.speed) << "2 speed";
-	assertEqualsM("2 altitude", 10.2, GPSdata.altitude);
+	ASSERT_NEAR(10.2, GPSdata.altitude, EPS3D) << "2 altitude";
 //	ASSERT_EQ( 0,  GPSdata.course) << "2 course";  // GPGGA not overwrite course
 
 	strcpy(nmeaMessage, "$GPRMC,111609.14,A,5001.27,N,3613.06,E,11.2,0.0,261206,0.0,E*50");
 	gps_location(&GPSdata, nmeaMessage);
 	ASSERT_EQ( 4,  GPSdata.quality) << "3 valid";
-	assertEqualsM("3 latitude", 5001.27, GPSdata.latitude);
-	assertEqualsM("3 longitude", 3613.06, GPSdata.longitude);
-	assertEqualsM("3 speed", 11.2, GPSdata.speed);
+	ASSERT_NEAR(5001.27, GPSdata.latitude, EPS3D) << "3 latitude";
+	ASSERT_NEAR(3613.06, GPSdata.longitude, EPS3D) << "3 longitude";
+	ASSERT_NEAR(11.2, GPSdata.speed, EPS3D) << "3 speed";
 //	ASSERT_EQ( 0,  GPSdata.altitude) << "3 altitude";  // GPRMC not overwrite altitude
 	ASSERT_EQ( 0,  GPSdata.course) << "3 course";
-	ASSERT_EQ( 2006,  GPSdata.time.year + 1900) << "3 GPS yy";
-	ASSERT_EQ( 12,  GPSdata.time.month) << "3 GPS mm";
-	ASSERT_EQ( 26,  GPSdata.time.day) << "3 GPS dd";
-	ASSERT_EQ( 11,  GPSdata.time.hour) << "3 GPS hh";
-	ASSERT_EQ( 16,  GPSdata.time.minute) << "3 GPS mm";
-	ASSERT_EQ( 9,  GPSdata.time.second) << "3 GPS ss";
+	ASSERT_EQ( 2006u,  GPSdata.time.year + 1900u) << "3 GPS yy";
+	ASSERT_EQ( 12u,  GPSdata.time.month) << "3 GPS mm";
+	ASSERT_EQ( 26u,  GPSdata.time.day) << "3 GPS dd";
+	ASSERT_EQ( 11u,  GPSdata.time.hour) << "3 GPS hh";
+	ASSERT_EQ( 16u,  GPSdata.time.minute) << "3 GPS mm";
+	ASSERT_EQ( 9u,  GPSdata.time.second) << "3 GPS ss";
 
 	// check again first one
 	// we need to pass a mutable string, not a constant because the parser would be modifying the string
 	strcpy(nmeaMessage, "$GPRMC,173843,A,3349.896,N,11808.521,W,000.0,360.0,230108,013.4,E*69");
 	gps_location(&GPSdata, nmeaMessage);
 	ASSERT_EQ( 4,  GPSdata.quality) << "4 valid";
-	assertEqualsM("4 latitude", 3349.896, GPSdata.latitude);
-	assertEqualsM("4 longitude", 11808.521, GPSdata.longitude);
+	ASSERT_NEAR(3349.896, GPSdata.latitude, EPS3D) << "4 latitude";
+	ASSERT_NEAR(11808.521, GPSdata.longitude, EPS3D) << "4 longitude";
 	ASSERT_EQ( 0,  GPSdata.speed) << "4 speed";
 	ASSERT_EQ( 360,  GPSdata.course) << "4 course";
 }
@@ -274,7 +276,7 @@ TEST(misc, testConsoleLogic) {
 
 	helpCommand();
 
-	char * cmd = "he ha";
+	const char * cmd = "he ha";
 	ASSERT_EQ(2, findEndOfToken(cmd));
 
 	cmd = "\"hee\" ha";
@@ -381,23 +383,23 @@ TEST(misc, testMisc) {
 
 	{
 		float v = atoff("1.0");
-		assertEqualsM("atoff", 1.0, v);
+		ASSERT_NEAR(1.0, v, EPS4D) << "atoff";
 	}
 	{
 		float v = atoff("nan");
-		ASSERT_TRUE(cisnan(v)) << "NaN atoff";
+		ASSERT_TRUE(std::isnan(v)) << "NaN atoff";
 	}
 	{
 		float v = atoff("N");
-		ASSERT_TRUE(cisnan(v)) << "NaN atoff";
+		ASSERT_TRUE(std::isnan(v)) << "NaN atoff";
 	}
 
 //	ASSERT_EQ(true, strEqual("spa3", getPinName(SPARKOUT_3_OUTPUT)));
 //	ASSERT_EQ(SPARKOUT_12_OUTPUT, getPinByName("spa12"));
 }
 
-int getRusEfiVersion(void) {
-	return TS_FILE_VERSION;
+int getRusEfiVersion() {
+	return 123123;
 }
 
 TEST(util, PeakDetect) {

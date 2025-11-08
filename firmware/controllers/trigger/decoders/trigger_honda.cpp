@@ -16,32 +16,14 @@ void configureHondaCbr600(TriggerWaveform *s) {
   s->tdcPosition = 0; // todo: hard-code TDC position once we know it
   s->setTriggerSynchronizationGap2(/*from*/3.9, /*to*/8);
 
-	s->addEvent720(350.0f, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
-	s->addEvent720(360.0f, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
+	s->addEvent720(350.0f, TriggerValue::FALL);
+	s->addEvent720(360.0f, TriggerValue::RISE);
 
-	s->addEvent720(650.0f, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
-	s->addEvent720(660.0f, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
+	s->addEvent720(650.0f, TriggerValue::FALL);
+	s->addEvent720(660.0f, TriggerValue::RISE);
 
-	s->addEvent720(710.0f, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
-	s->addEvent720(720.0f, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-}
-
-// todo: what is this 1+16 trigger about? should it have been defined as skipped + cam or else?
-void configureOnePlus16(TriggerWaveform *s) {
-	s->initialize(FOUR_STROKE_CAM_SENSOR, SyncEdge::RiseOnly);
-
-	int count = 16;
-	float tooth = s->getCycleDuration() / 2 / count;
-	float width = tooth / 2; // for VR we only handle rises so width does not matter much
-
-	s->addEventAngle(1, TriggerValue::RISE, TriggerWheel::T_PRIMARY);
-	s->addEventAngle(5, TriggerValue::FALL, TriggerWheel::T_PRIMARY);
-
-	for (int i = 1; i <= count; i++) {
-		s->addToothRiseFall(tooth * i, width, TriggerWheel::T_SECONDARY);
-	}
-
-	s->isSynchronizationNeeded = false;
+	s->addEvent720(710.0f, TriggerValue::FALL);
+	s->addEvent720(720.0f, TriggerValue::RISE);
 }
 
 // TT_HONDA_K_CRANK_12_1
@@ -86,3 +68,41 @@ void configureHondaK_4_1(TriggerWaveform *s) {
 
 	s->addToothRiseFall(360, 7);
 }
+
+void initialize_one_of_24_2_2(TriggerWaveform *s, int firstCount, int secondCount) {
+	s->initialize(FOUR_STROKE_CRANK_SENSOR, SyncEdge::RiseOnly);
+
+	float narrow = 360 / 24;
+	float wide = narrow * 2;
+
+	float base = 0;
+
+	for (int i = 0; i < firstCount; i++) {
+		s->addToothFallRise(base + narrow, narrow / 2);
+		base += narrow;
+	}
+
+	s->addToothFallRise(base + wide, wide / 2);
+	base += wide;
+
+	for (int i = 0; i < secondCount; i++) {
+		s->addToothFallRise(base + narrow, narrow / 2);
+		base += narrow;
+	}
+
+       s->addToothFallRise(360, narrow/2);
+}
+
+void configureHondaJ30A2_24_1_1(TriggerWaveform *s) {
+	initialize_one_of_24_2_2(s, 6, 14);
+
+    size_t count = 6;
+
+    s->tdcPosition = 0;
+
+ s->setTriggerSynchronizationGap3(/*gapIndex*/0, 1.6, 4);
+  for (size_t i = 1 ; i < count ; i++) {
+    s->setTriggerSynchronizationGap3(/*gapIndex*/i, 0.65, 1.4);
+  }
+  s->setTriggerSynchronizationGap3(/*gapIndex*/count, 0.2, 0.55);
+  }

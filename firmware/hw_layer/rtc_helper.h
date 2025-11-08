@@ -14,6 +14,7 @@
 #if EFI_RTC
 void initRtc();
 void printRtcDateTime();
+uint32_t getEpochTime();
 efidatetime_t getRtcDateTime();
 void setRtcDateTime(const efidatetime_t * const dateTime);
 
@@ -21,5 +22,5 @@ efidatetime_t convertRtcDateTimeToEfi(const RTCDateTime * const timespec);
 RTCDateTime convertRtcDateTimeFromEfi(const efidatetime_t * const dateTime);
 #endif // EFI_RTC
 
-void dateToString(char *buffer);
+//void dateToString(char *buffer);
 bool dateToStringShort(char *lcd_str);

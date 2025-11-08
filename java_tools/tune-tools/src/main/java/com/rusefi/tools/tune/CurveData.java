@@ -9,9 +9,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.util.Arrays;
 
-public class CurveData implements HoHo {
+public class CurveData implements CannableEntity {
     private final String curveName;
     private final float[] rawData;
 
@@ -26,7 +25,7 @@ public class CurveData implements HoHo {
                 break;
             countOfEqualElementsAtTheEnd++;
         }
-        System.out.println(countOfEqualElementsAtTheEnd + " equal elements at the end of the curve");
+//        System.out.println(countOfEqualElementsAtTheEnd + " equal elements at the end of the curve");
     }
 
     static CurveData processCurve(String msqFileName, String curveName, IniFileModel model, BufferedWriter w) throws IOException {
@@ -39,7 +38,7 @@ public class CurveData implements HoHo {
 
     @Nullable
     public static CurveData valueOf(String msqFileName, String curveName, IniFileModel model) throws IOException {
-        IniField iniField = model.allIniFields.get(curveName);
+        IniField iniField = model.getAllIniFields().get(curveName);
         if (!(iniField instanceof ArrayIniField))
             return null;
         ArrayIniField field = (ArrayIniField) iniField;
@@ -81,7 +80,7 @@ public class CurveData implements HoHo {
             curve[index++] = Float.parseFloat(line);
         }
 
-        System.out.println("Got bins " + Arrays.toString(curve));
+//        System.out.println("Got bins " + Arrays.toString(curve));
     }
 
     @NotNull
@@ -102,20 +101,25 @@ public class CurveData implements HoHo {
     }
 
     @Override
-    public String getCsourceMethod(String reference) {
-        return "static void " + getCannedMethod() + " {\n"
+    public String getCsourceMethod(String reference, String methodNamePrefix, String name) {
+        return "static void " + getCannedMethod(methodNamePrefix) + " {\n"
                 + "\t" + getCsourceCode() +
-                "\tcopyArray(" + reference + curveName + ", " + getCannedName() + ");\n" +
+                "\tcopyArray(" + reference + name + ", " + getCannedName() + ");\n" +
                 "}\n\n";
     }
 
     @NotNull
-    private String getCannedMethod() {
-        return "canned" + curveName + "()";
+    private String getCannedMethod(String methodNamePrefix) {
+        return methodNamePrefix + "canned" + curveName + "()";
     }
 
     @Override
-    public String getCinvokeMethod() {
-        return "\t" + getCannedMethod() + ";\n";
+    public String getCinvokeMethod(String methodNamePrefix) {
+        return "\t" + getCannedMethod(methodNamePrefix) + ";\n";
+    }
+
+    @Override
+    public String getName() {
+        return curveName;
     }
 }

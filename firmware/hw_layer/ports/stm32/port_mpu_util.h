@@ -34,6 +34,8 @@
 #include "stm32h7xx_hal_flash_ex.h"
 #endif
 
+#define 	TM_ID_GetFlashSize()    (*(__IO uint16_t *) (FLASHSIZE_BASE))
+
 #ifdef AT32F4XX
 /* TODO: Artery */
 typedef enum {
@@ -51,9 +53,23 @@ typedef enum {
 } BOR_Level_t;
 #endif
 
-// we are lucky - all CAN pins use the same AF
+// we are lucky - all CAN1/CAN2 pins use the same AF
 #define EFI_CAN_RX_AF 9
 #define EFI_CAN_TX_AF 9
+
+// not lucky with CAN3 and FDCAN3
+#if STM32_CAN_USE_CAN3
+#define EFI_CAN3_RX_AF 11
+#define EFI_CAN3_TX_AF 11
+#endif
+#if STM32_CAN_USE_FDCAN3
+// PD12/PD13
+#define EFI_CAN3_RX_AF 5
+#define EFI_CAN3_TX_AF 5
+// TODO: PG9/PG10 and PF6/PF7
+//#define EFI_CAN3_RX_AF 2
+//#define EFI_CAN3_TX_AF 2
+#endif
 
 #ifndef GPIO_AF_TIM1
 #define GPIO_AF_TIM1 1
@@ -100,7 +116,8 @@ typedef enum {
 #endif
 
 #ifdef __cplusplus
-void stm32_stop();
+uint32_t getMcuSerial();
+
 void stm32_standby();
 
 // Called just before the MCU is put in stop mode

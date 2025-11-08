@@ -34,6 +34,10 @@
 /** @brief Flash operation error because of bad flash, corrupted memory */
 #define FLASH_RETURN_BAD_FLASH -11
 
+#define FLASH_RETURN_SECURITYERROR -12
+
+#define FLASH_RETURN_CRCERROR -13
+
 /**
  * @brief Maximum program/erase parallelism
  *
@@ -96,18 +100,6 @@ size_t flashSectorSize(flashsector_t sector);
 
 uintptr_t getFlashAddrFirstCopy(void);
 uintptr_t getFlashAddrSecondCopy(void);
-
-/**
- * @brief Erase the flash @p sector.
- * @details The sector is checked for errors after erase.
- * @note The sector is deleted regardless of its current state.
- *
- * @param sector Sector which is going to be erased.
- * @return FLASH_RETURN_SUCCESS         No error erasing the sector.
- * @return FLASH_RETURN_BAD_FLASH       Flash cell error.
- * @return FLASH_RETURN_NO_PERMISSION   Access denied.
- */
-int intFlashSectorErase(flashsector_t sector);
 
 /**
  * @brief Erase the sectors containing the span of @p size bytes starting at @p address.

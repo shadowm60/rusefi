@@ -6,6 +6,7 @@ import com.rusefi.output.ConfigStructure;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -18,17 +19,47 @@ import static com.devexperts.logging.Logging.getLogging;
  */
 public class MetaHelper {
     private static final Logging log = getLogging(MetaHelper.class);
+    public static final String PERSISTENT_CONFIG_S = "persistent_config_s";
+    public static final String ENGINE_CONFIGURATION_S = "engine_configuration_s";
+
     @NotNull
-    static ReaderStateImpl getReaderState() throws IOException {
-        List<String> options = Files.readAllLines(Paths.get(RootHolder.ROOT + "../" + ConfigDefinition.CONFIG_PATH));
+    static ReaderStateImpl getReaderState(String boardPath) throws IOException {
+        List<String> options = FileLinesHelper.readAllLinesWithRoot("/../" + ConfigDefinition.CONFIG_PATH);
+        List<String> boardOptions = FileLinesHelper.readAllLines2(boardPath + "board_config.txt");
+
+        options.add(ConfigDefinition.KEY_PREPEND);
+        options.add("integration/rusefi_config_shared.txt");
+        options.add(ConfigDefinition.KEY_PREPEND);
+        options.add("integration/fields_api.txt");
+
+        // add board prepend
+        options.add(ConfigDefinition.KEY_PREPEND);
+        options.add(boardPath + "prepend.txt");
+
+        // add board config
+        // TODO: this is not correctly registered, see hack below on "state.getVariableRegistry().register"
+        options.add(ConfigDefinition.READFILE_OPTION);
+        options.add(BoardConfigStrategy.BOARD_CONFIG_FROM_FILE);
+        options.add(boardPath + "board_config.txt");
+
+        // add default (empty) board config
+        options.add(ConfigDefinition.READFILE_OPTION);
+        options.add("BOARD_ENGINE_CONFIGURATION_FROM_FILE");
+        options.add("tunerstudio/empty_board_options.ini");
+
         String[] totalArgs = options.toArray(new String[0]);
 
-
         ReaderStateImpl state = new ReaderStateImpl();
+        if (TuneContext.boardPrepend != null)
+            state.getVariableRegistry().readPrependValues(TuneContext.boardPrepend, false);
+
+        state.getVariableRegistry().register(BoardConfigStrategy.BOARD_CONFIG_FROM_FILE, String.join("\n", boardOptions));
+
         ConfigDefinition.doJob(totalArgs, state);
         return state;
     }
 
+    // nasty: context is a return parameter
     @Nullable
     static ConfigField lookForFieldWithinSpecificStruct(ReaderState state, String name, StringBuffer context, String parentStructName) {
         ConfigStructure s = state.getStructures().get(parentStructName);
@@ -49,7 +80,7 @@ public class MetaHelper {
             fromIndex++; // skip underscore
             if (cf == null)
                 continue;
-            String type = cf.getType();
+            String type = cf.getTypeName();
             s = state.getStructures().get(type);
 
             if (s != null) {
@@ -59,17 +90,19 @@ public class MetaHelper {
                     log.info("Not located " + substring + " in " + s);
                 } else {
                     context.append(cf.getOriginalArrayName()).append(".");
-                    log.info("Located " + tsFieldByName + " in " + s);
+                    log.info(name + ": Located " + tsFieldByName + " in " + s);
                 }
                 return tsFieldByName;
             }
         }
     }
 
+    //
     static ConfigField findField(ReaderState state, String name, StringBuffer context) {
-        ConfigField field = lookForFieldWithinSpecificStruct(state, name, context, "engine_configuration_s");
+        ConfigField field = lookForFieldWithinSpecificStruct(state, name, context, ENGINE_CONFIGURATION_S);
         if (field != null)
             return field;
-        return lookForFieldWithinSpecificStruct(state, name, context, "persistent_config_s");
+        // TuneCanTool has a smarter version of similar parent lookup logic?
+        return lookForFieldWithinSpecificStruct(state, name, context, PERSISTENT_CONFIG_S);
     }
 }
